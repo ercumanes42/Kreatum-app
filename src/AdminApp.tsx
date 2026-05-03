@@ -287,12 +287,6 @@ function NewGameModal({
         className="relative w-full max-w-md overflow-hidden bg-white dark:bg-kreatum-bg-dark border border-black/10 dark:border-white/10 rounded-[32px] shadow-2xl"
       >
         <div className="p-8">
-          <div className="flex justify-center mb-6">
-            <div className="w-14 h-14 bg-kreatum-purple/10 rounded-2xl flex items-center justify-center">
-              <Plus className="w-7 h-7 text-kreatum-purple" />
-            </div>
-          </div>
-
           <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">
             Nueva Partida
           </h2>
