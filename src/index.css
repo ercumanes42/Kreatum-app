@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-kreatum-purple: #A2549C;
+  --color-kreatum-purple-dark: #A84F99;
+  --color-kreatum-orange: #EE6F38;
+  --color-kreatum-yellow: #F7A816;
+  --color-kreatum-turquoise: #17ABBD;
+  --color-kreatum-blue: #4486C6;
+  --color-kreatum-green: #59B7A9;
+  --color-kreatum-red: #E73F1E;
+  --color-kreatum-dark: #102F40;
+  --color-kreatum-gray: #404040;
+  --color-kreatum-gray-light: #545F66;
+  --color-kreatum-bg-light: #f8fafc;
+  --color-kreatum-bg-dark: #050505;
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: Georgia, serif;
+}
+
+html, body {
+  @apply text-kreatum-gray bg-kreatum-bg-light dark:text-white dark:bg-kreatum-bg-dark antialiased transition-colors duration-500;
+}

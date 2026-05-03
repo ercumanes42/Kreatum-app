@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── GAMES ───────────────────────────────────────────────
+    // Anyone authenticated (including anonymous) can read games
+    // to join via room code. Only authenticated users can create.
+    match /games/{gameId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      // Only allow updating specific fields (phase control, status)
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['currentPhase', 'status', 'completedAt']);
+
+      // ─── TEAMS ───────────────────────────────────────────
+      // A team document can be read by anyone in the game.
+      // It can only be written by the player who owns it
+      // (playerId must match auth uid) OR during initial creation.
+      match /teams/{teamName} {
+        allow read: if request.auth != null;
+        // Allow create if authenticated (first join)
+        allow create: if request.auth != null;
+        // Allow update only if the document's playerId matches the caller
+        // OR if playerId field is being set for the first time (merge join)
+        allow update: if request.auth != null
+          && (resource.data.playerId == request.auth.uid
+              || !('playerId' in resource.data));
+      }
+
+      // ─── ATTACKS ─────────────────────────────────────────
+      // Anyone in the game can read attacks (needed for defense view).
+      // Only authenticated users can create attacks.
+      // Attacks cannot be updated or deleted once sent.
+      match /attacks/{attackId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.keys().hasAll(['fromTeam', 'toTeam', 'content', 'timestamp', 'playerId'])
+          && request.resource.data.playerId == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      // ─── DEFENSES ────────────────────────────────────────
+      // Same pattern as attacks: readable by all, writable by auth users.
+      match /defenses/{defenseId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.playerId == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      // ─── SOLUTIONS ───────────────────────────────────────
+      // Solutions are readable by all teams (needed for cross-team attacks).
+      // Writable only by authenticated users.
+      match /solutions/{teamName} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+    }
+
+    // ─── DENY EVERYTHING ELSE ──────────────────────────────
+    // Any collection not explicitly matched above is denied.
+  }
+}
