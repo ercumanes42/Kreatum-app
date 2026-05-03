@@ -30,6 +30,10 @@ export default function AdminApp() {
   }, []);
 
   const handleCreateGame = async () => {
+    if (!newGameFacilitator.trim()) {
+      alert('Por favor, introduce el nombre del facilitador (es obligatorio).');
+      return;
+    }
     setIsCreatingGame(true);
     try {
       await createGame(null, true, { client: newGameClient, facilitator: newGameFacilitator });
@@ -311,7 +315,7 @@ function NewGameModal({
             </div>
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
-                Facilitador (opcional)
+                Facilitador (Obligatorio)
               </label>
               <input
                 type="text"
@@ -333,9 +337,9 @@ function NewGameModal({
               Cancelar
             </Button>
             <Button
-              className="flex-1 py-4 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white"
+              className="flex-1 py-4 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white disabled:opacity-50"
               onClick={onCreate}
-              disabled={isCreating}
+              disabled={isCreating || !facilitator.trim()}
             >
               {isCreating ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
