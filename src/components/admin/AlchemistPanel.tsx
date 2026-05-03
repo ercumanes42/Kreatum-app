@@ -103,6 +103,16 @@ export function AlchemistPanel({ gameId }: Props) {
     alert('Workshop finalizado y marcado como completado.');
   };
 
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyCode = () => {
+    if (roomCode) {
+      navigator.clipboard.writeText(roomCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-kreatum-bg-light dark:bg-kreatum-bg-dark p-8 font-sans">
       <div className="max-w-7xl mx-auto space-y-12">
@@ -121,16 +131,22 @@ export function AlchemistPanel({ gameId }: Props) {
           
           <div className="flex items-center gap-4 bg-white/50 dark:bg-white/5 backdrop-blur-xl p-2 rounded-2xl border border-black/5 dark:border-white/5">
             <button 
-              className="px-4 py-2 bg-kreatum-purple/10 rounded-xl hover:bg-kreatum-purple/20 transition-colors group"
-              onClick={() => {
-                if (roomCode) {
-                  navigator.clipboard.writeText(roomCode);
-                }
-              }}
-              title="Copiar código al portapapeles"
+              className={cn(
+                "px-4 py-2 rounded-xl transition-all group flex flex-col items-center justify-center min-w-[120px]",
+                copied ? "bg-green-500/20 text-green-600" : "bg-kreatum-purple/10 hover:bg-kreatum-purple/20"
+              )}
+              onClick={handleCopyCode}
+              title="Haz clic para copiar"
             >
-               <p className="text-[10px] font-mono uppercase tracking-widest opacity-50 mb-0.5">Código de Sala</p>
-               <p className="text-xl font-bold font-mono text-kreatum-purple tracking-wider group-hover:scale-105 transition-transform">{roomCode || '---'}</p>
+               <p className="text-[10px] font-mono uppercase tracking-widest opacity-60 mb-0.5">
+                 {copied ? "¡Copiado!" : "Código de Sala"}
+               </p>
+               <p className={cn(
+                 "text-xl font-bold font-mono tracking-wider transition-transform",
+                 copied ? "scale-105" : "text-kreatum-purple group-hover:scale-105"
+               )}>
+                 {roomCode || '---'}
+               </p>
             </button>
             <div className="h-10 w-px bg-black/10 dark:bg-white/10" />
             <div className="flex items-center gap-2 px-2">
