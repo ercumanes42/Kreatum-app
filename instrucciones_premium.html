@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Instrucciones Kreatum | Premium Guide</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --purple: #7c3aed;
+            --purple-dark: #5b21b6;
+            --bg-dark: #0f172a;
+            --bg-light: #f8fafc;
+            --text-dark: #1e293b;
+            --text-light: #f1f5f9;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at 20% 30%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
+                        radial-gradient(circle at 80% 70%, rgba(124, 58, 237, 0.1) 0%, transparent 40%);
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 4rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #fff, var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.7;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .role-switcher {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 50px;
+        }
+
+        .role-btn {
+            padding: 15px 40px;
+            border-radius: 50px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            font-size: 1.1rem;
+        }
+
+        .role-btn.active {
+            background: var(--purple);
+            border-color: var(--purple);
+            box-shadow: 0 0 30px rgba(124, 58, 237, 0.4);
+            transform: translateY(-3px);
+        }
+
+        .role-btn:hover:not(.active) {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+
+        .content-section {
+            display: none;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        .step-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(16px);
+            transition: transform 0.3s ease;
+        }
+
+        .step-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            background: var(--purple);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+        }
+
+        .step-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .step-content ul {
+            list-style: none;
+            margin-left: 60px;
+        }
+
+        .step-content li {
+            position: relative;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .step-content li::before {
+            content: '→';
+            position: absolute;
+            left: -30px;
+            color: var(--purple);
+            font-weight: bold;
+        }
+
+        .highlight {
+            color: var(--purple);
+            font-weight: 600;
+        }
+
+        .badge {
+            background: rgba(124, 58, 237, 0.2);
+            color: #d8b4fe;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 100px;
+            padding: 40px;
+            border-top: 1px solid var(--glass-border);
+            opacity: 0.6;
+        }
+
+        .icon-box {
+            display: inline-flex;
+            padding: 12px;
+            background: rgba(124, 58, 237, 0.1);
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            .step-header { flex-direction: column; align-items: flex-start; }
+            .step-content ul { margin-left: 20px; }
+            .role-switcher { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="animated-bg"></div>
+
+    <div class="container">
+        <header>
+            <div class="icon-box">
+                <i data-lucide="book-open" style="color: var(--purple); width: 32px; height: 32px;"></i>
+            </div>
+            <h1>Kreatum</h1>
+            <p class="subtitle">Guía Maestra de Usuario</p>
+        </header>
+
+        <div class="role-switcher">
+            <button class="role-btn active" onclick="switchRole('alchemist', this)">🧙‍♂️ El Alquimista</button>
+            <button class="role-btn" onclick="switchRole('player', this)">👥 Los Jugadores</button>
+        </div>
+
+        <!-- SECCIÓN ALQUIMISTA -->
+        <div id="alchemist-section" class="content-section active">
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Iniciación del Ritual</div>
+                </div>
+                <div class="step-content">
+                    <ul>
+                        <li>Accede al portal sagrado: <span class="highlight">/admin</span></li>
+                        <li>Identifícate con tus credenciales de Alquimista.</li>
+                        <li>Si el tablero está vacío, pulsa <span class="badge">Nueva Partida</span>.</li>
+                        <li>Introduce el nombre del cliente y tu nombre como <span class="highlight">Facilitador</span> (obligatorio).</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <div class="step-title">La Llamada a los Equipos</div>
+                </div>
+                <div class="step-content">
+                    <ul>
+                        <li>Verás un código de 6 letras en el panel (ej: <span class="highlight">ABC-123</span>).</li>
+                        <li>Haz clic sobre el código para <span class="badge">Copiar</span> y compártelo con los participantes.</li>
+                        <li>Observa cómo aparecen los equipos (Agua, Aire, Fuego, Tierra) a medida que se unen.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Dominio de las Fases</div>
+                </div>
+                <div class="step-content">
+                    <ul>
+                        <li>Usa la barra lateral izquierda para navegar por las fases del juego.</li>
+                        <li>Al seleccionar una fase, **teletransportarás** a todos los jugadores a esa pantalla.</li>
+                        <li>Supervisa el contenido que escriben en tiempo real desde tu dashboard.</li>
+                        <li>Al finalizar el viaje, pulsa <span class="badge">Finalizar Workshop</span> para cerrar todas las sesiones.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN JUGADORES -->
+        <div id="player-section" class="content-section">
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Entrada al Mundo</div>
+                </div>
+                <div class="step-content">
+                    <ul>
+                        <li>Escanea el QR o entra en la URL principal desde tu móvil.</li>
+                        <li>Disfruta del video de bienvenida y toca la pantalla para continuar.</li>
+                        <li>Introduce el <span class="highlight">Código de Sala</span> que te ha dado el Alquimista.</li>
+                        <li>Elige tu elemento: **Agua, Aire, Fuego o Tierra**.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Transmutación de Ideas</div>
+                </div>
+                <div class="step-content">
+                    <ul>
+                        <li>Rellena los campos de texto de cada fase con vuestras soluciones creativas.</li>
+                        <li>En la fase de **Ataque (Sublimar)**, envía retos a los otros equipos. ¡Mínimo 10 para avanzar!</li>
+                        <li>Pulsa el botón de avanzar cuando termines tu parte, pero recuerda que el Alquimista tiene el control final del tiempo.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-header">
+                    <div class="step-number">3</div>
+                    <div class="step-title">El Legado Final</div>
+                </div>
+                <div class="step-content">
+                    <ul>
+                        <li>Al terminar, verás el resumen de vuestra creación y las estadísticas de ataques.</li>
+                        <li>Pulsa <span class="badge">Finalizar</span> para cerrar tu sesión y despedir el taller.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 Kreatum Platform. Diseñado para Alquimistas de la Creatividad.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Inicializar iconos
+        lucide.createIcons();
+
+        function switchRole(role, btn) {
+            // Actualizar botones
+            document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Actualizar secciones
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.getElementById(role + '-section').classList.add('active');
+            
+            // Re-inicializar iconos por si acaso
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
