@@ -61,8 +61,8 @@ export default function AdminApp() {
     );
   }
 
-  // Not authenticated — show full-screen login
-  if (!user) {
+  // Not authenticated or is an anonymous player — show full-screen login
+  if (!user || user.isAnonymous) {
     return <AdminLoginScreen />;
   }
 
