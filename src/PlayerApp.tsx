@@ -35,6 +35,9 @@ export default function PlayerApp() {
   const [isDark, setIsDark] = useState(false);
   const [showClosure, setShowClosure] = useState(false);
   const [showSplash, setShowSplash] = useState(() => {
+    if (localStorage.getItem('kreatum_splash_seen') === 'true') {
+      return false;
+    }
     const hasExistingSession =
       localStorage.getItem('kreatum_game_id') &&
       localStorage.getItem('kreatum_team');
@@ -170,7 +173,10 @@ export default function PlayerApp() {
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark text-kreatum-gray dark:text-white transition-colors duration-500">
       {/* Hero Video Splash */}
-      {showSplash && <HeroSplash onDismiss={() => setShowSplash(false)} />}
+      {showSplash && <HeroSplash onDismiss={() => {
+        setShowSplash(false);
+        localStorage.setItem('kreatum_splash_seen', 'true');
+      }} />}
 
       {/* Immersive background orbs */}
       <div className={cn("fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[140px] pointer-events-none z-0 transition-colors duration-1000", bg1)}></div>
