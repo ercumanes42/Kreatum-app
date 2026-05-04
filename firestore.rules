@@ -8,10 +8,10 @@ service cloud.firestore {
     match /games/{gameId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      // Only allow updating specific fields (phase control, status)
+// Only allow updating specific fields (phase control, status, challenge, unlocked phases)
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['currentPhase', 'status', 'completedAt']);
+           .hasOnly(['currentPhase', 'status', 'completedAt', 'unlockedPhases', 'challenge']);
 
       // ─── TEAMS ───────────────────────────────────────────
       // A team document can be read by anyone in the game.
