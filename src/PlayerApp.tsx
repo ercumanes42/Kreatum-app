@@ -63,7 +63,7 @@ export default function PlayerApp() {
 
   // Sync Global Phase and Status to local state for regular players
   useEffect(() => {
-    if (globalState?.currentPhase && !isAlchemist) {
+    if (globalState?.currentPhase && !isAlchemist && globalState.currentPhase !== state.currentPhase) {
       setState(prev => ({ ...prev, currentPhase: globalState.currentPhase as Phase }));
     }
 
@@ -71,7 +71,7 @@ export default function PlayerApp() {
       alert("El Alquimista ha finalizado el workshop. La sesión se ha cerrado.");
       leaveGame();
     }
-  }, [globalState?.currentPhase, globalState?.status, isAlchemist, leaveGame]);
+  }, [globalState?.currentPhase, globalState?.status, state.currentPhase, isAlchemist, leaveGame]);
 
   // Sync Firestore team state to local state
   useEffect(() => {

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Shield, Zap, Lock, ChevronRight } from 'lucide-react';
+import { Send, Shield, Zap, Lock, ChevronRight, X } from 'lucide-react';
 import { useAttacksReceived, useOpponentSolutions, useAttacksSent, Attack, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 import { cn } from '../../lib/utils';
@@ -40,7 +40,7 @@ const ATTACK_MAP: Record<Team, Team> = {
 };
 
 export function Sublimar({ state, updateState }: Props) {
-  const { sendAttack, gameId } = useGame();
+  const { sendAttack, deleteAttack, gameId } = useGame();
 
   const myTeam = state.team;
   const targetTeam = myTeam ? ATTACK_MAP[myTeam] : null;
@@ -243,12 +243,20 @@ export function Sublimar({ state, updateState }: Props) {
                         key={attack.id}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl border border-kreatum-red/10 shadow-sm"
+                        className="group relative flex items-center gap-3 p-3 bg-white dark:bg-white/5 rounded-xl border border-kreatum-red/10 shadow-sm"
                       >
                         <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center bg-kreatum-red/10 text-kreatum-red rounded-lg text-[10px] font-mono font-bold">
                           {String(idx + 1).padStart(2, '0')}
                         </span>
-                        <span className="text-xs text-kreatum-dark dark:text-white/80 line-clamp-2">{attack.content}</span>
+                        <span className="text-xs text-kreatum-dark dark:text-white/80 line-clamp-2 pr-6">{attack.content}</span>
+                        
+                        <button
+                          onClick={() => deleteAttack(attack.id)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-kreatum-red/40 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                          title="Eliminar ataque"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </motion.div>
                     ))}
                   </div>

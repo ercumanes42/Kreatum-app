@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
-import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 
@@ -23,6 +23,7 @@ interface GameContextType {
   saveSolution: (team: Team, content: string) => Promise<void>;
   validateRoomCode: (code: string) => Promise<boolean>;
   resetPlatform: () => Promise<void>;
+  deleteAttack: (attackId: string) => Promise<void>;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -290,6 +291,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const deleteAttack = async (attackId: string) => {
+    if (!gameId) return;
+    await deleteDoc(doc(db, 'games', gameId, 'attacks', attackId));
+  };
+
   return (
     <GameContext.Provider
       value={{
@@ -308,6 +314,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         updateSolution,
         saveSolution,
         validateRoomCode,
+        resetPlatform,
+        deleteAttack,
       }}
     >
       {children}
