@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { GameState } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Textarea } from '../ui/Textarea';
@@ -25,7 +25,6 @@ export function Proyectar({ state, updateState }: Props) {
     ? firestoreAttacksSent.map(a => a.content)
     : state.attacksOnOthers.filter(a => a.trim());
   const attacksReceivedList = firestoreAttacksReceived.map(a => a.content);
-
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
@@ -125,8 +124,6 @@ export function Proyectar({ state, updateState }: Props) {
           </div>
         </CardContent>
       </Card>
-
-
     </motion.div>
   );
 }
