@@ -118,7 +118,11 @@ export default function PlayerApp() {
     if (state.currentPhase === 'Selección' && !state.team) return true;
     
     const nextPhase = PHASES[currentIndex + 1];
-    if (!unlockedPhases.includes(nextPhase)) return true;
+    // Solo bloquear a partir de Conjugar (fase 4 = índice 3)
+    // Calcinar y Diluir se pueden avanzar libremente
+    if (currentIndex >= 3) { // Índice de Conjugar es 3
+      if (!unlockedPhases.includes(nextPhase)) return true;
+    }
 
     if (state.currentPhase === 'Sublimar') {
       if (!state.team) return true;
@@ -131,7 +135,11 @@ export default function PlayerApp() {
   const blockedByAlchemist = () => {
     if (currentIndex === PHASES.length - 1) return false;
     const nextPhase = PHASES[currentIndex + 1];
-    return nextPhase && !unlockedPhases.includes(nextPhase);
+    // Solo mostrar bloqueo a partir de Conjugar
+    if (currentIndex >= 3) {
+      return nextPhase && !unlockedPhases.includes(nextPhase);
+    }
+    return false;
   };
 
   const getTeamColor = (team: Team | null) => {
