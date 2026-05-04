@@ -55,10 +55,16 @@ export function AlchemistPanel({ gameId }: Props) {
   const hasUnlockedPhases = globalState.unlockedPhases && globalState.unlockedPhases.length > 0;
   const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
-  const setGlobalPhase = (phase: Phase) => {
+  const setGlobalPhase = async (phase: Phase) => {
     const phaseIndex = PHASES.indexOf(phase);
     const newUnlocked = PHASES.slice(0, phaseIndex + 2);
-    updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
+    try {
+      await updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
+      console.log('Fase y desbloqueos actualizados:', { phase, newUnlocked });
+    } catch (e: any) {
+      console.error('Error al actualizar fase:', e);
+      alert('Error al actualizar fase: ' + (e.message || 'Error de permisos en Firestore'));
+    }
   };
 
   const getTeamProgress = (teamData: any) => {
@@ -104,8 +110,13 @@ export function AlchemistPanel({ gameId }: Props) {
 
   const handleFinalize = async () => {
     if (!confirm('¿Seguro que quieres finalizar el workshop? Esto marcará la sesión como completada.')) return;
-    await setDoc(doc(db, 'games', gameId), { status: 'completed', completedAt: Date.now() }, { merge: true });
-    alert('Workshop finalizado y marcado como completado.');
+    try {
+      await updateDoc(doc(db, 'games', gameId), { status: 'completed', completedAt: Date.now() });
+      alert('Workshop finalizado y marcado como completado.');
+    } catch (e: any) {
+      console.error('Error al finalizar workshop:', e);
+      alert('Error al finalizar workshop: ' + (e.message || 'Error de permisos'));
+    }
   };
 
   const [copied, setCopied] = useState(false);
@@ -207,7 +218,7 @@ export function AlchemistPanel({ gameId }: Props) {
               {PHASES.map((phase, idx) => {
                 const isActive = currentPhase === phase;
                 const isPast = PHASES.indexOf(currentPhase) > idx;
-                const isPhaseUnlocked = unlockedPhases.includes(phase);
+                const isNextUnlocked = idx === PHASES.length - 1 ? true : unlockedPhases.includes(PHASES[idx + 1]);
                 return (
                   <button
                     key={phase}
@@ -227,7 +238,16 @@ export function AlchemistPanel({ gameId }: Props) {
                       </span>
                       <span className="font-medium tracking-tight">{phase}</span>
                     </div>
-                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? <div className="w-2 h-2 rounded-full bg-white animate-pulse" /> : !isPhaseUnlocked ? <span title="Fase bloqueada para jugadores">🔒</span> : <ChevronRight className="w-4 h-4 opacity-30" />}
+                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? (
+                      <div className="flex items-center gap-2">
+                        {!isNextUnlocked && <span title="Transición bloqueada para jugadores" className="text-white/80">🔒</span>}
+                        <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                      </div>
+                    ) : !isNextUnlocked ? (
+                      <span title="Transición bloqueada para jugadores">🔒</span>
+                    ) : (
+                      <ChevronRight className="w-4 h-4 opacity-30" />
+                    )}
                   </button>
                 );
               })}

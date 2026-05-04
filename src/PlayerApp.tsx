@@ -274,7 +274,7 @@ export default function PlayerApp() {
       </header>
 
       {/* Premium Challenge Banner */}
-      {challenge && state.team && state.currentPhase !== 'Selección' && (
+      {challenge && state.team && !['Selección', 'Calcinar', 'Diluir'].includes(state.currentPhase) && (
         <div className="w-full bg-gradient-to-r from-kreatum-purple/10 via-transparent to-kreatum-purple/10 border-b border-kreatum-purple/20 backdrop-blur-md px-6 py-4 relative z-20 overflow-hidden">
           {/* Subtle animated light effect */}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />

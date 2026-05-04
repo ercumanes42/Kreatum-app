@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Team, GameState, Phase } from '../types';
 
 export interface Attack {
@@ -81,7 +81,12 @@ export function useGameGlobal(gameId: string | null) {
   const updateGlobalState = async (updates: any) => {
     if (!gameId) return;
     const docRef = doc(db, 'games', gameId);
-    await setDoc(docRef, updates, { merge: true });
+    try {
+      await updateDoc(docRef, updates);
+    } catch (error) {
+      console.error('Error updating global state:', error);
+      throw error;
+    }
   };
 
   return { globalState, updateGlobalState, isLoading };
