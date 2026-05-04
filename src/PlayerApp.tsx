@@ -48,7 +48,9 @@ export default function PlayerApp() {
   const { attacks: attacksSent } = useAttacksSent(gameId, team || state.team);
   const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
   const challenge = globalState?.challenge || '';
-  const unlockedPhases = (globalState?.unlockedPhases as string[]) || ['Selección'];
+  // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir todas las fases
+  const hasUnlockedPhases = globalState?.unlockedPhases && globalState.unlockedPhases.length > 0;
+  const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
   // Sync context team into local state
   useEffect(() => {

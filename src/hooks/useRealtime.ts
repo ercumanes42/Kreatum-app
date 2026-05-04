@@ -58,7 +58,7 @@ export function useAttacksReceived(gameId: string | null, myTeam: Team | null) {
 }
 
 export function useGameGlobal(gameId: string | null) {
-  const [globalState, setGlobalState] = useState<{ currentPhase?: Phase; timer?: number }>({});
+  const [globalState, setGlobalState] = useState<{ currentPhase?: Phase; timer?: number; challenge?: string; unlockedPhases?: string[] }>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

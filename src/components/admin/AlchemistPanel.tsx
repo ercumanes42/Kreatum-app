@@ -51,7 +51,9 @@ export function AlchemistPanel({ gameId }: Props) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
 
   const currentPhase = globalState.currentPhase || 'Selección';
-  const unlockedPhases = (globalState.unlockedPhases as string[]) || ['Selección'];
+  // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir todas las fases
+  const hasUnlockedPhases = globalState.unlockedPhases && globalState.unlockedPhases.length > 0;
+  const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
   const setGlobalPhase = (phase: Phase) => {
     const phaseIndex = PHASES.indexOf(phase);
