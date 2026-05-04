@@ -1,3 +1,4 @@
+// Force redeploy - Phase 4 Fixes
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
