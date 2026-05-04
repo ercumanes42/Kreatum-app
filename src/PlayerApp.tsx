@@ -312,10 +312,14 @@ export default function PlayerApp() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
             >
-              <WorkshopClosure onRestart={() => {
-                setShowClosure(false);
-                leaveGame();
-              }} />
+              <WorkshopClosure 
+                state={state}
+                isOpen={true}
+                onClose={() => {
+                  setShowClosure(false);
+                  leaveGame();
+                }} 
+              />
             </motion.div>
           ) : (
             <motion.div
