@@ -9,6 +9,16 @@ export type Phase =
   | 'Fermentar' 
   | 'Proyectar';
 
+export const PHASES: Phase[] = [
+  'Selección',
+  'Calcinar',
+  'Diluir',
+  'Conjugar',
+  'Sublimar',
+  'Fermentar',
+  'Proyectar'
+];
+
 export interface GameState {
   team: Team | null;
   currentPhase: Phase;

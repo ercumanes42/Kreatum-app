@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { GameState } from '../../types';
+import { GameState, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { motion } from 'motion/react';
 import { Button } from '../ui/Button';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, X } from 'lucide-react';
 
 import { useGame } from '../../contexts/GameContext';
+import { useGameGlobal } from '../../hooks/useRealtime';
 
 interface Props {
   state: GameState;
@@ -14,8 +15,10 @@ interface Props {
 }
 
 export function Conjugar({ state, updateState }: Props) {
-  const { saveSolution } = useGame();
+  const { saveSolution, gameId } = useGame();
   const [selectionError, setSelectionError] = useState('');
+  const { globalState } = useGameGlobal(gameId);
+  const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Conjugar');
   
   const handleSolutionChange = (index: number, value: string) => {
     const newSolutions = [...state.solutions];
@@ -77,20 +80,37 @@ export function Conjugar({ state, updateState }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           {state.solutions.map((sol, idx) => (
-            <div key={idx} className="flex items-center gap-4">
+            <div key={idx} className="group relative flex items-center gap-4">
               <span className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-black/5 dark:bg-white/5 rounded-2xl text-kreatum-gray/60 dark:text-white/80 font-mono text-sm border border-black/5 dark:border-white/5">
                 {String(idx + 1).padStart(2, '0')}
               </span>
-              <Input 
-                value={sol}
-                onChange={(e) => handleSolutionChange(idx, e.target.value)}
-                placeholder="Plantea una solución..."
-              />
+              <div className="relative flex-1">
+                <Input 
+                  value={sol}
+                  onChange={(e) => handleSolutionChange(idx, e.target.value)}
+                  placeholder="Plantea una solución..."
+                  disabled={isLocked}
+                  className="pr-10"
+                />
+                {!isLocked && sol.trim() !== '' && (
+                  <button
+                    onClick={() => {
+                      const newSolutions = state.solutions.filter((_, i) => i !== idx);
+                      if (newSolutions.length === 0) newSolutions.push('');
+                      updateState({ solutions: newSolutions });
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-red-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Eliminar solución"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <Button
                 variant="outline"
                 className="h-12 px-4 flex-shrink-0 cursor-pointer"
                 onClick={() => selectForTop3(sol)}
-                disabled={!sol.trim()}
+                disabled={!sol.trim() || isLocked}
                 title="Elegir para mis 3 soluciones"
               >
                 <ArrowDown className="w-4 h-4 mr-2" />
@@ -119,6 +139,7 @@ export function Conjugar({ state, updateState }: Props) {
                   value={state.top3Solutions[idx]}
                   onChange={(e) => handleTop3Change(idx, e.target.value)}
                   placeholder="Copia o adapta aquí la solución..."
+                  disabled={isLocked}
                 />
               </div>
             ))}
@@ -143,6 +164,7 @@ export function Conjugar({ state, updateState }: Props) {
                       value={state.solutionVotes[idx] || ''}
                       onChange={(e) => handleVoteChange(idx, e.target.value)}
                       placeholder="Votos"
+                      disabled={isLocked}
                       className="text-center font-bold text-kreatum-turquoise text-lg placeholder:text-kreatum-gray/30 dark:placeholder:text-white/20"
                     />
                   </div>
@@ -164,6 +186,7 @@ export function Conjugar({ state, updateState }: Props) {
                   }
                 }}
                 placeholder="Escribe la solución a desarrollar..."
+                disabled={isLocked}
                 className="border-kreatum-turquoise/40 dark:border-kreatum-turquoise/50 focus:ring-kreatum-turquoise bg-kreatum-turquoise/5 dark:bg-kreatum-turquoise/10"
               />
             </div>

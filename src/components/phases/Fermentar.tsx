@@ -1,8 +1,10 @@
 import React from 'react';
-import { GameState } from '../../types';
+import { GameState, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Textarea } from '../ui/Textarea';
 import { motion } from 'motion/react';
+import { useGameGlobal } from '../../hooks/useRealtime';
+import { useGame } from '../../contexts/GameContext';
 
 interface Props {
   state: GameState;
@@ -10,6 +12,9 @@ interface Props {
 }
 
 export function Fermentar({ state, updateState }: Props) {
+  const { gameId } = useGame();
+  const { globalState } = useGameGlobal(gameId);
+  const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Fermentar');
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
       <div className="mb-10">
@@ -27,6 +32,7 @@ export function Fermentar({ state, updateState }: Props) {
               value={state.audience}
               onChange={(e) => updateState({ audience: e.target.value })}
               placeholder="Ej: Director de Experiencia de Cliente..."
+              disabled={isLocked}
               className="min-h-[120px] focus:ring-kreatum-purple/50 focus:border-kreatum-purple/50"
             />
           </CardContent>
@@ -42,6 +48,7 @@ export function Fermentar({ state, updateState }: Props) {
                 value={state.strengths}
                 onChange={(e) => updateState({ strengths: e.target.value })}
                 placeholder="Las ventajas más grandes de nuestra propuesta..."
+                disabled={isLocked}
                 className="focus:ring-kreatum-green/50 focus:border-kreatum-green/50 hover:border-kreatum-green/30"
               />
             </CardContent>
@@ -56,6 +63,7 @@ export function Fermentar({ state, updateState }: Props) {
                 value={state.weaknesses}
                 onChange={(e) => updateState({ weaknesses: e.target.value })}
                 placeholder="Riesgos o puntos débiles que debemos admitir y tener en cuenta..."
+                disabled={isLocked}
                 className="focus:ring-kreatum-yellow/50 focus:border-kreatum-yellow/50 hover:border-kreatum-yellow/30"
               />
             </CardContent>
@@ -71,6 +79,7 @@ export function Fermentar({ state, updateState }: Props) {
               value={state.pilot}
               onChange={(e) => updateState({ pilot: e.target.value })}
               placeholder="¿Cómo lo probaríamos de manera ágil y barata? (Ej: en un sólo concesionario de Madrid durante 1 semana)"
+              disabled={isLocked}
               className="min-h-[160px] focus:ring-kreatum-blue/50 focus:border-kreatum-blue/50 hover:border-kreatum-blue/30"
             />
           </CardContent>
@@ -85,6 +94,7 @@ export function Fermentar({ state, updateState }: Props) {
               value={state.resources}
               onChange={(e) => updateState({ resources: e.target.value })}
               placeholder="¿Qué y cuánto necesitamos para lanzar este prototipo? (Personas, dinero, permisos...)"
+              disabled={isLocked}
               className="min-h-[160px] focus:ring-kreatum-purple/50 focus:border-kreatum-purple/50"
             />
           </CardContent>

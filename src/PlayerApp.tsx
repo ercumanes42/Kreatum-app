@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, initialState, Phase, Team } from './types';
+import { GameState, initialState, Phase, Team, PHASES } from './types';
 import { Button } from './components/ui/Button';
 import { ChevronRight, ChevronLeft, Hexagon, Moon, Sun } from 'lucide-react';
 import { cn } from './lib/utils';
@@ -17,15 +17,7 @@ import { useAttacksSent, useTeamSync, useGameGlobal } from './hooks/useRealtime'
 import { useGame } from './contexts/GameContext';
 import { HeroSplash } from './components/HeroSplash';
 
-const PHASES: Phase[] = [
-  'Selección',
-  'Calcinar',
-  'Diluir',
-  'Conjugar',
-  'Sublimar',
-  'Fermentar',
-  'Proyectar'
-];
+
 
 const MIN_ATTACKS_PER_TEAM = 10;
 
@@ -33,6 +25,7 @@ export default function PlayerApp() {
   const { gameId, team, isAlchemist, leaveGame, roomCode } = useGame();
   const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
   const [isDark, setIsDark] = useState(false);
+  const [showClosure, setShowClosure] = useState(false);
   const [showSplash, setShowSplash] = useState(() => {
     if (localStorage.getItem('kreatum_splash_seen') === 'true') {
       return false;
@@ -68,8 +61,7 @@ export default function PlayerApp() {
     }
 
     if (globalState?.status === 'completed' && !isAlchemist) {
-      alert("El Alquimista ha finalizado el workshop. La sesión se ha cerrado.");
-      leaveGame();
+      setShowClosure(true);
     }
   }, [globalState?.currentPhase, globalState?.status, state.currentPhase, isAlchemist, leaveGame]);
 
@@ -313,26 +305,40 @@ export default function PlayerApp() {
       {/* Main Content */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-12 relative z-10">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={state.currentPhase}
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.98 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-          >
-            {state.currentPhase === 'Selección' && <TeamSelection state={state} updateState={updateState} />}
-            {state.currentPhase === 'Calcinar' && <Calcinar />}
-            {state.currentPhase === 'Diluir' && <Diluir state={state} updateState={updateState} />}
-            {state.currentPhase === 'Conjugar' && <Conjugar state={state} updateState={updateState} />}
-            {state.currentPhase === 'Sublimar' && <Sublimar state={state} updateState={updateState} />}
-            {state.currentPhase === 'Fermentar' && <Fermentar state={state} updateState={updateState} />}
-            {state.currentPhase === 'Proyectar' && <Proyectar state={state} updateState={updateState} onShowClosure={() => setShowClosure(true)} />}
-          </motion.div>
+          {showClosure ? (
+            <motion.div
+              key="closure"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+            >
+              <WorkshopClosure onRestart={() => {
+                setShowClosure(false);
+                leaveGame();
+              }} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key={state.currentPhase}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.98 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+            >
+              {state.currentPhase === 'Selección' && <TeamSelection state={state} updateState={updateState} />}
+              {state.currentPhase === 'Calcinar' && <Calcinar />}
+              {state.currentPhase === 'Diluir' && <Diluir state={state} updateState={updateState} />}
+              {state.currentPhase === 'Conjugar' && <Conjugar state={state} updateState={updateState} />}
+              {state.currentPhase === 'Sublimar' && <Sublimar state={state} updateState={updateState} />}
+              {state.currentPhase === 'Fermentar' && <Fermentar state={state} updateState={updateState} />}
+              {state.currentPhase === 'Proyectar' && <Proyectar state={state} updateState={updateState} onShowClosure={() => setShowClosure(true)} />}
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
       {/* Footer / Navigation */}
-      {state.team && (
+      {state.team && !showClosure && (
         <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-t border-black/5 dark:border-white/5 mt-auto relative z-20 transition-colors duration-500">
           <div className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
             <Button 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GameState, Team } from '../../types';
+import { GameState, Team, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
@@ -101,6 +101,7 @@ export function Sublimar({ state, updateState }: Props) {
 
   const { globalState } = useGameGlobal(gameId);
   const isNextUnlocked = globalState?.unlockedPhases?.includes('Fermentar');
+  const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Sublimar');
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
@@ -219,7 +220,7 @@ export function Sublimar({ state, updateState }: Props) {
                         ? "¡10 ataques completados!"
                         : `Escribe ataque #${totalAttacksSent + 1} para ${targetTeam}...`}
                       className="flex-1"
-                      disabled={!targetTeam || totalAttacksSent >= MAX_ATTACKS_PER_TEAM || isSending}
+                      disabled={!targetTeam || totalAttacksSent >= MAX_ATTACKS_PER_TEAM || isSending || isLocked}
                       onKeyDown={(e) => e.key === 'Enter' && handleSendAttack()}
                     />
                     <button
@@ -250,13 +251,15 @@ export function Sublimar({ state, updateState }: Props) {
                         </span>
                         <span className="text-xs text-kreatum-dark dark:text-white/80 line-clamp-2 pr-6">{attack.content}</span>
                         
-                        <button
-                          onClick={() => deleteAttack(attack.id)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-kreatum-red/40 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                          title="Eliminar ataque"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        {!isLocked && (
+                          <button
+                            onClick={() => deleteAttack(attack.id)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-kreatum-red/40 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                            title="Eliminar ataque"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </motion.div>
                     ))}
                   </div>

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { GameState } from '../../types';
+import { GameState, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { motion } from 'motion/react';
 import { Button } from '../ui/Button';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, X } from 'lucide-react';
 import { useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 
@@ -19,6 +19,7 @@ export function Diluir({ state, updateState }: Props) {
   const { gameId } = useGame();
   const { globalState } = useGameGlobal(gameId);
   const challenge = globalState?.challenge || state.challenge || '';
+  const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Diluir');
 
   const handlePerspectiveChange = (index: number, value: string) => {
     const newPerspectives = [...state.perspectives];
@@ -80,20 +81,37 @@ export function Diluir({ state, updateState }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           {state.perspectives.map((persp, idx) => (
-            <div key={idx} className="flex items-center gap-4">
+            <div key={idx} className="group relative flex items-center gap-4">
               <span className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-black/5 dark:bg-white/5 rounded-2xl text-kreatum-gray/60 dark:text-white/80 font-mono text-sm border border-black/5 dark:border-white/5">
                 {String(idx + 1).padStart(2, '0')}
               </span>
-              <Input 
-                value={persp}
-                onChange={(e) => handlePerspectiveChange(idx, e.target.value)}
-                placeholder="Escribe una nueva línea de pensamiento..."
-              />
+              <div className="relative flex-1">
+                <Input 
+                  value={persp}
+                  onChange={(e) => handlePerspectiveChange(idx, e.target.value)}
+                  placeholder="Escribe una nueva línea de pensamiento..."
+                  disabled={isLocked}
+                  className="pr-10"
+                />
+                {!isLocked && persp.trim() !== '' && (
+                  <button
+                    onClick={() => {
+                      const newPerspectives = state.perspectives.filter((_, i) => i !== idx);
+                      if (newPerspectives.length === 0) newPerspectives.push('');
+                      updateState({ perspectives: newPerspectives });
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-red-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Eliminar perspectiva"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <Button
                 variant="outline"
                 className="h-12 px-4 flex-shrink-0 cursor-pointer"
                 onClick={() => selectForTop3(persp)}
-                disabled={!persp.trim()}
+                disabled={!persp.trim() || isLocked}
                 title="Elegir para mis 3 líneas"
               >
                 <ArrowDown className="w-4 h-4 mr-2" />
@@ -125,6 +143,7 @@ export function Diluir({ state, updateState }: Props) {
                   value={state.top3Perspectives[idx]}
                   onChange={(e) => handleTop3Change(idx, e.target.value)}
                   placeholder="Copia o adapta aquí la línea..."
+                  disabled={isLocked}
                 />
               </div>
             ))}
@@ -149,6 +168,7 @@ export function Diluir({ state, updateState }: Props) {
                       value={state.perspectiveVotes[idx] || ''}
                       onChange={(e) => handleVoteChange(idx, e.target.value)}
                       placeholder="Votos"
+                      disabled={isLocked}
                       className="text-center font-bold text-kreatum-purple text-lg placeholder:text-kreatum-gray/30 dark:placeholder:text-white/20"
                     />
                   </div>
@@ -164,6 +184,7 @@ export function Diluir({ state, updateState }: Props) {
                 value={state.selectedPerspective}
                 onChange={(e) => updateState({ selectedPerspective: e.target.value })}
                 placeholder="Escribe la línea con la que vamos a trabajar..."
+                disabled={isLocked}
                 className="border-kreatum-purple/40 dark:border-kreatum-purple/50 focus:ring-kreatum-purple bg-kreatum-purple/5 dark:bg-kreatum-purple/10"
               />
             </div>
