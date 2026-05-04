@@ -1,33 +1,23 @@
 import React from 'react';
-import { GameState, PHASES } from '../../types';
+import { GameState, Phase } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Textarea } from '../ui/Textarea';
 import { motion } from 'motion/react';
 import { Button } from '../ui/Button';
 import { Sparkles } from 'lucide-react';
 import { sounds } from '../../lib/sounds';
-import { useAttacksReceived, useAttacksSent, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 
 interface Props {
   state: GameState;
   updateState: (updates: Partial<GameState>) => void;
-  onShowClosure: () => void;
 }
 
-export function Proyectar({ state, updateState, onShowClosure }: Props) {
-  const { gameId, leaveGame } = useGame();
-  const { globalState } = useGameGlobal(gameId);
-  const isLocked = globalState?.status === 'completed';
+export function Proyectar({ state, updateState }: Props) {
+  const { gameId } = useGame();
 
   // Fetch real attack data from Firestore
-  const { attacks: firestoreAttacksReceived } = useAttacksReceived(gameId, state.team);
-  const { attacks: firestoreAttacksSent } = useAttacksSent(gameId, state.team);
-
-  const attacksSentList = firestoreAttacksSent.length > 0
-    ? firestoreAttacksSent.map(a => a.content)
-    : state.attacksOnOthers.filter(a => a.trim());
-  const attacksReceivedList = firestoreAttacksReceived.map(a => a.content);
+  // Note: gameId would be used for real-time sync in future versions
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
@@ -55,7 +45,7 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
                   onChange={(e) => {
                     updateState({ pitchStart: e.target.value });
                   }}
-                  disabled={isLocked}
+                  disabled={false}
                   className="min-h-[120px] bg-white/50 dark:bg-black/20 text-sm flex-1"
                   placeholder="Escribe tu inicio aquí..."
                 />
@@ -73,7 +63,7 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
                   onChange={(e) => {
                     updateState({ pitchProblem: e.target.value });
                   }}
-                  disabled={isLocked}
+                  disabled={false}
                   className="min-h-[120px] bg-white/50 dark:bg-black/20 text-sm flex-1"
                   placeholder="Escribe el problema aquí..."
                 />
@@ -91,7 +81,7 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
                   onChange={(e) => {
                     updateState({ pitchSolution: e.target.value });
                   }}
-                  disabled={isLocked}
+                  disabled={false}
                   className="min-h-[120px] bg-white/50 dark:bg-black/20 text-sm flex-1"
                   placeholder="Escribe la solución aquí..."
                 />
@@ -109,7 +99,7 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
                   onChange={(e) => {
                     updateState({ pitchAction: e.target.value });
                   }}
-                  disabled={isLocked}
+                  disabled={false}
                   className="min-h-[120px] bg-white/50 dark:bg-black/20 text-sm flex-1"
                   placeholder="Escribe la llamada a la acción aquí..."
                 />
@@ -121,7 +111,7 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
             <Button
               onClick={() => {
                 sounds.playSuccess();
-                leaveGame();
+                updateState({ currentPhase: 'Selección' as any });
               }}
               className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-lg"
             >

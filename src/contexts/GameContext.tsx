@@ -83,27 +83,26 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const generateRoomCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No visually confusing chars
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
+const generateRoomCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
 
-  const validateRoomCode = async (code: string): Promise<boolean> => {
-    const gamesRef = collection(db, 'games');
-    const q = query(gamesRef, where('roomCode', '==', code.trim().toUpperCase()));
-    const snapshot = await getDocs(q);
-    return !snapshot.empty;
-  };
+const validateRoomCode = async (code: string): Promise<boolean> => {
+  const gamesRef = collection(db, 'games');
+  const q = query(gamesRef, where('roomCode', '==', code.trim().toUpperCase()));
+  const snapshot = await getDocs(q);
+  return !snapshot.empty;
+};
 
   const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string; challenge?: string, customCode?: string }): Promise<string> => {
     if (!playerId) throw new Error('No se ha podido identificar al usuario. Reintenta en unos segundos.');
 
     const code = metadata?.customCode || generateRoomCode();
-    console.log('Generando partida con código:', code);
 
     const gameRef = await addDoc(collection(db, 'games'), {
       createdAt: Date.now(),

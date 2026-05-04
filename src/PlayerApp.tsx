@@ -336,7 +336,7 @@ export default function PlayerApp() {
               {state.currentPhase === 'Conjugar' && <Conjugar state={state} updateState={updateState} />}
               {state.currentPhase === 'Sublimar' && <Sublimar state={state} updateState={updateState} />}
               {state.currentPhase === 'Fermentar' && <Fermentar state={state} updateState={updateState} />}
-              {state.currentPhase === 'Proyectar' && <Proyectar state={state} updateState={updateState} onShowClosure={() => setShowClosure(true)} />}
+              {state.currentPhase === 'Proyectar' && <Proyectar state={state} updateState={updateState} />}
             </motion.div>
           )}
         </AnimatePresence>
