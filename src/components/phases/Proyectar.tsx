@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function Proyectar({ state, updateState }: Props) {
-  const { gameId } = useGame();
+  const { gameId, leaveGame } = useGame();
 
   // Fetch real attack data from Firestore
   const { attacks: firestoreAttacksReceived } = useAttacksReceived(gameId, state.team);
@@ -114,7 +114,7 @@ export function Proyectar({ state, updateState }: Props) {
             <Button
               onClick={() => {
                 sounds.playSuccess();
-                updateState({ currentPhase: 'Selección' as any });
+                leaveGame();
               }}
               className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-lg"
             >
