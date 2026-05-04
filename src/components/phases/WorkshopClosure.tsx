@@ -147,8 +147,19 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                 transition={{ delay: 0.5 }}
                 className="text-6xl md:text-7xl font-light tracking-tighter text-white font-serif mb-6"
               >
-                ¡Workshop Completado!
+                ¡Enhorabuena, Alquimistas!
               </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className="text-white/60 text-lg mb-8"
+              >
+                Has completado con éxito todas las fases de Kreatum.
+                <br />
+                Tu visión y creatividad han dado sus frutos.
+              </motion.p>
 
               <motion.div
                 initial={{ opacity: 0 }}
@@ -254,7 +265,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                 className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-base"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                Finalizar
+                Volver al Inicio
               </Button>
             </motion.div>
           </div>
