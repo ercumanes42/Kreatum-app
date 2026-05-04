@@ -357,17 +357,15 @@ export function AlchemistPanel({ gameId }: Props) {
                           <p className="text-sm italic line-clamp-2 leading-relaxed flex-1">
                             {data?.selectedSolution || <span className="opacity-30">Aún no definida...</span>}
                           </p>
-                          {data && (
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="shrink-0 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
-                              onClick={() => setSummaryTeam(teamId)}
-                            >
-                              <Sparkles className="w-3 h-3 mr-1" />
-                              Resumen
-                            </Button>
-                          )}
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="shrink-0 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
+                            onClick={() => setSummaryTeam(teamId)}
+                          >
+                            <Sparkles className="w-3 h-3 mr-1" />
+                            Resumen
+                          </Button>
                         </div>
                       </div>
                     </CardContent>

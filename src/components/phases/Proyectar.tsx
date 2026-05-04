@@ -12,10 +12,9 @@ import { useGame } from '../../contexts/GameContext';
 interface Props {
   state: GameState;
   updateState: (updates: Partial<GameState>) => void;
-  onShowClosure?: () => void;
 }
 
-export function Proyectar({ state, updateState, onShowClosure }: Props) {
+export function Proyectar({ state, updateState }: Props) {
   const { gameId } = useGame();
 
   // Fetch real attack data from Firestore
@@ -111,11 +110,23 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
               </CardContent>
             </Card>
           </div>
+
+          <div className="flex justify-center mt-12">
+            <Button
+              onClick={() => {
+                sounds.playSuccess();
+                updateState({ currentPhase: 'Selección' as any });
+              }}
+              className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-lg"
+            >
+              <Sparkles className="w-5 h-5" />
+              Finalizar Workshop
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
 
-      </div>
     </motion.div>
   );
 }
