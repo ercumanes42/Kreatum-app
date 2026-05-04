@@ -105,9 +105,17 @@ export default function PlayerApp() {
   };
 
   const prevPhase = () => {
+    // Si estamos en Sublimar y en la vista de Defensa, volver a Ataque en lugar de cambiar de fase
+    if (state.currentPhase === 'Sublimar' && state.sublimarView === 'Defensa') {
+      updateState({ sublimarView: 'Ataque' });
+      return;
+    }
+
+    const currentIndex = PHASES.indexOf(state.currentPhase);
     if (currentIndex > 0) {
       sounds.playClick();
-      updateState({ currentPhase: PHASES[currentIndex - 1] });
+      const prevPhaseName = PHASES[currentIndex - 1];
+      updateState({ currentPhase: prevPhaseName });
       window.scrollTo(0, 0);
     }
   };

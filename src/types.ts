@@ -33,6 +33,7 @@ export interface GameState {
   defenses: string[];
   reformulatedSolution: string;
   expectedResults: string;
+  sublimarView: 'Ataque' | 'Defensa';
 
   // Fermentar
   audience: string;
@@ -70,6 +71,7 @@ export const initialState: GameState = {
   defenses: [''],
   reformulatedSolution: '',
   expectedResults: '',
+  sublimarView: 'Ataque',
 
   audience: '',
   strengths: '',

@@ -59,14 +59,20 @@ export function AlchemistPanel({ gameId }: Props) {
   const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
   const setGlobalPhase = async (phase: Phase) => {
-    const phaseIndex = PHASES.indexOf(phase);
-    const newUnlocked = PHASES.slice(0, phaseIndex + 2);
+    const newUnlocked = Array.from(new Set([...unlockedPhases, phase]));
     try {
       await updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
-      console.log('Fase y desbloqueos actualizados:', { phase, newUnlocked });
     } catch (e: any) {
-      console.error('Error al actualizar fase:', e);
-      alert('Error al actualizar fase: ' + (e.message || 'Error de permisos en Firestore'));
+      alert('Error al actualizar fase: ' + e.message);
+    }
+  };
+
+  const unlockPhase = async (phase: Phase) => {
+    const newUnlocked = Array.from(new Set([...unlockedPhases, phase]));
+    try {
+      await updateGlobalState({ unlockedPhases: newUnlocked });
+    } catch (e: any) {
+      alert('Error al desbloquear fase: ' + e.message);
     }
   };
 
@@ -244,11 +250,35 @@ export function AlchemistPanel({ gameId }: Props) {
                     </div>
                     {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? (
                       <div className="flex items-center gap-2">
-                        {idx >= 2 && !isNextUnlocked && <span title="Transición bloqueada para jugadores" className="text-white/80">🔒</span>}
+                        {idx >= 2 && idx < PHASES.length - 1 && (
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (!unlockedPhases.includes(PHASES[idx+1])) {
+                                unlockPhase(PHASES[idx+1]); 
+                              }
+                            }}
+                            className={cn(
+                              "p-1 rounded-md transition-all",
+                              unlockedPhases.includes(PHASES[idx+1]) 
+                                ? "text-white/40 cursor-default" 
+                                : "text-white hover:bg-white/20 hover:scale-110 active:scale-95"
+                            )}
+                            title={unlockedPhases.includes(PHASES[idx+1]) ? "Siguiente fase desbloqueada" : "Hacer clic para desbloquear siguiente fase"}
+                          >
+                            {unlockedPhases.includes(PHASES[idx+1]) ? '🔓' : '🔒'}
+                          </button>
+                        )}
                         <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
                       </div>
-                    ) : (idx >= 2 && !isNextUnlocked) ? (
-                      <span title="Transición bloqueada para jugadores">🔒</span>
+                    ) : (idx >= 2 && !unlockedPhases.includes(phase)) ? (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); unlockPhase(phase); }}
+                        className="text-white hover:scale-110 transition-transform p-1 hover:bg-kreatum-purple/20 rounded-md"
+                        title="Clic para desbloquear"
+                      >
+                        🔒
+                      </button>
                     ) : (
                       <ChevronRight className="w-4 h-4 opacity-30" />
                     )}

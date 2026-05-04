@@ -63,7 +63,8 @@ export function Sublimar({ state, updateState }: Props) {
 
   const [attackInput, setAttackInput] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [subView, setSubView] = useState<'Ataque' | 'Defensa'>('Ataque');
+  const subView = state.sublimarView || 'Ataque';
+  const setSubView = (view: 'Ataque' | 'Defensa') => updateState({ sublimarView: view });
 
   const currentRivalSolution = targetTeam ? opponentSolutions[targetTeam] || state.receivedSolutionToAttack : state.receivedSolutionToAttack;
 
@@ -97,6 +98,9 @@ export function Sublimar({ state, updateState }: Props) {
   const totalAttacksSent = getSentAttackCount();
   const requiredTotalAttacks = MIN_ATTACKS_PER_TEAM;
   const isAttackPhaseComplete = totalAttacksSent >= requiredTotalAttacks;
+
+  const { globalState } = useGameGlobal(gameId);
+  const isNextUnlocked = globalState?.unlockedPhases?.includes('Fermentar');
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
@@ -259,12 +263,19 @@ export function Sublimar({ state, updateState }: Props) {
                 >
                   <button
                     onClick={() => setSubView('Defensa')}
-                    className="group relative px-12 py-5 bg-kreatum-blue text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-kreatum-blue/20 hover:scale-105 transition-all overflow-hidden"
+                    disabled={!isNextUnlocked}
+                    className={cn(
+                      "group relative px-12 py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl transition-all overflow-hidden",
+                      isNextUnlocked 
+                        ? "bg-kreatum-blue text-white shadow-kreatum-blue/20 hover:scale-105" 
+                        : "bg-kreatum-gray/20 text-kreatum-gray/40 cursor-not-allowed"
+                    )}
                   >
                     <span className="relative z-10 flex items-center gap-3">
-                      Continuar a Defensa <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      {isNextUnlocked ? 'Continuar a Defensa' : '🔒 Esperando al Alquimista'} 
+                      {isNextUnlocked && <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                     </span>
-                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                    {isNextUnlocked && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />}
                   </button>
                 </motion.div>
               )}
