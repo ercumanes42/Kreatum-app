@@ -51,6 +51,7 @@ export default function PlayerApp() {
     }
     if (!team && !gameId && state.team) {
       setState({ ...initialState });
+      setShowClosure(false);
     }
   }, [team, gameId]);
 
@@ -355,9 +356,14 @@ export default function PlayerApp() {
               Atrás
             </Button>
             
-<Button 
+            <Button 
               onClick={() => {
-                nextPhase();
+                if (currentIndex === PHASES.length - 1) {
+                  sounds.playSuccess();
+                  leaveGame();
+                } else {
+                  nextPhase();
+                }
               }}
               disabled={currentIndex === PHASES.length - 1 ? false : isNextDisabled()}
               title={blockedByAlchemist() ? 'El Alquimista aún no ha desbloqueado esta fase' : ''}
