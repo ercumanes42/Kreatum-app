@@ -33,7 +33,6 @@ export default function PlayerApp() {
   const { gameId, team, isAlchemist, leaveGame, roomCode } = useGame();
   const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
   const [isDark, setIsDark] = useState(false);
-  const [showClosure, setShowClosure] = useState(false);
   const [showSplash, setShowSplash] = useState(() => {
     if (localStorage.getItem('kreatum_splash_seen') === 'true') {
       return false;
@@ -335,12 +334,7 @@ export default function PlayerApp() {
             
 <Button 
               onClick={() => {
-                if (currentIndex === PHASES.length - 1) {
-                  sounds.playSuccess();
-                  setShowClosure(true);
-                } else {
-                  nextPhase();
-                }
+                nextPhase();
               }}
               disabled={currentIndex === PHASES.length - 1 ? false : isNextDisabled()}
               title={blockedByAlchemist() ? 'El Alquimista aún no ha desbloqueado esta fase' : ''}
@@ -360,12 +354,6 @@ export default function PlayerApp() {
         </footer>
       )}
 
-      {/* Workshop Closure Modal */}
-      <WorkshopClosure
-        state={state}
-        isOpen={showClosure}
-        onClose={() => setShowClosure(false)}
-      />
     </div>
   );
 }

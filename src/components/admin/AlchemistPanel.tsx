@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { GameHistory } from './GameHistory';
+import { WorkshopClosure } from '../phases/WorkshopClosure';
+import { Sparkles } from 'lucide-react';
 
 const PHASES: Phase[] = [
   'Selección',
@@ -49,6 +51,7 @@ export function AlchemistPanel({ gameId }: Props) {
   const { teams } = useAllTeams(gameId);
   const attackCounts = useAttacksCountByTeam(gameId);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
+  const [summaryTeam, setSummaryTeam] = useState<Team | null>(null);
 
   const currentPhase = globalState.currentPhase || 'Selección';
   // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir todas las fases
@@ -113,6 +116,7 @@ export function AlchemistPanel({ gameId }: Props) {
     try {
       await updateDoc(doc(db, 'games', gameId), { status: 'completed', completedAt: Date.now() });
       alert('Workshop finalizado y marcado como completado.');
+      leaveGame();
     } catch (e: any) {
       console.error('Error al finalizar workshop:', e);
       alert('Error al finalizar workshop: ' + (e.message || 'Error de permisos'));
@@ -319,9 +323,22 @@ export function AlchemistPanel({ gameId }: Props) {
 
                       <div className="bg-black/5 dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/5">
                         <p className="text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">Solución Definitiva</p>
-                        <p className="text-sm italic line-clamp-2 leading-relaxed">
-                          {data?.selectedSolution || <span className="opacity-30">Aún no definida...</span>}
-                        </p>
+                        <div className="flex justify-between items-start gap-4">
+                          <p className="text-sm italic line-clamp-2 leading-relaxed flex-1">
+                            {data?.selectedSolution || <span className="opacity-30">Aún no definida...</span>}
+                          </p>
+                          {data && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="shrink-0 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
+                              onClick={() => setSummaryTeam(teamId)}
+                            >
+                              <Sparkles className="w-3 h-3 mr-1" />
+                              Resumen
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -330,6 +347,14 @@ export function AlchemistPanel({ gameId }: Props) {
             </div>
           </div>
         </div>
+
+        {summaryTeam && teams[summaryTeam] && (
+          <WorkshopClosure 
+            state={teams[summaryTeam] as any} 
+            onClose={() => setSummaryTeam(null)}
+            isOpen={!!summaryTeam}
+          />
+        )}
 
         {/* Action Bar */}
         <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl p-6 rounded-[32px] border border-black/5 dark:border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">

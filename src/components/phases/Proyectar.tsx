@@ -115,22 +115,6 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
       </Card>
 
 
-      <div className="text-center pt-16">
-        <h3 className="text-4xl font-light tracking-tighter text-kreatum-purple font-serif mb-6">¡Enhorabuena, Equipo!</h3>
-        <p className="text-sm font-mono text-kreatum-gray/80 dark:text-white/60 uppercase tracking-widest mb-10">
-          Habéis completado todas las fases de Kreatum.
-        </p>
-        
-        <div className="flex justify-center items-center">
-          <Button 
-            size="lg" 
-            className="px-10 flex gap-3 items-center bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-[0_0_30px_rgba(162,84,156,0.4)] rounded-2xl h-14 text-base" 
-            onClick={onShowClosure}
-          >
-            <Sparkles className="w-5 h-5" />
-            Ver Resumen de Partida
-          </Button>
-        </div>
       </div>
     </motion.div>
   );
