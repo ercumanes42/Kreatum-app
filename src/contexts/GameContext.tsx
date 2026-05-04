@@ -111,7 +111,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       client: metadata?.client || '',
       facilitator: metadata?.facilitator || '',
       challenge: metadata?.challenge || '',
-      unlockedPhases: ['Selección', 'Calcinar', 'Diluir'],
+      unlockedPhases: ['Selección'],
     });
 
     const gameId = gameRef.id;

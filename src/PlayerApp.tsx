@@ -48,7 +48,7 @@ export default function PlayerApp() {
   const { attacks: attacksSent } = useAttacksSent(gameId, team || state.team);
   const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
   const challenge = globalState?.challenge || '';
-  // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir todas las fases
+  // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir progreso libre
   const hasUnlockedPhases = globalState?.unlockedPhases && globalState.unlockedPhases.length > 0;
   const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
@@ -118,9 +118,8 @@ export default function PlayerApp() {
     if (state.currentPhase === 'Selección' && !state.team) return true;
     
     const nextPhase = PHASES[currentIndex + 1];
-    // Solo bloquear a partir de Conjugar (fase 4 = índice 3)
-    // Calcinar y Diluir se pueden avanzar libremente
-    if (currentIndex >= 3) { // Índice de Conjugar es 3
+    // Bloquear a partir de pasar de Diluir a Conjugar (índice 2 en adelante)
+    if (currentIndex >= 2) {
       if (!unlockedPhases.includes(nextPhase)) return true;
     }
 
@@ -135,8 +134,8 @@ export default function PlayerApp() {
   const blockedByAlchemist = () => {
     if (currentIndex === PHASES.length - 1) return false;
     const nextPhase = PHASES[currentIndex + 1];
-    // Solo mostrar bloqueo a partir de Conjugar
-    if (currentIndex >= 3) {
+    // Mostrar bloqueo a partir de Diluir a Conjugar
+    if (currentIndex >= 2) {
       return nextPhase && !unlockedPhases.includes(nextPhase);
     }
     return false;
