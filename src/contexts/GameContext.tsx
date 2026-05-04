@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
-import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 
@@ -237,9 +237,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     
     const gamesRef = collection(db, 'games');
     const snapshot = await getDocs(gamesRef);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(gameDoc => {
+      batch.delete(gameDoc.ref);
+    });
     
-    const deletePromises = snapshot.docs.map(gameDoc => deleteDoc(gameDoc.ref));
-    await Promise.all(deletePromises);
+    await batch.commit();
     
     // Also clear current session
     leaveGame();
