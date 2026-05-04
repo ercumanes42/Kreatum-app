@@ -244,10 +244,10 @@ export function AlchemistPanel({ gameId }: Props) {
                     </div>
                     {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? (
                       <div className="flex items-center gap-2">
-                        {!isNextUnlocked && <span title="Transición bloqueada para jugadores" className="text-white/80">🔒</span>}
+                        {idx >= 2 && !isNextUnlocked && <span title="Transición bloqueada para jugadores" className="text-white/80">🔒</span>}
                         <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
                       </div>
-                    ) : !isNextUnlocked ? (
+                    ) : (idx >= 2 && !isNextUnlocked) ? (
                       <span title="Transición bloqueada para jugadores">🔒</span>
                     ) : (
                       <ChevronRight className="w-4 h-4 opacity-30" />
