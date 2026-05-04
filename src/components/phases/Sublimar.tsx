@@ -5,7 +5,7 @@ import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Shield, Zap, Lock, ChevronRight } from 'lucide-react';
-import { useAttacksReceived, useOpponentSolutions, useAttacksSent, Attack } from '../../hooks/useRealtime';
+import { useAttacksReceived, useOpponentSolutions, useAttacksSent, Attack, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 import { cn } from '../../lib/utils';
 
