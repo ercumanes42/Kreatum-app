@@ -81,7 +81,7 @@ export function Proyectar({ state, updateState, onShowClosure }: Props) {
               <CardContent className="p-6 flex flex-col gap-4 h-full">
                 <div>
                   <span className="text-[10px] uppercase tracking-[0.2em] text-kreatum-purple font-black block mb-1">3. Solución</span>
-                  <p className="text-xs text-kreatum-gray/80 dark:text-white/60 font-mono">Explica tu prototipo claramente.</p>
+                  <p className="text-xs text-kreatum-gray/80 dark:text-white/60 font-mono">Explica tu solución y cómo probarla rápido y barato.</p>
                 </div>
                 <Textarea
                   value={state.pitchSolution}

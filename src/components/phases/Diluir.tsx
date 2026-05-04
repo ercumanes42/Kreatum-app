@@ -6,6 +6,8 @@ import { Textarea } from '../ui/Textarea';
 import { motion } from 'motion/react';
 import { Button } from '../ui/Button';
 import { ArrowDown } from 'lucide-react';
+import { useGameGlobal } from '../../hooks/useRealtime';
+import { useGame } from '../../contexts/GameContext';
 
 interface Props {
   state: GameState;
@@ -14,6 +16,9 @@ interface Props {
 
 export function Diluir({ state, updateState }: Props) {
   const [selectionError, setSelectionError] = useState('');
+  const { gameId } = useGame();
+  const { globalState } = useGameGlobal(gameId);
+  const challenge = globalState?.challenge || state.challenge || '';
 
   const handlePerspectiveChange = (index: number, value: string) => {
     const newPerspectives = [...state.perspectives];
@@ -63,12 +68,9 @@ export function Diluir({ state, updateState }: Props) {
           <CardTitle>Reto a Trabajar</CardTitle>
         </CardHeader>
         <CardContent>
-          <Textarea 
-            value={state.challenge}
-            onChange={(e) => updateState({ challenge: e.target.value })}
-            className="text-xl font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed border-transparent hover:border-kreatum-purple/20 focus:border-kreatum-purple/50 focus:ring-kreatum-purple/50 bg-transparent dark:bg-transparent resize-none overflow-hidden min-h-[60px]"
-            placeholder="Escribe aquí tu reto a trabajar..."
-          />
+          <p className="text-xl font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed select-none">
+            {challenge || <span className="text-kreatum-gray/40 italic text-base">El Alquimista aún no ha definido el reto.</span>}
+          </p>
         </CardContent>
       </Card>
 

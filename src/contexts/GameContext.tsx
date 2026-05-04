@@ -14,7 +14,7 @@ interface GameContextType {
   setIsAlchemist: (val: boolean) => void;
   isLoading: boolean;
   roomCode: string | null;
-  createGame: (team: Team | null, asAlchemist?: boolean, metadata?: { client?: string; facilitator?: string }) => Promise<string>;
+  createGame: (team: Team | null, asAlchemist?: boolean, metadata?: { client?: string; facilitator?: string; challenge?: string }) => Promise<string>;
   joinGame: (gameIdOrCode: string, joinAs: Team | 'Alchemist') => Promise<void>;
   leaveGame: () => void;
   sendAttack: (content: string, toTeam: Team, fromTeam: Team) => Promise<void>;
@@ -97,7 +97,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return !snapshot.empty;
   };
 
-  const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string }): Promise<string> => {
+  const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string; challenge?: string }): Promise<string> => {
     if (!playerId) throw new Error('No se ha podido identificar al usuario. Reintenta en unos segundos.');
 
     const code = generateRoomCode();
@@ -110,6 +110,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       roomCode: code,
       client: metadata?.client || '',
       facilitator: metadata?.facilitator || '',
+      challenge: metadata?.challenge || '',
+      unlockedPhases: ['Selección'],
     });
 
     const gameId = gameRef.id;

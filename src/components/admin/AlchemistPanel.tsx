@@ -51,9 +51,12 @@ export function AlchemistPanel({ gameId }: Props) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
 
   const currentPhase = globalState.currentPhase || 'Selección';
+  const unlockedPhases = (globalState.unlockedPhases as string[]) || ['Selección'];
 
   const setGlobalPhase = (phase: Phase) => {
-    updateGlobalState({ currentPhase: phase });
+    const phaseIndex = PHASES.indexOf(phase);
+    const newUnlocked = PHASES.slice(0, phaseIndex + 2);
+    updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
   };
 
   const getTeamProgress = (teamData: any) => {
@@ -202,6 +205,7 @@ export function AlchemistPanel({ gameId }: Props) {
               {PHASES.map((phase, idx) => {
                 const isActive = currentPhase === phase;
                 const isPast = PHASES.indexOf(currentPhase) > idx;
+                const isNextUnlocked = unlockedPhases.includes(PHASES[idx + 1]);
                 return (
                   <button
                     key={phase}
@@ -221,7 +225,7 @@ export function AlchemistPanel({ gameId }: Props) {
                       </span>
                       <span className="font-medium tracking-tight">{phase}</span>
                     </div>
-                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? <div className="w-2 h-2 rounded-full bg-white animate-pulse" /> : <ChevronRight className="w-4 h-4 opacity-30" />}
+                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? <div className="w-2 h-2 rounded-full bg-white animate-pulse" /> : !isNextUnlocked ? <span title="Fase bloqueada para jugadores">🔒</span> : <ChevronRight className="w-4 h-4 opacity-30" />}
                   </button>
                 );
               })}

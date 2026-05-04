@@ -47,6 +47,8 @@ export default function PlayerApp() {
 
   const { attacks: attacksSent } = useAttacksSent(gameId, team || state.team);
   const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
+  const challenge = globalState?.challenge || '';
+  const unlockedPhases = (globalState?.unlockedPhases as string[]) || ['Selección'];
 
   // Sync context team into local state
   useEffect(() => {
@@ -113,12 +115,21 @@ export default function PlayerApp() {
     if (currentIndex === PHASES.length - 1) return true;
     if (state.currentPhase === 'Selección' && !state.team) return true;
     
+    const nextPhase = PHASES[currentIndex + 1];
+    if (!unlockedPhases.includes(nextPhase)) return true;
+
     if (state.currentPhase === 'Sublimar') {
       if (!state.team) return true;
       return attacksSent.length < MIN_ATTACKS_PER_TEAM;
     }
 
     return false;
+  };
+
+  const blockedByAlchemist = () => {
+    if (currentIndex === PHASES.length - 1) return false;
+    const nextPhase = PHASES[currentIndex + 1];
+    return nextPhase && !unlockedPhases.includes(nextPhase);
   };
 
   const getTeamColor = (team: Team | null) => {
@@ -258,6 +269,20 @@ export default function PlayerApp() {
         )}
       </header>
 
+      {/* Banner del Reto */}
+      {challenge && state.team && state.currentPhase !== 'Selección' && (
+        <div className="w-full bg-kreatum-purple/5 border-b border-kreatum-purple/10 dark:bg-kreatum-purple/10 dark:border-kreatum-purple/20 px-6 py-3 relative z-20">
+          <div className="max-w-4xl mx-auto flex items-start gap-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-kreatum-purple/70 whitespace-nowrap mt-0.5 flex-shrink-0">
+              Reto:
+            </span>
+            <p className="text-sm font-serif text-kreatum-dark/80 dark:text-white/80 leading-snug line-clamp-2">
+              {challenge}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-12 relative z-10">
         <AnimatePresence mode="wait">
@@ -293,7 +318,7 @@ export default function PlayerApp() {
               Atrás
             </Button>
             
-            <Button 
+<Button 
               onClick={() => {
                 if (currentIndex === PHASES.length - 1) {
                   sounds.playSuccess();
@@ -303,9 +328,17 @@ export default function PlayerApp() {
                 }
               }}
               disabled={currentIndex === PHASES.length - 1 ? false : isNextDisabled()}
-              className={cn("flex gap-2", currentIndex === PHASES.length - 1 ? "bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-lg shadow-kreatum-purple/20" : "")}
+              title={blockedByAlchemist() ? 'El Alquimista aún no ha desbloqueado esta fase' : ''}
+              className={cn(
+                "flex gap-2",
+                currentIndex === PHASES.length - 1
+                  ? "bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-lg shadow-kreatum-purple/20"
+                  : blockedByAlchemist()
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+              )}
             >
-              {currentIndex === PHASES.length - 1 ? '✦ Finalizar Workshop' : 'Siguiente Fase'}
+              {currentIndex === PHASES.length - 1 ? '✦ Finalizar Workshop' : blockedByAlchemist() ? '🔒 Esperando al Alquimista' : 'Siguiente Fase'}
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>

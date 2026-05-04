@@ -18,6 +18,7 @@ export default function AdminApp() {
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [newGameClient, setNewGameClient] = useState('');
   const [newGameFacilitator, setNewGameFacilitator] = useState('');
+  const [newGameChallenge, setNewGameChallenge] = useState('');
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -34,17 +35,26 @@ export default function AdminApp() {
       alert('Por favor, introduce el nombre del facilitador (es obligatorio).');
       return;
     }
+    if (!newGameChallenge.trim()) {
+      alert('Por favor, introduce el Reto del Workshop (es obligatorio).');
+      return;
+    }
     setIsCreatingGame(true);
     try {
-      await createGame(null, true, { client: newGameClient, facilitator: newGameFacilitator });
-      setShowNewGameModal(false);
-      setNewGameClient('');
-      setNewGameFacilitator('');
+      await createGame(null, true, { client: newGameClient, facilitator: newGameFacilitator, challenge: newGameChallenge });
+      handleCloseModal();
     } catch (e: any) {
       alert('Error al crear partida: ' + e.message);
     } finally {
       setIsCreatingGame(false);
     }
+  };
+
+  const handleCloseModal = () => {
+    setNewGameChallenge('');
+    setNewGameClient('');
+    setNewGameFacilitator('');
+    setShowNewGameModal(false);
   };
 
   const handleLogout = async () => {
@@ -137,9 +147,11 @@ export default function AdminApp() {
             onClientChange={setNewGameClient}
             facilitator={newGameFacilitator}
             onFacilitatorChange={setNewGameFacilitator}
+            challenge={newGameChallenge}
+            onChallengeChange={setNewGameChallenge}
             isCreating={isCreatingGame}
             onCreate={handleCreateGame}
-            onClose={() => setShowNewGameModal(false)}
+            onClose={handleCloseModal}
           />
         )}
       </div>
@@ -268,13 +280,16 @@ function AdminLoginScreen() {
 // ─────────────────── NEW GAME MODAL ───────────────────
 function NewGameModal({ 
   client, onClientChange, 
-  facilitator, onFacilitatorChange, 
+  facilitator, onFacilitatorChange,
+  challenge, onChallengeChange,
   isCreating, onCreate, onClose 
 }: {
   client: string;
   onClientChange: (v: string) => void;
   facilitator: string;
   onFacilitatorChange: (v: string) => void;
+  challenge: string;
+  onChallengeChange: (v: string) => void;
   isCreating: boolean;
   onCreate: () => void;
   onClose: () => void;
@@ -295,6 +310,19 @@ function NewGameModal({
           </p>
 
           <div className="space-y-4 mb-8">
+            <div>
+              <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
+                Reto del Workshop <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={challenge}
+                onChange={(e) => onChallengeChange(e.target.value)}
+                placeholder="Ej: ¿Cómo podemos mejorar la experiencia de onboarding de nuevos empleados?"
+                required
+                rows={3}
+                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white resize-none"
+              />
+            </div>
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
                 Nombre del cliente (opcional)
@@ -333,7 +361,7 @@ function NewGameModal({
             <Button
               className="flex-1 py-4 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white disabled:opacity-50"
               onClick={onCreate}
-              disabled={isCreating || !facilitator.trim()}
+              disabled={isCreating || !facilitator.trim() || !challenge.trim()}
             >
               {isCreating ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
