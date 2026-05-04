@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
-import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 
@@ -14,7 +14,7 @@ interface GameContextType {
   setIsAlchemist: (val: boolean) => void;
   isLoading: boolean;
   roomCode: string | null;
-  createGame: (team: Team | null, asAlchemist?: boolean, metadata?: { client?: string; facilitator?: string; challenge?: string }) => Promise<string>;
+  createGame: (team: Team | null, asAlchemist?: boolean, metadata?: { client?: string; facilitator?: string; challenge?: string, customCode?: string }) => Promise<string>;
   joinGame: (gameIdOrCode: string, joinAs: Team | 'Alchemist') => Promise<void>;
   leaveGame: () => void;
   sendAttack: (content: string, toTeam: Team, fromTeam: Team) => Promise<void>;
@@ -22,6 +22,7 @@ interface GameContextType {
   updateSolution: (reformulated: string, results: string) => Promise<void>;
   saveSolution: (team: Team, content: string) => Promise<void>;
   validateRoomCode: (code: string) => Promise<boolean>;
+  resetPlatform: () => Promise<void>;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -97,10 +98,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return !snapshot.empty;
   };
 
-  const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string; challenge?: string }): Promise<string> => {
+  const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string; challenge?: string, customCode?: string }): Promise<string> => {
     if (!playerId) throw new Error('No se ha podido identificar al usuario. Reintenta en unos segundos.');
 
-    const code = generateRoomCode();
+    const code = metadata?.customCode || generateRoomCode();
     console.log('Generando partida con código:', code);
 
     const gameRef = await addDoc(collection(db, 'games'), {
@@ -229,6 +230,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('kreatum_is_alchemist');
     localStorage.removeItem('kreatum_room_code');
     localStorage.removeItem('kreatum_session_at');
+  };
+
+  const resetPlatform = async () => {
+    if (!isAlchemist) return;
+    
+    const gamesRef = collection(db, 'games');
+    const snapshot = await getDocs(gamesRef);
+    
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    // Also clear current session
+    leaveGame();
   };
 
   const sendAttack = async (content: string, toTeam: Team, fromTeam: Team) => {

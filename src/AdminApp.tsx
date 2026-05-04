@@ -21,6 +21,8 @@ export default function AdminApp() {
   const [newGameChallenge, setNewGameChallenge] = useState('');
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [customRoomCode, setCustomRoomCode] = useState('');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -41,7 +43,12 @@ export default function AdminApp() {
     }
     setIsCreatingGame(true);
     try {
-      await createGame(null, true, { client: newGameClient, facilitator: newGameFacilitator, challenge: newGameChallenge });
+      await createGame(null, true, { 
+        client: newGameClient, 
+        facilitator: newGameFacilitator, 
+        challenge: newGameChallenge,
+        customCode: customRoomCode.trim().toUpperCase() || undefined
+      });
       handleCloseModal();
     } catch (e: any) {
       alert('Error al crear partida: ' + e.message);
@@ -54,6 +61,7 @@ export default function AdminApp() {
     setNewGameChallenge('');
     setNewGameClient('');
     setNewGameFacilitator('');
+    setCustomRoomCode('');
     setShowNewGameModal(false);
   };
 
@@ -123,7 +131,14 @@ export default function AdminApp() {
               </Button>
             </div>
 
-            <div className="mt-8">
+            <div className="mt-8 flex flex-col items-center gap-4">
+              <button
+                onClick={() => setShowResetModal(true)}
+                className="text-xs font-mono text-red-500/40 hover:text-red-500 transition-colors uppercase tracking-widest border border-red-500/20 px-4 py-2 rounded-lg"
+              >
+                Resetear Plataforma (Danger Zone)
+              </button>
+              
               <button
                 onClick={handleLogout}
                 className="text-xs font-mono text-kreatum-gray/40 hover:text-red-500 transition-colors uppercase tracking-widest"
@@ -140,6 +155,13 @@ export default function AdminApp() {
           )}
         </div>
 
+        {/* Reset Modal */}
+        {showResetModal && (
+          <ResetModal
+            onClose={() => setShowResetModal(false)}
+          />
+        )}
+
         {/* New Game Modal */}
         {showNewGameModal && (
           <NewGameModal
@@ -149,6 +171,8 @@ export default function AdminApp() {
             onFacilitatorChange={setNewGameFacilitator}
             challenge={newGameChallenge}
             onChallengeChange={setNewGameChallenge}
+            customCode={customRoomCode}
+            onCustomCodeChange={setCustomRoomCode}
             isCreating={isCreatingGame}
             onCreate={handleCreateGame}
             onClose={handleCloseModal}
@@ -160,6 +184,73 @@ export default function AdminApp() {
 
   // Authenticated with active game — show full AlchemistPanel
   return <AlchemistPanel gameId={gameId} />;
+}
+
+// ─────────────────── RESET MODAL ───────────────────
+function ResetModal({ onClose }: { onClose: () => void }) {
+  const { resetPlatform } = useGame();
+  const [confirmCode, setConfirmCode] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+  const SECURITY_CODE = 'KREATUM2026';
+
+  const handleReset = async () => {
+    if (confirmCode !== SECURITY_CODE) {
+      alert('Código de seguridad incorrecto.');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await resetPlatform();
+      onClose();
+    } catch (e: any) {
+      alert('Error al resetear: ' + e.message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white dark:bg-kreatum-bg-dark p-8 rounded-[32px] max-w-md w-full shadow-2xl border border-red-500/20"
+      >
+        <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <History className="w-8 h-8 text-red-500" />
+        </div>
+        <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">Reiniciar Plataforma</h2>
+        <p className="text-sm text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
+          Esta acción <span className="text-red-500 font-bold uppercase">eliminará todas las partidas</span>, equipos y datos históricos. No se puede deshacer.
+        </p>
+
+        <div className="mb-8">
+          <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
+            Escribe el código de seguridad: <span className="text-kreatum-purple font-bold">{SECURITY_CODE}</span>
+          </label>
+          <input
+            type="text"
+            value={confirmCode}
+            onChange={(e) => setConfirmCode(e.target.value.toUpperCase())}
+            placeholder="Introduce el código..."
+            className="w-full px-4 py-4 bg-black/5 dark:bg-white/5 border-2 border-red-500/20 focus:border-red-500 rounded-2xl outline-none transition-all text-center font-bold tracking-[0.2em]"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1 py-4" onClick={onClose}>Cancelar</Button>
+          <Button 
+            className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20"
+            onClick={handleReset}
+            disabled={isResetting || confirmCode !== SECURITY_CODE}
+          >
+            {isResetting ? 'Borrando...' : 'Borrar Todo'}
+          </Button>
+        </div>
+      </motion.div>
+    </div>
+  );
 }
 
 // ─────────────────── LOGIN SCREEN (full page) ───────────────────
@@ -176,21 +267,8 @@ function AdminLoginScreen() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will pick up the new user
     } catch (err: any) {
-      if (
-        err.code === 'auth/invalid-credential' ||
-        err.code === 'auth/user-not-found' ||
-        err.code === 'auth/wrong-password'
-      ) {
-        setError('Credenciales incorrectas. Verifica tu email y contraseña.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.');
-      } else if (err.code === 'auth/network-request-failed') {
-        setError('Error de red. Verifica tu conexión a internet.');
-      } else {
-        setError(err.message || 'Error de autenticación');
-      }
+      setError(err.message || 'Error de autenticación');
     } finally {
       setIsLoading(false);
     }
@@ -198,7 +276,6 @@ function AdminLoginScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark">
-      {/* Background orbs */}
       <div className="fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[140px] pointer-events-none z-0 bg-kreatum-purple/15" />
       <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none z-0 bg-kreatum-blue/10" />
 
@@ -207,11 +284,6 @@ function AdminLoginScreen() {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="relative z-10 w-full max-w-md mx-4"
       >
-        {/* Logo */}
-        <div className="flex justify-center mb-10">
-          <img src="/logo.png" alt="Kreatum" className="h-12 w-auto object-contain" />
-        </div>
-
         <div className="bg-white/60 dark:bg-white/5 backdrop-blur-2xl border border-black/5 dark:border-white/10 rounded-[32px] shadow-2xl p-8">
           <div className="flex justify-center mb-6">
             <div className="w-16 h-16 bg-kreatum-purple/10 rounded-2xl flex items-center justify-center">
@@ -222,53 +294,25 @@ function AdminLoginScreen() {
           <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">
             Acceso Alquimista
           </h2>
-          <p className="text-sm font-mono text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
-            Solo personal autorizado de Kreatum
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-kreatum-gray/40 dark:text-white/40" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@kreatum.com"
-                  required
-                  className="w-full pl-12 pr-4 py-4 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white"
-                />
-              </div>
-              
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-kreatum-gray/40 dark:text-white/40" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Contraseña"
-                  required
-                  className="w-full pl-12 pr-4 py-4 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white"
-                />
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-6 mt-4 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white font-bold tracking-wide"
-            >
-              {isLoading ? (
-                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                'Entrar al Panel'
-              )}
+          
+          <form onSubmit={handleSubmit} className="space-y-4 mt-8">
+            {error && <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center">{error}</div>}
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              className="w-full px-4 py-4 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Contraseña"
+              className="w-full px-4 py-4 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
+            />
+            <Button type="submit" disabled={isLoading} className="w-full py-6 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-2xl">
+              {isLoading ? 'Entrando...' : 'Entrar al Panel'}
             </Button>
           </form>
         </div>
@@ -282,6 +326,7 @@ function NewGameModal({
   client, onClientChange, 
   facilitator, onFacilitatorChange,
   challenge, onChallengeChange,
+  customCode, onCustomCodeChange,
   isCreating, onCreate, onClose 
 }: {
   client: string;
@@ -290,6 +335,8 @@ function NewGameModal({
   onFacilitatorChange: (v: string) => void;
   challenge: string;
   onChallengeChange: (v: string) => void;
+  customCode: string;
+  onCustomCodeChange: (v: string) => void;
   isCreating: boolean;
   onCreate: () => void;
   onClose: () => void;
@@ -306,7 +353,7 @@ function NewGameModal({
             Nueva Partida
           </h2>
           <p className="text-sm font-mono text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
-            Se generará un código de sala automáticamente
+            Define los detalles del workshop
           </p>
 
           <div className="space-y-4 mb-8">
@@ -317,57 +364,53 @@ function NewGameModal({
               <textarea
                 value={challenge}
                 onChange={(e) => onChallengeChange(e.target.value)}
-                placeholder="Ej: ¿Cómo podemos mejorar la experiencia de onboarding de nuevos empleados?"
+                placeholder="Ej: ¿Cómo podemos mejorar la experiencia?"
                 required
                 rows={3}
-                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white resize-none"
+                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white resize-none text-sm"
               />
             </div>
-            <div>
-              <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
-                Nombre del cliente (opcional)
-              </label>
+            
+            <div className="grid grid-cols-2 gap-4">
               <input
                 type="text"
                 value={client}
                 onChange={(e) => onClientChange(e.target.value)}
-                placeholder="Ej: Empresa XYZ"
-                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white"
+                placeholder="Cliente"
+                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
               />
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
-                Facilitador (Obligatorio)
-              </label>
               <input
                 type="text"
                 value={facilitator}
                 onChange={(e) => onFacilitatorChange(e.target.value)}
-                placeholder="Tu nombre"
-                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white"
+                placeholder="Facilitador"
+                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
+                Código Personalizado (opcional)
+              </label>
+              <input
+                type="text"
+                value={customCode}
+                onChange={(e) => onCustomCodeChange(e.target.value.toUpperCase())}
+                placeholder="Ej: PRUEBA"
+                maxLength={10}
+                className="w-full px-4 py-3 bg-kreatum-purple/5 border-dashed border-2 border-kreatum-purple/20 focus:border-kreatum-purple rounded-2xl outline-none text-center font-bold tracking-widest text-kreatum-purple"
               />
             </div>
           </div>
 
           <div className="flex gap-3">
+            <Button variant="outline" className="flex-1 py-4" onClick={onClose} disabled={isCreating}>Cancelar</Button>
             <Button
-              variant="outline"
-              className="flex-1 py-4 rounded-2xl"
-              onClick={onClose}
-              disabled={isCreating}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1 py-4 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white disabled:opacity-50"
+              className="flex-1 py-4 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-2xl disabled:opacity-50"
               onClick={onCreate}
               disabled={isCreating || !challenge.trim()}
             >
-              {isCreating ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                'Crear Partida'
-              )}
+              {isCreating ? 'Creando...' : 'Crear Partida'}
             </Button>
           </div>
         </div>
@@ -375,4 +418,3 @@ function NewGameModal({
     </div>
   );
 }
-
