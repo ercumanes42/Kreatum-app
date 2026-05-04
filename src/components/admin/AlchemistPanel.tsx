@@ -4,7 +4,7 @@ import { useGame } from '../../contexts/GameContext';
 import { Phase, Team } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { db } from '../../lib/firebase';
-import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { Button } from '../ui/Button';
 import { motion, AnimatePresence } from 'motion/react';
 import { 

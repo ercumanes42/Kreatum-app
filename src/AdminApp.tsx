@@ -361,7 +361,7 @@ function NewGameModal({
             <Button
               className="flex-1 py-4 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white disabled:opacity-50"
               onClick={onCreate}
-              disabled={isCreating || !facilitator.trim() || !challenge.trim()}
+              disabled={isCreating || !challenge.trim()}
             >
               {isCreating ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
