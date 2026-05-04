@@ -238,7 +238,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const gamesRef = collection(db, 'games');
     const snapshot = await getDocs(gamesRef);
     
-    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    const deletePromises = snapshot.docs.map(gameDoc => deleteDoc(gameDoc.ref));
     await Promise.all(deletePromises);
     
     // Also clear current session
