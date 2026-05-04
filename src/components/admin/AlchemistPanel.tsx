@@ -207,7 +207,7 @@ export function AlchemistPanel({ gameId }: Props) {
               {PHASES.map((phase, idx) => {
                 const isActive = currentPhase === phase;
                 const isPast = PHASES.indexOf(currentPhase) > idx;
-                const isNextUnlocked = unlockedPhases.includes(PHASES[idx + 1]);
+                const isPhaseUnlocked = unlockedPhases.includes(phase);
                 return (
                   <button
                     key={phase}
@@ -227,7 +227,7 @@ export function AlchemistPanel({ gameId }: Props) {
                       </span>
                       <span className="font-medium tracking-tight">{phase}</span>
                     </div>
-                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? <div className="w-2 h-2 rounded-full bg-white animate-pulse" /> : !isNextUnlocked ? <span title="Fase bloqueada para jugadores">🔒</span> : <ChevronRight className="w-4 h-4 opacity-30" />}
+                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? <div className="w-2 h-2 rounded-full bg-white animate-pulse" /> : !isPhaseUnlocked ? <span title="Fase bloqueada para jugadores">🔒</span> : <ChevronRight className="w-4 h-4 opacity-30" />}
                   </button>
                 );
               })}

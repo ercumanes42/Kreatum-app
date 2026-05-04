@@ -118,10 +118,8 @@ export default function PlayerApp() {
     if (state.currentPhase === 'Selección' && !state.team) return true;
     
     const nextPhase = PHASES[currentIndex + 1];
-    // Bloquear a partir de pasar de Diluir a Conjugar (índice 2 en adelante)
-    if (currentIndex >= 2) {
-      if (!unlockedPhases.includes(nextPhase)) return true;
-    }
+    // Bloquear si la siguiente fase no ha sido desbloqueada por el Alquimista
+    if (!unlockedPhases.includes(nextPhase)) return true;
 
     if (state.currentPhase === 'Sublimar') {
       if (!state.team) return true;
@@ -134,11 +132,8 @@ export default function PlayerApp() {
   const blockedByAlchemist = () => {
     if (currentIndex === PHASES.length - 1) return false;
     const nextPhase = PHASES[currentIndex + 1];
-    // Mostrar bloqueo a partir de Diluir a Conjugar
-    if (currentIndex >= 2) {
-      return nextPhase && !unlockedPhases.includes(nextPhase);
-    }
-    return false;
+    // Mostrar bloqueo si la siguiente fase no está desbloqueada
+    return nextPhase && !unlockedPhases.includes(nextPhase);
   };
 
   const getTeamColor = (team: Team | null) => {
@@ -278,15 +273,26 @@ export default function PlayerApp() {
         )}
       </header>
 
-      {/* Banner del Reto */}
+      {/* Premium Challenge Banner */}
       {challenge && state.team && state.currentPhase !== 'Selección' && (
-        <div className="w-full bg-kreatum-purple/5 border-b border-kreatum-purple/10 dark:bg-kreatum-purple/10 dark:border-kreatum-purple/20 px-6 py-3 relative z-20">
-          <div className="max-w-4xl mx-auto flex items-start gap-3">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-kreatum-purple/70 whitespace-nowrap mt-0.5 flex-shrink-0">
-              Reto:
-            </span>
-            <p className="text-sm font-serif text-kreatum-dark/80 dark:text-white/80 leading-snug line-clamp-2">
-              {challenge}
+        <div className="w-full bg-gradient-to-r from-kreatum-purple/10 via-transparent to-kreatum-purple/10 border-b border-kreatum-purple/20 backdrop-blur-md px-6 py-4 relative z-20 overflow-hidden">
+          {/* Subtle animated light effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
+          
+          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 bg-white/50 dark:bg-white/10 px-4 py-2 rounded-2xl border border-kreatum-purple/20 shadow-lg shadow-kreatum-purple/5 shrink-0">
+              <div className="w-8 h-8 bg-kreatum-purple/20 rounded-xl flex items-center justify-center">
+                <Hexagon className="w-4 h-4 text-kreatum-purple" />
+              </div>
+              <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-kreatum-purple font-black whitespace-nowrap">
+                Reto Activo
+              </span>
+            </div>
+            
+            <div className="hidden sm:block h-8 w-px bg-kreatum-purple/20" />
+            
+            <p className="text-lg font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-90 text-center sm:text-left line-clamp-2">
+              "{challenge}"
             </p>
           </div>
         </div>
