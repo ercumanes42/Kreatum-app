@@ -150,16 +150,6 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                 ¡Enhorabuena, Alquimistas!
               </motion.h1>
 
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="text-white/60 text-lg mb-8"
-              >
-                Has completado con éxito todas las fases de Kreatum.
-                <br />
-                Tu visión y creatividad han dado sus frutos.
-              </motion.p>
 
               <motion.div
                 initial={{ opacity: 0 }}
