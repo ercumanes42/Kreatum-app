@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, getDocs, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Team } from '../../types';
@@ -77,7 +77,15 @@ export function GameHistory() {
           completedAt: data.completedAt,
           client: data.client,
           facilitator: data.facilitator,
-          globalState: data.globalState || {},
+          globalState: {
+            currentPhase: data.currentPhase,
+            challenge: data.challenge,
+            client: data.client,
+            facilitator: data.facilitator,
+            roomCode: data.roomCode,
+            status: data.status,
+            unlockedPhases: data.unlockedPhases,
+          },
           teams,
           attacksCount: attacksSnap.size,
         });

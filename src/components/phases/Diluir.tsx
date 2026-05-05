@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { GameState, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
 import { motion } from 'motion/react';
 import { Button } from '../ui/Button';
 import { ArrowDown, X } from 'lucide-react';

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { GameState, initialState, Phase, Team, PHASES } from './types';
 import { Button } from './components/ui/Button';
 import { ChevronRight, ChevronLeft, Hexagon, Moon, Sun } from 'lucide-react';
@@ -117,10 +118,10 @@ export default function PlayerApp() {
     if (currentIndex === PHASES.length - 1) return true;
     if (state.currentPhase === 'Selección' && !state.team) return true;
     
-    const nextPhase = PHASES[currentIndex + 1];
+    const nextPhaseName = PHASES[currentIndex + 1];
     // Bloquear a partir de pasar de Diluir a Conjugar (índice 2 en adelante)
     if (currentIndex >= 2) {
-      if (!unlockedPhases.includes(nextPhase)) return true;
+      if (!unlockedPhases.includes(nextPhaseName)) return true;
     }
 
     if (state.currentPhase === 'Sublimar') {
@@ -133,10 +134,10 @@ export default function PlayerApp() {
 
   const blockedByAlchemist = () => {
     if (currentIndex === PHASES.length - 1) return false;
-    const nextPhase = PHASES[currentIndex + 1];
+    const nextPhaseName = PHASES[currentIndex + 1];
     // Mostrar bloqueo a partir de Diluir a Conjugar
     if (currentIndex >= 2) {
-      return nextPhase && !unlockedPhases.includes(nextPhase);
+      return nextPhaseName && !unlockedPhases.includes(nextPhaseName);
     }
     return false;
   };
@@ -303,42 +304,37 @@ export default function PlayerApp() {
         </div>
       )}
 
+      {/* WorkshopClosure como portal para evitar que transform de motion.div rompa position:fixed */}
+      {showClosure && createPortal(
+        <WorkshopClosure
+          state={state}
+          isOpen={true}
+          onClose={() => {
+            setShowClosure(false);
+            leaveGame();
+          }}
+        />,
+        document.body
+      )}
+
       {/* Main Content */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-12 relative z-10">
         <AnimatePresence mode="wait">
-          {showClosure ? (
-            <motion.div
-              key="closure"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-            >
-              <WorkshopClosure 
-                state={state}
-                isOpen={true}
-                onClose={() => {
-                  setShowClosure(false);
-                  leaveGame();
-                }} 
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key={state.currentPhase}
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.98 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-            >
-              {state.currentPhase === 'Selección' && <TeamSelection state={state} updateState={updateState} />}
-              {state.currentPhase === 'Calcinar' && <Calcinar />}
-              {state.currentPhase === 'Diluir' && <Diluir state={state} updateState={updateState} />}
-              {state.currentPhase === 'Conjugar' && <Conjugar state={state} updateState={updateState} />}
-              {state.currentPhase === 'Sublimar' && <Sublimar state={state} updateState={updateState} />}
-              {state.currentPhase === 'Fermentar' && <Fermentar state={state} updateState={updateState} />}
-              {state.currentPhase === 'Proyectar' && <Proyectar state={state} updateState={updateState} />}
-            </motion.div>
-          )}
+          <motion.div
+            key={state.currentPhase}
+            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.98 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            {state.currentPhase === 'Selección' && <TeamSelection state={state} updateState={updateState} />}
+            {state.currentPhase === 'Calcinar' && <Calcinar />}
+            {state.currentPhase === 'Diluir' && <Diluir state={state} updateState={updateState} />}
+            {state.currentPhase === 'Conjugar' && <Conjugar state={state} updateState={updateState} />}
+            {state.currentPhase === 'Sublimar' && <Sublimar state={state} updateState={updateState} />}
+            {state.currentPhase === 'Fermentar' && <Fermentar state={state} updateState={updateState} />}
+            {state.currentPhase === 'Proyectar' && <Proyectar state={state} updateState={updateState} />}
+          </motion.div>
         </AnimatePresence>
       </main>
 

@@ -2,7 +2,7 @@
 
 **Autor:** Antigravity (Coding Assistant)  
 **Fecha inicial:** 28 de abril de 2026  
-**Última actualización:** 3 de mayo de 2026 (Optimización Final y Despliegue)  
+**Última actualización:** 5 de mayo de 2026 (Corrección de Errores Críticos y Advertencias)  
 **Contexto:** Revisión de arquitectura, funcionalidades y UX de la plataforma de workshops colaborativos Kreatum.
 
 ---
@@ -223,4 +223,24 @@ La plataforma tiene todas las etapas funcionales implementadas (1-3 + 6-7) y la 
 
 Las **Firestore Security Rules** han sido validadas y configuradas, cerrando el último paso pendiente.
 
-**Plataforma lista para producción.**
+---
+
+## Corrección de Errores Críticos y Advertencias (05/05/2026)
+
+Se corrigieron todos los errores críticos (Rules of Hooks, z-index roto, datos indefinidos) y advertencias de TypeScript identificados en revisión:
+
+| # | Severidad | Bug | Archivo(s) | Fix aplicado |
+|---|-----------|-----|-----------|-------------|
+| 27 | 🔴 CRÍTICO | **Rules of Hooks:** `useAttacksReceived`, `useAttacksSent`, `useOpponentSolutions`, `useGameGlobal` y dos `useState` se invocaban DESPUÉS del bloque `if (!myTeam) return` | `Sublimar.tsx` | Todos los hooks movidos al inicio del componente, antes de cualquier return condicional |
+| 28 | 🔴 CRÍTICO | **`position:fixed` roto por `transform`:** `WorkshopClosure` con `fixed inset-0` dentro de `<motion.div scale>` → el fixed era relativo al motion.div, no al viewport | `PlayerApp.tsx` | Extraído del `AnimatePresence` y renderizado via `createPortal(…, document.body)` |
+| 29 | 🔴 CRÍTICO | **`globalState` siempre `undefined` en historial:** `data.globalState` accedía a campo anidado inexistente — los campos están directamente en el documento raíz de Firestore | `GameHistory.tsx` | Construcción con campos directos del documento (`data.currentPhase`, `data.challenge`, etc.) |
+| 30 | 🟡 ADVERTENCIA | **Botón "Finalizar Workshop" del jugador con lógica incorrecta:** Ejecutaba `updateState({ currentPhase: 'Selección' as any })` en lugar de completar el workshop | `Proyectar.tsx` | Escribe `{ status: 'completed', completedAt }` en Firestore via import dinámico, disparando el cierre en todos los clientes |
+| 31 | 🟡 ADVERTENCIA | **`resetPlatform` dejaba subcolecciones huérfanas:** Solo borraba el documento raíz, dejando `attacks`, `defenses`, `teams`, `solutions` | `GameContext.tsx` | Nuevo bucle que borra subcolecciones antes del documento padre, en batches de máx. 499 operaciones |
+| 32 | 🟡 ADVERTENCIA | **`PHASES` redefinido localmente:** Definición local duplicada podía desincronizarse con `types.ts` | `AlchemistPanel.tsx` | Eliminada; se importa `PHASES` desde `../../types` |
+| 33 | 🟡 ADVERTENCIA | **Variable `nextPhase` sombreaba función `nextPhase`:** En `isNextDisabled()` y `blockedByAlchemist()` | `PlayerApp.tsx` | Renombrada a `nextPhaseName` en ambas funciones |
+
+**Imports limpiados:** `Textarea` (Diluir), `Phase` (Proyectar), `getDoc`/`query`/`orderBy` (GameHistory, GameContext), `const Icon` sin uso (AlchemistPanel).
+
+**Nota ERROR 4:** El guard `if (state.team)` antes de `saveSolution` ya existía correctamente en `Conjugar.tsx` — no requirió cambios.
+
+**Plataforma lista para producción. Sin errores críticos pendientes.**

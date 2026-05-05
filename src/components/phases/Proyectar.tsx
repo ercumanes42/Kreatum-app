@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameState, Phase } from '../../types';
+import { GameState } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Textarea } from '../ui/Textarea';
 import { motion } from 'motion/react';
@@ -109,9 +109,20 @@ export function Proyectar({ state, updateState }: Props) {
 
           <div className="flex justify-center mt-12">
             <Button
-              onClick={() => {
+              onClick={async () => {
                 sounds.playSuccess();
-                updateState({ currentPhase: 'Selección' as any });
+                if (gameId) {
+                  try {
+                    const { updateDoc, doc: firestoreDoc } = await import('firebase/firestore');
+                    const { db } = await import('../../lib/firebase');
+                    await updateDoc(firestoreDoc(db, 'games', gameId), {
+                      status: 'completed',
+                      completedAt: Date.now(),
+                    });
+                  } catch (e) {
+                    console.error('Error al finalizar workshop:', e);
+                  }
+                }
               }}
               className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-lg"
             >

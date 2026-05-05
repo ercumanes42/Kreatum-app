@@ -45,6 +45,14 @@ export function Sublimar({ state, updateState }: Props) {
   const myTeam = state.team;
   const targetTeam = myTeam ? ATTACK_MAP[myTeam] : null;
 
+  // TODOS los hooks ANTES del return condicional (Rules of Hooks)
+  const { attacks: attacksReceived, isLoading: loadingAttacks } = useAttacksReceived(gameId, myTeam);
+  const { attacks: attacksSent, isLoading: loadingAttacksSent } = useAttacksSent(gameId, myTeam);
+  const { solutions: opponentSolutions } = useOpponentSolutions(gameId, myTeam);
+  const [attackInput, setAttackInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const { globalState } = useGameGlobal(gameId);
+
   if (!myTeam) {
     return (
       <div className="p-8 text-center bg-kreatum-red/10 border border-kreatum-red/20 rounded-2xl">
@@ -57,12 +65,6 @@ export function Sublimar({ state, updateState }: Props) {
     );
   }
 
-  const { attacks: attacksReceived, isLoading: loadingAttacks } = useAttacksReceived(gameId, myTeam);
-  const { attacks: attacksSent, isLoading: loadingAttacksSent } = useAttacksSent(gameId, myTeam);
-  const { solutions: opponentSolutions } = useOpponentSolutions(gameId, myTeam);
-
-  const [attackInput, setAttackInput] = useState('');
-  const [isSending, setIsSending] = useState(false);
   const subView = state.sublimarView || 'Ataque';
   const setSubView = (view: 'Ataque' | 'Defensa') => updateState({ sublimarView: view });
 
@@ -99,7 +101,6 @@ export function Sublimar({ state, updateState }: Props) {
   const requiredTotalAttacks = MIN_ATTACKS_PER_TEAM;
   const isAttackPhaseComplete = totalAttacksSent >= requiredTotalAttacks;
 
-  const { globalState } = useGameGlobal(gameId);
   const isNextUnlocked = globalState?.unlockedPhases?.includes('Fermentar');
   const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Sublimar');
 

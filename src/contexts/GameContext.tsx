@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
-import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 
@@ -234,17 +234,40 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
 
   const resetPlatform = async () => {
     if (!isAlchemist) return;
-    
+
     const gamesRef = collection(db, 'games');
     const snapshot = await getDocs(gamesRef);
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(gameDoc => {
+    const SUB_COLLECTIONS = ['attacks', 'defenses', 'teams', 'solutions'];
+    const MAX_BATCH_OPS = 499;
+
+    let batch = writeBatch(db);
+    let opCount = 0;
+
+    const commitIfNeeded = async () => {
+      if (opCount >= MAX_BATCH_OPS) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+    };
+
+    for (const gameDoc of snapshot.docs) {
+      // Borrar subcolecciones antes del documento padre
+      for (const sub of SUB_COLLECTIONS) {
+        const subSnap = await getDocs(collection(db, 'games', gameDoc.id, sub));
+        for (const subDoc of subSnap.docs) {
+          await commitIfNeeded();
+          batch.delete(subDoc.ref);
+          opCount++;
+        }
+      }
+      await commitIfNeeded();
       batch.delete(gameDoc.ref);
-    });
-    
-    await batch.commit();
-    
-    // Also clear current session
+      opCount++;
+    }
+
+    if (opCount > 0) await batch.commit();
+
     leaveGame();
   };
 

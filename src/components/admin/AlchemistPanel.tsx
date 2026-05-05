@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameGlobal, useAllTeams, useAttacksCountByTeam } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
-import { Phase, Team } from '../../types';
+import { Phase, Team, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { db } from '../../lib/firebase';
 import { doc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
@@ -24,15 +24,7 @@ import { GameHistory } from './GameHistory';
 import { WorkshopClosure } from '../phases/WorkshopClosure';
 import { Sparkles } from 'lucide-react';
 
-const PHASES: Phase[] = [
-  'Selección',
-  'Calcinar',
-  'Diluir',
-  'Conjugar',
-  'Sublimar',
-  'Fermentar',
-  'Proyectar'
-];
+// PHASES se importa desde '../../types' — no redefinir aquí
 
 const TEAM_CONFIG: Record<Team, { icon: string; color: string; bg: string }> = {
   Fuego: { icon: '/assets/logos/fuego.png', color: 'text-kreatum-red', bg: 'bg-kreatum-red/5' },
@@ -306,7 +298,6 @@ export function AlchemistPanel({ gameId }: Props) {
               {(['Agua', 'Aire', 'Fuego', 'Tierra'] as Team[]).map((teamId) => {
                 const data = teams[teamId];
                 const config = TEAM_CONFIG[teamId];
-                const Icon = config.icon;
                 const progress = getTeamProgress(data);
                 
                 return (
