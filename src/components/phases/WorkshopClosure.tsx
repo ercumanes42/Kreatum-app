@@ -147,7 +147,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                 transition={{ delay: 0.5 }}
                 className="text-6xl md:text-7xl font-light tracking-tighter text-white font-serif mb-6"
               >
-                ¡Enhorabuena, Alquimistas!
+                ¡Enhorabuena!
               </motion.h1>
 
 
