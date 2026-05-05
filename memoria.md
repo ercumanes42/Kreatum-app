@@ -243,4 +243,18 @@ Se corrigieron todos los errores críticos (Rules of Hooks, z-index roto, datos 
 
 **Nota ERROR 4:** El guard `if (state.team)` antes de `saveSolution` ya existía correctamente en `Conjugar.tsx` — no requirió cambios.
 
+---
+
+## Mejoras de UX del Alquimista y Sincronización (05/05/2026 - Sesión 2)
+
+Se resolvieron bloqueos de UX detectados durante pruebas en vivo donde la comunicación entre el panel del Alquimista y la aplicación del jugador no fluía correctamente:
+
+| # | Bug/Mejora | Archivo(s) | Fix aplicado |
+|---|------------|-----------|-------------|
+| 34 | Botón explícito para Fase Defensa | `AlchemistPanel.tsx` | Añadido un botón "Desbloquear Defensa para Equipos" dentro de la fila de Sublimar para evitar que el administrador salte a la fase 5 por accidente al intentar desbloquear. |
+| 35 | Transición Automática a Defensa | `Sublimar.tsx` | El componente detecta automáticamente cuando el Alquimista desbloquea la fase y mueve al jugador directamente a la pestaña "Defensa" sin requerir clics adicionales. |
+| 36 | Intercepción de saltos de Fase | `PlayerApp.tsx` | Si el administrador fuerza la Fase 5 por error, el jugador que no ha completado la Defensa es interceptado y mantenido en la Fase 4 (pestaña Defensa) protegiendo el flujo. |
+| 37 | Sincronización real de progreso al administrador | `PlayerApp.tsx` | Cambiado `setState` a `updateState` al recibir la señal de forzado de fase del administrador. Ahora el documento de Firebase se actualiza, y el panel del administrador refleja en 100% de tiempo real exactamente en qué fase están los jugadores. |
+| 38 | Progreso al 100% al finalizar | `PlayerApp.tsx`, `AlchemistPanel.tsx`, `types.ts` | Agregado `isFinished: true` cuando el jugador hace clic en "Finalizar Workshop". El AlchemistPanel ahora lee esto y sube la barra de progreso al 100% solo en ese momento preciso. |
+
 **Plataforma lista para producción. Sin errores críticos pendientes.**
