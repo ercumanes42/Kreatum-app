@@ -66,11 +66,11 @@ export default function PlayerApp() {
         state.sublimarView !== 'Defensa'
       ) {
         // Keep them in Sublimar but switch to Defensa
-        setState(prev => ({ ...prev, currentPhase: 'Sublimar', sublimarView: 'Defensa' }));
+        updateState({ currentPhase: 'Sublimar', sublimarView: 'Defensa' });
         return;
       }
       
-      setState(prev => ({ ...prev, currentPhase: globalState.currentPhase as Phase }));
+      updateState({ currentPhase: globalState.currentPhase as Phase });
     }
 
     if (globalState?.status === 'completed' && !isAlchemist) {
@@ -367,6 +367,7 @@ export default function PlayerApp() {
               onClick={() => {
                 if (currentIndex === PHASES.length - 1) {
                   sounds.playSuccess();
+                  updateState({ isFinished: true });
                   leaveGame();
                 } else {
                   nextPhase();

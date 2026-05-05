@@ -58,6 +58,9 @@ export interface GameState {
   pitchProblem: string;
   pitchSolution: string;
   pitchAction: string;
+
+  // Session state
+  isFinished?: boolean;
 }
 
 export const initialState: GameState = {

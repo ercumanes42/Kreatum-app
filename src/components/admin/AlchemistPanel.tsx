@@ -70,8 +70,12 @@ export function AlchemistPanel({ gameId }: Props) {
 
   const getTeamProgress = (teamData: any) => {
     if (!teamData) return 0;
+    if (teamData.isFinished) return 100;
+    
     const phaseIndex = PHASES.indexOf(teamData.currentPhase || 'Selección');
-    return Math.round(((phaseIndex + 1) / PHASES.length) * 100);
+    // Si no ha terminado, el máximo progreso mostrado es basado en su fase actual
+    // Seleccion = 0, Calcinar = 14, ..., Proyectar = 85.
+    return Math.round((phaseIndex / PHASES.length) * 100);
   };
 
   const [isExporting, setIsExporting] = useState(false);
