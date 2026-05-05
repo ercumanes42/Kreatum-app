@@ -59,13 +59,24 @@ export default function PlayerApp() {
   // Sync Global Phase and Status to local state for regular players
   useEffect(() => {
     if (globalState?.currentPhase && !isAlchemist && globalState.currentPhase !== state.currentPhase) {
+      // Intercept transition from Sublimar to Fermentar if they haven't seen 'Defensa'
+      if (
+        state.currentPhase === 'Sublimar' && 
+        globalState.currentPhase === 'Fermentar' && 
+        state.sublimarView !== 'Defensa'
+      ) {
+        // Keep them in Sublimar but switch to Defensa
+        setState(prev => ({ ...prev, currentPhase: 'Sublimar', sublimarView: 'Defensa' }));
+        return;
+      }
+      
       setState(prev => ({ ...prev, currentPhase: globalState.currentPhase as Phase }));
     }
 
     if (globalState?.status === 'completed' && !isAlchemist) {
       setShowClosure(true);
     }
-  }, [globalState?.currentPhase, globalState?.status, state.currentPhase, isAlchemist, leaveGame]);
+  }, [globalState?.currentPhase, globalState?.status, state.currentPhase, state.sublimarView, isAlchemist, leaveGame]);
 
   // Sync Firestore team state to local state
   useEffect(() => {

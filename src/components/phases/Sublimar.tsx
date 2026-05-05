@@ -104,6 +104,13 @@ export function Sublimar({ state, updateState }: Props) {
   const isNextUnlocked = globalState?.unlockedPhases?.includes('Fermentar');
   const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Sublimar');
 
+  // Auto-transition to Defensa if unlocked and attacks are complete
+  React.useEffect(() => {
+    if (isAttackPhaseComplete && isNextUnlocked && subView === 'Ataque') {
+      setSubView('Defensa');
+    }
+  }, [isAttackPhaseComplete, isNextUnlocked, subView]);
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">

@@ -222,59 +222,77 @@ export function AlchemistPanel({ gameId }: Props) {
                 const isPast = PHASES.indexOf(currentPhase) > idx;
                 const isNextUnlocked = idx === PHASES.length - 1 ? true : unlockedPhases.includes(PHASES[idx + 1]);
                 return (
-                  <button
-                    key={phase}
-                    onClick={() => setGlobalPhase(phase)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border",
-                      isActive 
-                        ? "bg-kreatum-purple text-white border-kreatum-purple shadow-lg scale-[1.02] z-10" 
-                        : isPast 
-                          ? "bg-white dark:bg-white/5 text-kreatum-purple border-kreatum-purple/20 opacity-70"
-                          : "bg-white dark:bg-white/5 text-kreatum-gray/60 border-black/5 dark:border-white/5 hover:border-kreatum-purple/30"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded-full flex items-center justify-center border border-current text-[10px] font-bold">
-                        {idx + 1}
-                      </span>
-                      <span className="font-medium tracking-tight">{phase}</span>
-                    </div>
-                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? (
-                      <div className="flex items-center gap-2">
-                        {idx >= 2 && idx < PHASES.length - 1 && (
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              if (!unlockedPhases.includes(PHASES[idx+1])) {
-                                unlockPhase(PHASES[idx+1]); 
-                              }
-                            }}
-                            className={cn(
-                              "p-1 rounded-md transition-all",
-                              unlockedPhases.includes(PHASES[idx+1]) 
-                                ? "text-white/40 cursor-default" 
-                                : "text-white hover:bg-white/20 hover:scale-110 active:scale-95"
-                            )}
-                            title={unlockedPhases.includes(PHASES[idx+1]) ? "Siguiente fase desbloqueada" : "Hacer clic para desbloquear siguiente fase"}
-                          >
-                            {unlockedPhases.includes(PHASES[idx+1]) ? '🔓' : '🔒'}
-                          </button>
-                        )}
-                        <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <div key={phase} className="relative">
+                    <button
+                      onClick={() => setGlobalPhase(phase)}
+                      className={cn(
+                        "w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border",
+                        isActive 
+                          ? "bg-kreatum-purple text-white border-kreatum-purple shadow-lg scale-[1.02] z-10" 
+                          : isPast 
+                            ? "bg-white dark:bg-white/5 text-kreatum-purple border-kreatum-purple/20 opacity-70"
+                            : "bg-white dark:bg-white/5 text-kreatum-gray/60 border-black/5 dark:border-white/5 hover:border-kreatum-purple/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 h-6 rounded-full flex items-center justify-center border border-current text-[10px] font-bold">
+                          {idx + 1}
+                        </span>
+                        <span className="font-medium tracking-tight">{phase}</span>
                       </div>
-                    ) : (idx >= 2 && !unlockedPhases.includes(phase)) ? (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); unlockPhase(phase); }}
-                        className="text-white hover:scale-110 transition-transform p-1 hover:bg-kreatum-purple/20 rounded-md"
-                        title="Clic para desbloquear"
+                      {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? (
+                        <div className="flex items-center gap-2">
+                          {idx >= 2 && idx < PHASES.length - 1 && (
+                            <div 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (!unlockedPhases.includes(PHASES[idx+1])) {
+                                  unlockPhase(PHASES[idx+1]); 
+                                }
+                              }}
+                              className={cn(
+                                "p-1 rounded-md transition-all",
+                                unlockedPhases.includes(PHASES[idx+1]) 
+                                  ? "text-white/40 cursor-default" 
+                                  : "text-white hover:bg-white/20 hover:scale-110 active:scale-95 cursor-pointer"
+                              )}
+                              title={unlockedPhases.includes(PHASES[idx+1]) ? "Siguiente fase desbloqueada" : "Hacer clic para desbloquear siguiente fase"}
+                            >
+                              {unlockedPhases.includes(PHASES[idx+1]) ? '🔓' : '🔒'}
+                            </div>
+                          )}
+                          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        </div>
+                      ) : (idx >= 2 && !unlockedPhases.includes(phase)) ? (
+                        <div 
+                          onClick={(e) => { e.stopPropagation(); unlockPhase(phase); }}
+                          className="text-white hover:scale-110 transition-transform p-1 hover:bg-kreatum-purple/20 rounded-md cursor-pointer"
+                          title="Clic para desbloquear"
+                        >
+                          🔒
+                        </div>
+                      ) : (
+                        <ChevronRight className="w-4 h-4 opacity-30" />
+                      )}
+                    </button>
+
+                    {/* Explicit button to unlock Defense when in Phase 4 */}
+                    {isActive && phase === 'Sublimar' && !unlockedPhases.includes('Fermentar') && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="mt-2"
                       >
-                        🔒
-                      </button>
-                    ) : (
-                      <ChevronRight className="w-4 h-4 opacity-30" />
+                        <Button 
+                          onClick={(e) => { e.stopPropagation(); unlockPhase('Fermentar'); }}
+                          className="w-full bg-kreatum-blue hover:bg-kreatum-blue/90 text-white rounded-xl text-xs h-10 shadow-lg shadow-kreatum-blue/20"
+                        >
+                          <ShieldAlert className="w-4 h-4 mr-2" />
+                          Desbloquear Defensa para Equipos
+                        </Button>
+                      </motion.div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </CardContent>
@@ -346,7 +364,7 @@ export function AlchemistPanel({ gameId }: Props) {
                         <p className="text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">Solución Definitiva</p>
                         <div className="flex justify-between items-start gap-4">
                           <p className="text-sm italic line-clamp-2 leading-relaxed flex-1">
-                            {data?.selectedSolution || <span className="opacity-30">Aún no definida...</span>}
+                            {data?.reformulatedSolution || data?.selectedSolution || <span className="opacity-30">Aún no definida...</span>}
                           </p>
                           <Button 
                             size="sm" 
