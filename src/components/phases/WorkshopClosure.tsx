@@ -24,11 +24,11 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   // Use Firestore data (real-time) with fallback to local state
-  const attacksSentCount = firestoreAttacksSent.length || state.attacksOnOthers.filter(a => a.trim()).length;
+  const attacksSentCount = firestoreAttacksSent.length || (state.attacksOnOthers ?? []).filter(a => a.trim()).length;
   const attacksReceivedCount = firestoreAttacksReceived.length;
   const attacksSentList = firestoreAttacksSent.length > 0
     ? firestoreAttacksSent.map(a => a.content)
-    : state.attacksOnOthers.filter(a => a.trim());
+    : (state.attacksOnOthers ?? []).filter(a => a.trim());
   const attacksReceivedList = firestoreAttacksReceived.map(a => a.content);
 
   const toggleSection = (key: string) => {
@@ -43,7 +43,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
       items: [
         { label: 'Reto', value: state.challenge },
         { label: 'Perspectiva Definitiva', value: state.selectedPerspective },
-        { label: `Perspectivas generadas`, value: state.perspectives.filter(p => p.trim()).length.toString() },
+        { label: `Perspectivas generadas`, value: (state.perspectives ?? []).filter(p => p.trim()).length.toString() },
       ]
     },
     {
@@ -52,7 +52,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
       color: 'kreatum-purple',
       items: [
         { label: 'Solución Definitiva', value: state.selectedSolution },
-        { label: 'Soluciones generadas', value: state.solutions.filter(s => s.trim()).length.toString() },
+        { label: 'Soluciones generadas', value: (state.solutions ?? []).filter(s => s.trim()).length.toString() },
       ]
     },
     {

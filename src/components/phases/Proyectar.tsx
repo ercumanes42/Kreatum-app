@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function Proyectar({ state, updateState }: Props) {
-  const { gameId } = useGame();
+  const { gameId, leaveGame } = useGame();
 
   // Fetch real attack data from Firestore
   // Note: gameId would be used for real-time sync in future versions
@@ -109,20 +109,9 @@ export function Proyectar({ state, updateState }: Props) {
 
           <div className="flex justify-center mt-12">
             <Button
-              onClick={async () => {
+              onClick={() => {
                 sounds.playSuccess();
-                if (gameId) {
-                  try {
-                    const { updateDoc, doc: firestoreDoc } = await import('firebase/firestore');
-                    const { db } = await import('../../lib/firebase');
-                    await updateDoc(firestoreDoc(db, 'games', gameId), {
-                      status: 'completed',
-                      completedAt: Date.now(),
-                    });
-                  } catch (e) {
-                    console.error('Error al finalizar workshop:', e);
-                  }
-                }
+                leaveGame();
               }}
               className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-lg"
             >
