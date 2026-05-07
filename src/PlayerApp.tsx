@@ -74,9 +74,10 @@ export default function PlayerApp() {
     }
 
     if (globalState?.status === 'completed' && !isAlchemist) {
-      setShowClosure(true);
+      // If the Alchemist closes the session, redirect the player to the home screen
+      leaveGame();
     }
-  }, [globalState?.currentPhase, globalState?.status, state.currentPhase, state.sublimarView, isAlchemist, leaveGame]);
+  }, [globalState?.status, isAlchemist, leaveGame]);
 
   // Sync Firestore team state to local state
   useEffect(() => {
