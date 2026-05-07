@@ -16,6 +16,7 @@ export function Fermentar({ state, updateState }: Props) {
   const { gameId } = useGame();
   const { globalState } = useGameGlobal(gameId);
   const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Fermentar');
+  
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
       <PhaseHeader
@@ -23,7 +24,8 @@ export function Fermentar({ state, updateState }: Props) {
         subtitle="Aterriza la solución. Dále forma para poder presentarla."
       />
 
-      <div className="grid lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Row 1: Audience, Strengths, Weaknesses */}
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>¿A quién se lo vamos a presentar?</CardTitle>
@@ -68,9 +70,9 @@ export function Fermentar({ state, updateState }: Props) {
             />
           </CardContent>
         </Card>
-      </div>
 
-        <Card className="lg:col-span-2 border-2 border-kreatum-blue/30">
+        {/* Row 2: Pilot (Full width) */}
+        <Card className="lg:col-span-3 border-2 border-kreatum-blue/30">
           <CardHeader>
             <CardTitle>Prueba Piloto / Prototipo (Testeo)</CardTitle>
           </CardHeader>
@@ -85,7 +87,8 @@ export function Fermentar({ state, updateState }: Props) {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        {/* Row 3: Resources (Full width) */}
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Recursos Necesarios</CardTitle>
           </CardHeader>
