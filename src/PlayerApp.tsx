@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameState, initialState, Phase, Team, PHASES } from './types';
 import { Button } from './components/ui/Button';
 import { ChevronRight, ChevronLeft, Hexagon, Moon, Sun } from 'lucide-react';
@@ -11,7 +10,7 @@ import { Conjugar } from './components/phases/Conjugar';
 import { Sublimar } from './components/phases/Sublimar';
 import { Fermentar } from './components/phases/Fermentar';
 import { Proyectar } from './components/phases/Proyectar';
-import { WorkshopClosure } from './components/phases/WorkshopClosure';
+
 import { sounds } from './lib/sounds';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAttacksSent, useTeamSync, useGameGlobal } from './hooks/useRealtime';
@@ -26,7 +25,7 @@ export default function PlayerApp() {
   const { gameId, team, isAlchemist, leaveGame, roomCode } = useGame();
   const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
   const [isDark, setIsDark] = useState(false);
-  const [showClosure, setShowClosure] = useState(false);
+  const [workshopEnded, setWorkshopEnded] = useState(false);
   const [showSplash, setShowSplash] = useState(() => {
     if (localStorage.getItem('kreatum_splash_seen') === 'true') {
       return false;
@@ -52,7 +51,7 @@ export default function PlayerApp() {
     }
     if (!team && !gameId && state.team) {
       setState({ ...initialState });
-      setShowClosure(false);
+      setWorkshopEnded(false);
     }
   }, [team, gameId]);
 
@@ -71,13 +70,22 @@ export default function PlayerApp() {
       }
       
       updateState({ currentPhase: globalState.currentPhase as Phase });
+      // Scroll to top when the Alchemist changes the phase remotely
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  }, [globalState?.currentPhase, isAlchemist]);
 
-    if (globalState?.status === 'completed' && !isAlchemist) {
-      // If the Alchemist closes the session, redirect the player to the home screen
-      leaveGame();
+  // Handle workshop completion by admin
+  useEffect(() => {
+    if (globalState?.status === 'completed' && !isAlchemist && !workshopEnded) {
+      setWorkshopEnded(true);
+      // Brief message, then redirect
+      const timer = setTimeout(() => {
+        leaveGame();
+      }, 3000);
+      return () => clearTimeout(timer);
     }
-  }, [globalState?.status, isAlchemist, leaveGame]);
+  }, [globalState?.status, isAlchemist, workshopEnded, leaveGame]);
 
   // Sync Firestore team state to local state
   useEffect(() => {
@@ -322,17 +330,22 @@ export default function PlayerApp() {
         </div>
       )}
 
-      {/* WorkshopClosure como portal para evitar que transform de motion.div rompa position:fixed */}
-      {showClosure && createPortal(
-        <WorkshopClosure
-          state={state}
-          isOpen={true}
-          onClose={() => {
-            setShowClosure(false);
-            leaveGame();
-          }}
-        />,
-        document.body
+      {/* Workshop ended overlay */}
+      {workshopEnded && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center space-y-6 max-w-md px-8"
+          >
+            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-kreatum-purple to-kreatum-turquoise rounded-[28px] flex items-center justify-center shadow-2xl shadow-kreatum-purple/40">
+              <Hexagon className="w-12 h-12 text-white" />
+            </div>
+            <h1 className="text-4xl md:text-5xl font-light tracking-tighter text-white font-serif">¡Enhorabuena!</h1>
+            <p className="text-lg text-white/60 font-mono">Has finalizado el workshop.<br/>Vamos a las votaciones.</p>
+            <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto" />
+          </motion.div>
+        </div>
       )}
 
       {/* Main Content */}
@@ -357,7 +370,7 @@ export default function PlayerApp() {
       </main>
 
       {/* Footer / Navigation */}
-      {state.team && !showClosure && (
+      {state.team && !workshopEnded && !state.isFinished && (
         <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-t border-black/5 dark:border-white/5 mt-auto relative z-20 transition-colors duration-500">
           <div className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
             <Button 
@@ -373,13 +386,12 @@ export default function PlayerApp() {
             <Button 
               onClick={() => {
                 if (currentIndex === PHASES.length - 1) {
-                  // Finalization is handled inside Proyectar component
-                  return;
+                  return; // Finalization handled inside Proyectar
                 } else {
                   nextPhase();
                 }
               }}
-              disabled={currentIndex === PHASES.length - 1 ? true : isNextDisabled()}
+              disabled={isNextDisabled()}
               title={blockedByAlchemist() ? 'El Alquimista aún no ha desbloqueado esta fase' : ''}
               className={cn(
                 "flex gap-2",

@@ -85,9 +85,9 @@ export function AlchemistPanel({ gameId }: Props) {
 
   const getTeamProgress = (teamData: any) => {
     if (!teamData) return 0;
-    if (teamData.isFinished) return 100;
+    if (teamData.isFinished === true) return 100;
     const phaseIndex = PHASES.indexOf(teamData.currentPhase || 'Selección');
-    return Math.round((phaseIndex / PHASES.length) * 100);
+    return Math.round((phaseIndex / (PHASES.length - 1)) * 100);
   };
 
   const [isExporting, setIsExporting] = useState(false);

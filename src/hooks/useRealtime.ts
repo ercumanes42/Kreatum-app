@@ -57,8 +57,20 @@ export function useAttacksReceived(gameId: string | null, myTeam: Team | null) {
   return { attacks, isLoading };
 }
 
+export interface GlobalGameState {
+  currentPhase?: Phase;
+  timer?: number;
+  challenge?: string;
+  unlockedPhases?: string[];
+  status?: 'active' | 'completed';
+  completedAt?: number;
+  sublimarDefenseUnlocked?: boolean;
+  sublimarDefenseUnlockedAt?: number;
+  [key: string]: any; // allow additional fields from Firestore
+}
+
 export function useGameGlobal(gameId: string | null) {
-  const [globalState, setGlobalState] = useState<{ currentPhase?: Phase; timer?: number; challenge?: string; unlockedPhases?: string[] }>({});
+  const [globalState, setGlobalState] = useState<GlobalGameState>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

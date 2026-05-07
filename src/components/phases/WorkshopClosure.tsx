@@ -35,6 +35,13 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
     setExpandedSection(prev => prev === key ? null : key);
   };
 
+  const SECTION_COLORS: Record<string, { bg: string; text: string }> = {
+    'kreatum-turquoise': { bg: 'bg-kreatum-turquoise/20', text: 'text-kreatum-turquoise' },
+    'kreatum-purple': { bg: 'bg-kreatum-purple/20', text: 'text-kreatum-purple' },
+    'kreatum-red': { bg: 'bg-kreatum-red/20', text: 'text-kreatum-red' },
+    'kreatum-green': { bg: 'bg-kreatum-green/20', text: 'text-kreatum-green' },
+  };
+
   const sections = [
     {
       key: 'diluir',
@@ -198,8 +205,8 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className={`w-8 h-8 rounded-xl bg-${section.color}/20 flex items-center justify-center`}>
-                          <CheckCircle2 className={`w-4 h-4 text-${section.color}`} />
+                        <div className={`w-8 h-8 rounded-xl ${SECTION_COLORS[section.color]?.bg || 'bg-white/10'} flex items-center justify-center`}>
+                          <CheckCircle2 className={`w-4 h-4 ${SECTION_COLORS[section.color]?.text || 'text-white'}`} />
                         </div>
                         <span className="text-sm font-bold text-white/90 uppercase tracking-wide">
                           {section.title}

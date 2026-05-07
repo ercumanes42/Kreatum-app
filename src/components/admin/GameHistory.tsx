@@ -33,11 +33,11 @@ interface GameRecord {
   attacksCount: number;
 }
 
-const TEAM_CONFIG: Record<Team, { icon: string; color: string; bg: string }> = {
-  Fuego: { icon: '/assets/logos/fuego.png', color: 'text-kreatum-red', bg: 'bg-kreatum-red/10' },
-  Agua: { icon: '/assets/logos/agua.png', color: 'text-kreatum-blue', bg: 'bg-kreatum-blue/10' },
-  Tierra: { icon: '/assets/logos/tierra.png', color: 'text-kreatum-green', bg: 'bg-kreatum-green/10' },
-  Aire: { icon: '/assets/logos/aire.png', color: 'text-kreatum-turquoise', bg: 'bg-kreatum-turquoise/10' },
+const TEAM_CONFIG: Record<Team, { icon: string; color: string; bg: string; barColor: string }> = {
+  Fuego: { icon: '/assets/logos/fuego.png', color: 'text-kreatum-red', bg: 'bg-kreatum-red/10', barColor: 'bg-kreatum-red' },
+  Agua: { icon: '/assets/logos/agua.png', color: 'text-kreatum-blue', bg: 'bg-kreatum-blue/10', barColor: 'bg-kreatum-blue' },
+  Tierra: { icon: '/assets/logos/tierra.png', color: 'text-kreatum-green', bg: 'bg-kreatum-green/10', barColor: 'bg-kreatum-green' },
+  Aire: { icon: '/assets/logos/aire.png', color: 'text-kreatum-turquoise', bg: 'bg-kreatum-turquoise/10', barColor: 'bg-kreatum-turquoise' },
 };
 
 export function GameHistory() {
@@ -300,7 +300,7 @@ export function GameHistory() {
 
             return (
               <Card key={team} className="overflow-hidden border-black/5 dark:border-white/5">
-                <div className={cn("h-1.5 w-full", config.color.replace('text-', 'bg-'))} />
+                <div className={cn("h-1.5 w-full", config.barColor)} />
                 <button
                   onClick={() => setExpandedTeam(isExpanded ? null : team)}
                   className="w-full p-6 flex items-center justify-between hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
