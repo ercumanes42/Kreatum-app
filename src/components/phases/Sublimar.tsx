@@ -147,7 +147,7 @@ export function Sublimar({ state, updateState }: Props) {
               )}
               title={!isDefenseUnlocked ? "El Alquimista aún no ha desbloqueado la Defensa" : ""}
             >
-              {!isDefenseUnlocked && '🔒 '}Defensa y Reformulación
+              {!isDefenseUnlocked && <Lock className="w-3 h-3 inline mr-1" />}Defensa y Reformulación
             </button>
           </div>
         )}
@@ -290,15 +290,17 @@ export function Sublimar({ state, updateState }: Props) {
                               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <button
                                   onClick={() => handleStartEdit(attack)}
-                                  className="p-1.5 text-kreatum-blue/40 hover:text-kreatum-blue"
+                                  className="p-1.5 text-kreatum-blue/40 hover:text-kreatum-blue cursor-pointer"
                                   title="Editar ataque"
+                                  aria-label="Editar ataque"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => deleteAttack(attack.id)}
-                                  className="p-1.5 text-kreatum-red/40 hover:text-red-500"
+                                  className="p-1.5 text-kreatum-red/40 hover:text-red-500 cursor-pointer"
                                   title="Eliminar ataque"
+                                  aria-label="Eliminar ataque"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -329,7 +331,7 @@ export function Sublimar({ state, updateState }: Props) {
                     )}
                   >
                     <span className="relative z-10 flex items-center gap-3">
-                      {isDefenseUnlocked ? 'Continuar a Defensa' : '🔒 Esperando al Alquimista'} 
+                      {isDefenseUnlocked ? 'Continuar a Defensa' : <><Lock className="w-4 h-4" /> Esperando al Alquimista</>} 
                       {isDefenseUnlocked && <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                     </span>
                     {isDefenseUnlocked && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />}

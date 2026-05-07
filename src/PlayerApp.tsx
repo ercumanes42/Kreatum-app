@@ -272,28 +272,41 @@ export default function PlayerApp() {
           </div>
         </div>
         
-        {/* Progress Bar */}
+        {/* Progress Stepper — desktop: full labels, mobile: compact dots */}
         {state.currentPhase !== 'Selección' && (
-          <div className="bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5 flex overflow-x-auto no-scrollbar transition-colors duration-500">
-            <div className="max-w-7xl mx-auto px-6 lg:px-8 py-3 flex items-center gap-6 text-[10px] uppercase tracking-widest font-semibold whitespace-nowrap w-full">
+          <div className="bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5 transition-colors duration-300">
+            {/* Desktop stepper */}
+            <div className="hidden md:flex max-w-7xl mx-auto px-6 lg:px-8 py-3 items-center gap-6 text-[10px] uppercase tracking-widest font-semibold whitespace-nowrap overflow-x-auto">
               {PHASES.slice(1).map((phase, idx) => {
                 const isActive = phase === state.currentPhase;
                 const isPassed = PHASES.indexOf(phase) < currentIndex;
                 return (
                   <div key={phase} className={cn(
                     "flex items-center gap-2 transition-colors",
-                    isActive ? "text-kreatum-purple" : isPassed ? "text-kreatum-gray dark:text-white/60" : "text-kreatum-gray-light/60 dark:text-white/60"
+                    isActive ? "text-kreatum-purple" : isPassed ? "text-kreatum-gray dark:text-white/60" : "text-kreatum-gray-light/60 dark:text-white/30"
                   )}>
                     <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
-                      isActive ? "bg-kreatum-purple/20 text-kreatum-purple border border-kreatum-purple/50 shadow-[0_0_15px_rgba(162,84,156,0.3)]" : isPassed ? "bg-black/10 dark:bg-white/10 text-kreatum-gray dark:text-white/80" : "bg-black/5 dark:bg-white/5 text-kreatum-gray-light dark:text-white/60"
+                      "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all",
+                      isActive ? "bg-kreatum-purple/20 text-kreatum-purple border border-kreatum-purple/50 shadow-[0_0_15px_rgba(162,84,156,0.3)]" : isPassed ? "bg-black/10 dark:bg-white/10 text-kreatum-gray dark:text-white/80" : "bg-black/5 dark:bg-white/5 text-kreatum-gray-light dark:text-white/30"
                     )}>
-                      {idx + 1}
+                      {isPassed ? <span className="text-[8px]">✓</span> : idx + 1}
                     </div>
-                    <span>{phase}</span>
+                    <span className="hidden lg:block">{phase}</span>
                   </div>
                 );
               })}
+            </div>
+            {/* Mobile stepper: compact progress bar + current phase name */}
+            <div className="md:hidden flex items-center gap-3 px-4 py-2">
+              <div className="flex-1 h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-kreatum-purple rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((currentIndex / (PHASES.length - 1)) * 100)}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-mono font-bold text-kreatum-purple whitespace-nowrap">
+                {currentIndex}/{PHASES.length - 1} &middot; {state.currentPhase}
+              </span>
             </div>
           </div>
         )}
@@ -301,17 +314,28 @@ export default function PlayerApp() {
 
       {/* Premium Challenge Banner */}
       {challenge && state.team && !['Selección', 'Calcinar', 'Diluir'].includes(state.currentPhase) && (
-        <div className="sticky top-[80px] z-20 px-6 py-4 pointer-events-none">
+        <div className="sticky top-[80px] z-20 px-4 md:px-6 py-3 pointer-events-none">
           <div className="max-w-7xl mx-auto flex justify-end">
             <motion.div 
               initial={{ x: 50, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               className="pointer-events-auto relative group"
             >
-              {/* Background Glow */}
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-kreatum-purple to-kreatum-turquoise rounded-[2rem] blur opacity-20 group-hover:opacity-40 transition duration-1000" />
+              {/* Glow */}
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-kreatum-purple to-kreatum-turquoise rounded-[2rem] blur opacity-20 group-hover:opacity-40 transition duration-500" />
               
-              <div className="relative flex items-center gap-6 pl-8 pr-4 py-2.5 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-[2rem] border border-white/20 dark:border-white/10 shadow-2xl shadow-kreatum-purple/10">
+              {/* Mobile: compact pill */}
+              <div className="md:hidden relative flex items-center gap-3 pl-4 pr-3 py-2 bg-white/90 dark:bg-black/70 backdrop-blur-xl rounded-full border border-white/20 dark:border-white/10 shadow-xl shadow-kreatum-purple/10">
+                <div className="w-6 h-6 bg-gradient-to-br from-kreatum-purple to-kreatum-purple-dark rounded-full flex items-center justify-center shrink-0">
+                  <Hexagon className="w-3 h-3 text-white" />
+                </div>
+                <p className="text-xs font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-90 max-w-[160px] line-clamp-1">
+                  "{challenge}"
+                </p>
+              </div>
+
+              {/* Desktop: full pill */}
+              <div className="hidden md:flex relative items-center gap-6 pl-8 pr-4 py-2.5 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-[2rem] border border-white/20 dark:border-white/10 shadow-2xl shadow-kreatum-purple/10">
                 <div className="flex flex-col items-end">
                   <span className="text-[9px] font-mono uppercase tracking-[0.3em] text-kreatum-purple/70 font-black mb-1">
                     Reto Activo
@@ -320,9 +344,8 @@ export default function PlayerApp() {
                     "{challenge}"
                   </p>
                 </div>
-
                 <div className="w-12 h-12 bg-gradient-to-br from-kreatum-purple to-kreatum-purple-dark rounded-full flex items-center justify-center shadow-lg shadow-kreatum-purple/20 shrink-0">
-                  <Hexagon className="w-6 h-6 text-white animate-[pulse_3s_infinite]" />
+                  <Hexagon className="w-6 h-6 text-white" />
                 </div>
               </div>
             </motion.div>
