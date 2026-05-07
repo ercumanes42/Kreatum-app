@@ -292,25 +292,31 @@ export default function PlayerApp() {
 
       {/* Premium Challenge Banner */}
       {challenge && state.team && !['Selección', 'Calcinar', 'Diluir'].includes(state.currentPhase) && (
-        <div className="w-full bg-gradient-to-r from-kreatum-purple/10 via-transparent to-kreatum-purple/10 border-b border-kreatum-purple/20 backdrop-blur-md px-6 py-4 relative z-20 overflow-hidden">
-          {/* Subtle animated light effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
-          
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-            <div className="flex items-center gap-3 bg-white/50 dark:bg-white/10 px-4 py-2 rounded-2xl border border-kreatum-purple/20 shadow-lg shadow-kreatum-purple/5 shrink-0">
-              <div className="w-8 h-8 bg-kreatum-purple/20 rounded-xl flex items-center justify-center">
-                <Hexagon className="w-4 h-4 text-kreatum-purple" />
+        <div className="sticky top-[80px] z-20 px-6 py-4 pointer-events-none">
+          <div className="max-w-7xl mx-auto flex justify-end">
+            <motion.div 
+              initial={{ x: 50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              className="pointer-events-auto relative group"
+            >
+              {/* Background Glow */}
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-kreatum-purple to-kreatum-turquoise rounded-[2rem] blur opacity-20 group-hover:opacity-40 transition duration-1000" />
+              
+              <div className="relative flex items-center gap-6 pl-8 pr-4 py-2.5 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-[2rem] border border-white/20 dark:border-white/10 shadow-2xl shadow-kreatum-purple/10">
+                <div className="flex flex-col items-end">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.3em] text-kreatum-purple/70 font-black mb-1">
+                    Reto Activo
+                  </span>
+                  <p className="text-base font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-90 text-right max-w-[300px] line-clamp-2">
+                    "{challenge}"
+                  </p>
+                </div>
+
+                <div className="w-12 h-12 bg-gradient-to-br from-kreatum-purple to-kreatum-purple-dark rounded-full flex items-center justify-center shadow-lg shadow-kreatum-purple/20 shrink-0">
+                  <Hexagon className="w-6 h-6 text-white animate-[pulse_3s_infinite]" />
+                </div>
               </div>
-              <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-kreatum-purple font-black whitespace-nowrap">
-                Reto Activo
-              </span>
-            </div>
-            
-            <div className="hidden sm:block h-8 w-px bg-kreatum-purple/20" />
-            
-            <p className="text-lg font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-90 text-center sm:text-left line-clamp-2">
-              "{challenge}"
-            </p>
+            </motion.div>
           </div>
         </div>
       )}
