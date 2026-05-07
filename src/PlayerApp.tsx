@@ -47,6 +47,13 @@ export default function PlayerApp() {
   const leaveGameRef = useRef(leaveGame);
   useEffect(() => { leaveGameRef.current = leaveGame; }, [leaveGame]);
 
+  const updateState = (updates: Partial<GameState>) => {
+    setState(prev => {
+      const newState = { ...prev, ...updates };
+      updateTeamSync(updates);
+      return newState;
+    });
+  };
 
   // Sync context team into local state
   useEffect(() => {
@@ -105,11 +112,6 @@ export default function PlayerApp() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDark]);
-
-  const updateState = (updates: Partial<GameState>) => {
-    setState(prev => ({ ...prev, ...updates }));
-    updateTeamSync(updates);
-  };
 
   const currentIndex = PHASES.indexOf(state.currentPhase);
 
@@ -216,19 +218,21 @@ export default function PlayerApp() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark text-kreatum-gray dark:text-white transition-colors duration-500">
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark text-kreatum-gray dark:text-white transition-colors duration-300 font-sans">
+      <div className="grain-overlay" />
+      
       {/* Hero Video Splash */}
       {showSplash && <HeroSplash onDismiss={() => {
         setShowSplash(false);
         localStorage.setItem('kreatum_splash_seen', 'true');
       }} />}
 
-      {/* Immersive background orbs */}
-      <div className={cn("fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[140px] pointer-events-none z-0 transition-colors duration-1000", bg1)}></div>
-      <div className={cn("fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none z-0 transition-colors duration-1000", bg2)}></div>
+      {/* Immersive background orbs - Refined for senior depth */}
+      <div className={cn("fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none z-0 transition-colors duration-1000 opacity-40", bg1)}></div>
+      <div className={cn("fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[180px] pointer-events-none z-0 transition-colors duration-1000 opacity-40", bg2)}></div>
 
       {/* Header */}
-      <header className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-b border-black/5 dark:border-white/5 sticky top-0 z-20 transition-colors duration-500">
+      <header className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-b border-black/5 dark:border-white/5 sticky top-0 z-20 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative group">
@@ -365,12 +369,12 @@ export default function PlayerApp() {
             animate={{ opacity: 1, scale: 1 }}
             className="text-center space-y-6 max-w-md px-8"
           >
-            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-kreatum-purple to-kreatum-turquoise rounded-[28px] flex items-center justify-center shadow-2xl shadow-kreatum-purple/40">
+            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-kreatum-purple to-kreatum-turquoise rounded-[32px] flex items-center justify-center shadow-[0_20px_50px_rgba(162,84,156,0.5)]">
               <Hexagon className="w-12 h-12 text-white" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-light tracking-tighter text-white font-serif">¡Enhorabuena!</h1>
-            <p className="text-lg text-white/60 font-mono">Has finalizado el workshop.<br/>Vamos a las votaciones.</p>
-            <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto" />
+            <h1 className="text-5xl md:text-7xl h1-agency text-white font-serif">¡Enhorabuena!</h1>
+            <p className="text-xl text-white/70 font-mono tracking-widest uppercase">Has finalizado el workshop.<br/>Vamos a las votaciones.</p>
+            <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto" />
           </motion.div>
         </div>
       )}
@@ -380,10 +384,11 @@ export default function PlayerApp() {
         <AnimatePresence mode="wait">
           <motion.div
             key={state.currentPhase}
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            initial={{ opacity: 0, y: 30, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.98 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
+            exit={{ opacity: 0, y: -30, scale: 0.96 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="reveal-cascade"
           >
             {state.currentPhase === 'Selección' && <TeamSelection state={state} updateState={updateState} />}
             {state.currentPhase === 'Calcinar' && <Calcinar />}
@@ -398,7 +403,8 @@ export default function PlayerApp() {
 
       {/* Footer / Navigation */}
       {state.team && !workshopEnded && !state.isFinished && (
-        <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-t border-black/5 dark:border-white/5 mt-auto relative z-20 transition-colors duration-500">
+        <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-t border-black/5 dark:border-white/5 mt-auto relative z-20 transition-colors duration-300">
+
           <div className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
             <Button 
               variant="ghost" 
@@ -421,16 +427,23 @@ export default function PlayerApp() {
               disabled={isNextDisabled()}
               title={blockedByAlchemist() ? 'El Alquimista aún no ha desbloqueado esta fase' : ''}
               className={cn(
-                "flex gap-2",
+                "flex gap-2 btn-premium",
                 currentIndex === PHASES.length - 1
-                  ? "bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-lg shadow-kreatum-purple/20"
+                  ? "bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-premium"
                   : blockedByAlchemist()
                     ? "opacity-50 cursor-not-allowed"
                     : ""
               )}
             >
-              {currentIndex === PHASES.length - 1 ? '✦ Finalizar Workshop' : blockedByAlchemist() ? '🔒 Esperando al Alquimista' : 'Siguiente Fase'}
+              {currentIndex === PHASES.length - 1 ? '✦ Finalizar Workshop' : blockedByAlchemist() ? (
+                <span className="flex items-center gap-2">
+                  <Lock className="w-4 h-4" />
+                  Esperando al Alquimista
+                </span>
+              ) : 'Siguiente Fase'}
               <ChevronRight className="w-4 h-4" />
+
+
             </Button>
           </div>
         </footer>

@@ -5,16 +5,15 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
   return (
     <div
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-[30px] backdrop-blur-xl transition-all duration-500",
-        "bg-white/80 border border-black/5 shadow-sm",
-        "dark:bg-[#13111C]/95 dark:bg-gradient-to-br dark:from-[#2e2645]/50 dark:to-[#13111C]/90 dark:border-white/[0.08] dark:shadow-[0_15px_40px_-10px_rgba(0,0,0,0.8)]",
-        "dark:ring-1 dark:ring-white/[0.02]",
-        "hover:dark:border-white/[0.15] hover:dark:shadow-[0_20px_50px_-10px_rgba(0,0,0,0.9)] hover:dark:bg-[#161421]/95",
+        "glass-card group relative flex h-full flex-col overflow-hidden rounded-[32px] transition-all duration-300",
+        "dark:bg-gradient-to-br dark:from-white/[0.05] dark:to-transparent",
+        "hover:shadow-2xl hover:shadow-kreatum-purple/10 hover:border-kreatum-purple/30",
         className
       )}
       {...props}
     >
-      <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-kreatum-purple/[0.1] via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+      {/* Subtle brand glow on hover */}
+      <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-kreatum-purple/[0.05] via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
       {children}
     </div>
   );
@@ -25,7 +24,7 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("text-2xl font-light tracking-tighter text-kreatum-dark dark:text-white/90 font-serif transition-colors", className)} {...props} />;
+  return <h3 className={cn("text-2xl font-medium tracking-tight text-kreatum-dark dark:text-white/95 font-serif transition-colors", className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

@@ -77,20 +77,24 @@ export function Diluir({ state, updateState }: Props) {
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      className="space-y-12 reveal-cascade"
+    >
       
       <PhaseHeader
         phase="Diluir"
         subtitle="Disgregación del reto. Encuentra nuevas perspectivas."
       />
 
-      <Card className="border-l-4 border-l-kreatum-purple">
+      <Card className="border-l-[6px] border-l-kreatum-purple glow-purple">
         <CardHeader>
-          <CardTitle>Reto a Trabajar</CardTitle>
+          <CardTitle className="text-sm uppercase tracking-[0.3em] font-black opacity-50">Reto a Trabajar</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xl font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed select-none">
-            {challenge || <span className="text-kreatum-gray/40 italic text-base">El Alquimista aún no ha definido el reto.</span>}
+          <p className="text-2xl md:text-3xl font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-95 select-none">
+            {challenge || <span className="opacity-40">El Alquimista aún no ha definido el reto.</span>}
           </p>
         </CardContent>
       </Card>
@@ -105,8 +109,8 @@ export function Diluir({ state, updateState }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           {state.perspectives.map((persp, idx) => (
-            <div key={idx} className="group relative flex items-center gap-4">
-              <span className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-black/5 dark:bg-white/5 rounded-2xl text-kreatum-gray/60 dark:text-white/80 font-mono text-sm border border-black/5 dark:border-white/5">
+            <div key={idx} className="group relative flex items-center gap-4 transition-transform duration-300 hover:translate-x-1">
+              <span className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-black/5 dark:bg-white/5 rounded-2xl text-kreatum-purple font-mono text-lg font-black border border-kreatum-purple/20 transition-all group-hover:bg-kreatum-purple/10 group-hover:scale-110">
                 {String(idx + 1).padStart(2, '0')}
               </span>
               <div className="relative flex-1">
