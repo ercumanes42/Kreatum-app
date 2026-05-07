@@ -23,53 +23,52 @@ export function Fermentar({ state, updateState }: Props) {
         subtitle="Aterriza la solución. Dále forma para poder presentarla."
       />
 
-      <div className="grid lg:grid-cols-2 gap-8">
-        <Card>
+      <div className="grid lg:grid-cols-3 gap-8">
+        <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>¿A quién se lo vamos a presentar?</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1">
             <Textarea 
               value={state.audience}
               onChange={(e) => updateState({ audience: e.target.value })}
               placeholder="Ej: Director de Experiencia de Cliente..."
               disabled={isLocked}
-              className="min-h-[120px] focus:ring-kreatum-purple/50 focus:border-kreatum-purple/50"
+              className="min-h-[150px] h-full focus:ring-kreatum-purple/50 focus:border-kreatum-purple/50"
             />
           </CardContent>
         </Card>
 
-        <div className="space-y-8">
-          <Card className="border-l-4 border-l-kreatum-green bg-kreatum-green/5">
-            <CardHeader>
-              <CardTitle>Fortalezas de la idea</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea 
-                value={state.strengths}
-                onChange={(e) => updateState({ strengths: e.target.value })}
-                placeholder="Las ventajas más grandes de nuestra propuesta..."
-                disabled={isLocked}
-                className="focus:ring-kreatum-green/50 focus:border-kreatum-green/50 hover:border-kreatum-green/30"
-              />
-            </CardContent>
-          </Card>
+        <Card className="border-l-4 border-l-kreatum-green bg-kreatum-green/5 flex flex-col">
+          <CardHeader>
+            <CardTitle>Fortalezas de la idea</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <Textarea 
+              value={state.strengths}
+              onChange={(e) => updateState({ strengths: e.target.value })}
+              placeholder="Las ventajas más grandes de nuestra propuesta..."
+              disabled={isLocked}
+              className="min-h-[150px] h-full focus:ring-kreatum-green/50 focus:border-kreatum-green/50 hover:border-kreatum-green/30"
+            />
+          </CardContent>
+        </Card>
 
-          <Card className="border-l-4 border-l-kreatum-yellow bg-kreatum-yellow/5">
-            <CardHeader>
-              <CardTitle>Debilidades a explicar</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea 
-                value={state.weaknesses}
-                onChange={(e) => updateState({ weaknesses: e.target.value })}
-                placeholder="Riesgos o puntos débiles que debemos admitir y tener en cuenta..."
-                disabled={isLocked}
-                className="focus:ring-kreatum-yellow/50 focus:border-kreatum-yellow/50 hover:border-kreatum-yellow/30"
-              />
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border-l-4 border-l-kreatum-yellow bg-kreatum-yellow/5 flex flex-col">
+          <CardHeader>
+            <CardTitle>Debilidades a explicar</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <Textarea 
+              value={state.weaknesses}
+              onChange={(e) => updateState({ weaknesses: e.target.value })}
+              placeholder="Riesgos o puntos débiles que debemos admitir y tener en cuenta..."
+              disabled={isLocked}
+              className="min-h-[150px] h-full focus:ring-kreatum-yellow/50 focus:border-kreatum-yellow/50 hover:border-kreatum-yellow/30"
+            />
+          </CardContent>
+        </Card>
+      </div>
 
         <Card className="lg:col-span-2 border-2 border-kreatum-blue/30">
           <CardHeader>
