@@ -15,27 +15,12 @@
   --color-kreatum-dark: #102F40;
   --color-kreatum-gray: #404040;
   --color-kreatum-gray-light: #545F66;
-  --color-kreatum-bg-light: #f8fafc;
-  --color-kreatum-bg-dark: #050505;
+  --color-kreatum-bg-light: #f1f5f9;
+  --color-kreatum-bg-dark: #010102;
   
   --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-serif: "Playfair Display", Georgia, serif;
-
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
-  @keyframes pulse-soft {
-    0%, 100% { transform: scale(1); opacity: 0.8; }
-    50% { transform: scale(1.02); opacity: 1; }
-  }
-
-  @keyframes reveal {
-    from { opacity: 0; transform: translateY(30px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
 
   @keyframes grain {
     0%, 100% { transform: translate(0, 0); }
@@ -45,6 +30,16 @@
     40% { transform: translate(-5%, 25%); }
     50% { transform: translate(-15%, 10%); }
   }
+
+  @keyframes sweep {
+    0% { transform: translateX(-100%) skewX(-15deg); }
+    100% { transform: translateX(200%) skewX(-15deg); }
+  }
+  
+  @keyframes rotate-border {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 }
 
 html {
@@ -52,58 +47,79 @@ html {
 }
 
 html, body {
-  @apply text-kreatum-gray bg-kreatum-bg-light dark:text-white dark:bg-kreatum-bg-dark antialiased transition-colors duration-300;
+  @apply text-kreatum-gray bg-kreatum-bg-light dark:text-white dark:bg-kreatum-bg-dark antialiased transition-colors duration-500;
   overflow-x: hidden;
 }
 
-/* --- Agency Premium Design Polish --- */
+/* --- THE "I CAN SEE IT" AGENCY POLISH --- */
 
-/* 1. Tactile Grain Texture */
+/* 1. HIGH INTENSITY GRAIN (Cinema Texture) */
 .grain-overlay {
   position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  opacity: 0.035;
+  top: -150%;
+  left: -150%;
+  width: 400%;
+  height: 400%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.12; /* High enough to be felt */
   pointer-events: none;
   z-index: 9999;
-  animation: grain 12s steps(10) infinite;
+  animation: grain 6s steps(6) infinite;
 }
 
-.dark .grain-overlay { opacity: 0.065; }
+.dark .grain-overlay {
+  opacity: 0.18;
+}
 
-/* 2. Glassmorphism 2.0 (Specular) */
+/* 2. SUPER-GLASS (Hyper Depth) */
 .glass-card {
-  @apply bg-white/60 dark:bg-black/50 backdrop-blur-2xl border border-white/20 dark:border-white/10 relative;
+  @apply bg-white/80 dark:bg-black/70 backdrop-blur-3xl border border-white/40 dark:border-white/10 relative overflow-hidden;
   box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.1),
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+    0 40px 100px -20px rgba(0, 0, 0, 0.2),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .dark .glass-card {
   box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.5),
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+    0 60px 120px -30px rgba(0, 0, 0, 0.8),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-/* Specular highlight on top edge */
-.glass-card::after {
+/* 3. PREMIUM BUTTON SWEEP */
+.btn-premium {
+  @apply relative overflow-hidden transition-all duration-500 transform active:scale-95 shadow-2xl;
+}
+
+.btn-premium::after {
   content: "";
   position: absolute;
   top: 0;
-  left: 10%;
-  right: 10%;
-  height: 1px;
+  left: 0;
+  width: 60%;
+  height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: sweep 3s infinite ease-in-out;
   pointer-events: none;
 }
 
-/* 3. Cinematic Entrance */
+/* 4. AGENCY TYPOGRAPHY */
+h1, h2 {
+  @apply font-black tracking-tighter;
+}
+
+.font-serif {
+  @apply font-medium italic;
+  letter-spacing: -0.02em;
+}
+
+/* 5. MOTION STAGGER REVEAL (CSS Backup) */
 .reveal-cascade > * {
-  opacity: 0;
-  animation: reveal 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  @apply opacity-0 translate-y-8 blur-sm;
+  animation: reveal-agency 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes reveal-agency {
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
 .reveal-cascade > *:nth-child(1) { animation-delay: 0.1s; }
@@ -111,46 +127,7 @@ html, body {
 .reveal-cascade > *:nth-child(3) { animation-delay: 0.3s; }
 .reveal-cascade > *:nth-child(4) { animation-delay: 0.4s; }
 
-/* 4. Hierarchy & Typography */
-h1, .h1-agency {
-  @apply font-black tracking-tighter;
-  line-height: 0.9;
-}
-
-.font-serif {
-  @apply italic font-medium;
-  letter-spacing: -0.01em;
-}
-
-/* 5. Micro-interactions */
-.btn-premium {
-  @apply relative overflow-hidden transition-all duration-300;
-}
-
-.btn-premium::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: 0.5s;
-}
-
-.btn-premium:hover::before {
-  left: 100%;
-}
-
-/* 6. Advanced Shadows (Umbra) */
-.shadow-premium {
-  box-shadow: 
-    0 10px 30px -10px rgba(162, 84, 156, 0.2),
-    0 4px 10px -5px rgba(162, 84, 156, 0.1);
-}
-
-/* 7. Scrollbar */
-::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-thumb {
-  @apply bg-kreatum-purple/20 rounded-full hover:bg-kreatum-purple/40 transition-colors;
+/* 6. GLOW UTILITIES */
+.glow-purple {
+  @apply shadow-[0_0_40px_rgba(162,84,156,0.15)] hover:shadow-[0_0_60px_rgba(162,84,156,0.25)];
 }

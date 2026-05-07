@@ -5,14 +5,18 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
   return (
     <div
       className={cn(
-        "glass-card group relative flex h-full flex-col overflow-hidden rounded-[32px] transition-all duration-300",
-        "dark:bg-gradient-to-br dark:from-white/[0.05] dark:to-transparent",
-        "hover:shadow-2xl hover:shadow-kreatum-purple/10 hover:border-kreatum-purple/30",
+        "glass-card group relative flex h-full flex-col overflow-hidden rounded-[32px] transition-all duration-500",
+        "dark:bg-gradient-to-br dark:from-white/[0.08] dark:to-transparent",
+        "hover:shadow-2xl hover:shadow-kreatum-purple/20 hover:border-kreatum-purple/40 hover:-translate-y-1",
         className
       )}
       {...props}
     >
+      {/* Tactile Noise Texture Overlay for Card */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.05] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+      
       {/* Subtle brand glow on hover */}
+
       <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-kreatum-purple/[0.05] via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
       {children}
     </div>

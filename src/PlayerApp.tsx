@@ -218,7 +218,7 @@ export default function PlayerApp() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark text-kreatum-gray dark:text-white transition-colors duration-300 font-sans">
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark text-kreatum-gray dark:text-white transition-colors duration-500 font-sans">
       <div className="grain-overlay" />
       
       {/* Hero Video Splash */}
@@ -228,11 +228,12 @@ export default function PlayerApp() {
       }} />}
 
       {/* Immersive background orbs - Refined for senior depth */}
-      <div className={cn("fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none z-0 transition-colors duration-1000 opacity-40", bg1)}></div>
-      <div className={cn("fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[180px] pointer-events-none z-0 transition-colors duration-1000 opacity-40", bg2)}></div>
+      <div className={cn("fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[200px] pointer-events-none z-0 transition-colors duration-1000 opacity-30", bg1)}></div>
+      <div className={cn("fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[200px] pointer-events-none z-0 transition-colors duration-1000 opacity-30", bg2)}></div>
 
       {/* Header */}
-      <header className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-b border-black/5 dark:border-white/5 sticky top-0 z-20 transition-colors duration-300">
+      <header className="bg-white/60 dark:bg-black/60 backdrop-blur-3xl border-b border-black/5 dark:border-white/10 sticky top-0 z-20 transition-colors duration-500">
+
         <div className="max-w-7xl mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative group">
@@ -384,12 +385,13 @@ export default function PlayerApp() {
         <AnimatePresence mode="wait">
           <motion.div
             key={state.currentPhase}
-            initial={{ opacity: 0, y: 30, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -30, scale: 0.96 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, y: 40, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -40, filter: 'blur(10px)' }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             className="reveal-cascade"
           >
+
             {state.currentPhase === 'Selección' && <TeamSelection state={state} updateState={updateState} />}
             {state.currentPhase === 'Calcinar' && <Calcinar />}
             {state.currentPhase === 'Diluir' && <Diluir state={state} updateState={updateState} />}

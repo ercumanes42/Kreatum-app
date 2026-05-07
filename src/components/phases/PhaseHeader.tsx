@@ -31,32 +31,36 @@ export function PhaseHeader({ phase, subtitle, children }: PhaseHeaderProps) {
   const number = PHASE_NUMBERS[phase];
 
   return (
-    <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-      <div className="flex items-center gap-6">
+    <div className="mb-14 flex flex-col md:flex-row md:items-center justify-between gap-8">
+      <div className="flex items-center gap-8">
         {logo && (
-          <div className="relative flex-shrink-0">
-            {/* Subtle glow ring */}
-            <div className="absolute inset-0 rounded-full bg-kreatum-purple/10 blur-xl scale-110" />
+          <div className="relative flex-shrink-0 group">
+            {/* Intense Brand Glow */}
+            <div className="absolute inset-0 rounded-full bg-kreatum-purple/20 blur-2xl scale-150 animate-pulse" />
             <img
               src={logo}
               alt={`Logo fase ${phase}`}
-              className="relative w-20 h-20 object-contain drop-shadow-lg"
+              className="relative w-24 h-24 object-contain transition-transform duration-700 group-hover:scale-110 drop-shadow-[0_0_15px_rgba(162,84,156,0.3)]"
             />
           </div>
         )}
-        <div>
-          <p className="text-[10px] font-mono font-black uppercase tracking-[0.3em] text-kreatum-purple mb-1 opacity-70">
-            Fase {number}
-          </p>
-          <h2 className="text-5xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif leading-none">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <span className="h-0.5 w-8 bg-kreatum-purple rounded-full" />
+            <p className="text-[11px] font-mono font-black uppercase tracking-[0.4em] text-kreatum-purple opacity-90">
+              Fase {number}
+            </p>
+          </div>
+          <h2 className="text-6xl md:text-7xl font-black tracking-tighter text-kreatum-dark dark:text-white leading-[0.85] pt-1">
             {phase}
           </h2>
-          <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80 uppercase tracking-widest mt-3">
+          <p className="text-sm font-mono text-kreatum-gray/60 dark:text-white/60 uppercase tracking-[0.2em] pt-2">
             {subtitle}
           </p>
         </div>
       </div>
       {children && <div className="flex-shrink-0">{children}</div>}
     </div>
+
   );
 }

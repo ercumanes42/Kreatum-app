@@ -86,10 +86,11 @@ export default function AdminApp() {
   // Authenticated but no active game — show empty state
   if (!gameId) {
     return (
-      <div className="min-h-screen bg-kreatum-bg-light dark:bg-kreatum-bg-dark relative overflow-hidden">
+      <div className="min-h-screen bg-kreatum-bg-light dark:bg-kreatum-bg-dark relative overflow-hidden font-sans">
+        <div className="grain-overlay" />
         {/* Background orbs */}
-        <div className="fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[140px] pointer-events-none z-0 bg-kreatum-purple/10" />
-        <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none z-0 bg-kreatum-blue/10" />
+        <div className="fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-purple/10 opacity-30" />
+        <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-blue/10 opacity-30" />
 
         <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-8">
           <motion.div
@@ -101,10 +102,10 @@ export default function AdminApp() {
               <LayoutDashboard className="w-10 h-10 text-white" />
             </div>
             
-            <h1 className="text-4xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-3">
+            <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-kreatum-dark dark:text-white leading-none mb-4">
               Panel del Alquimista
             </h1>
-            <p className="text-sm font-mono text-kreatum-gray/60 dark:text-white/50 uppercase tracking-widest mb-12">
+            <p className="text-sm font-mono text-kreatum-purple uppercase tracking-[0.3em] font-black mb-12">
               No hay ninguna partida activa
             </p>
 
@@ -114,7 +115,7 @@ export default function AdminApp() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
-                className="px-8 h-14 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-lg shadow-kreatum-purple/20 flex gap-3 items-center text-base"
+                className="px-10 h-14 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-premium btn-premium flex gap-3 items-center text-base"
                 onClick={() => setShowNewGameModal(true)}
               >
                 <Plus className="w-5 h-5" />
@@ -280,25 +281,28 @@ function AdminLoginScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark">
-      <div className="fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[140px] pointer-events-none z-0 bg-kreatum-purple/15" />
-      <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none z-0 bg-kreatum-blue/10" />
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark font-sans">
+      <div className="grain-overlay" />
+      <div className="fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-purple/20 opacity-30" />
+      <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-blue/15 opacity-30" />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="relative z-10 w-full max-w-md mx-4"
+        className="relative z-10 w-full max-w-md mx-4 reveal-cascade"
       >
-        <div className="bg-white/60 dark:bg-white/5 backdrop-blur-2xl border border-black/5 dark:border-white/10 rounded-[32px] shadow-2xl p-8">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-kreatum-purple/10 rounded-2xl flex items-center justify-center">
-              <LayoutDashboard className="w-8 h-8 text-kreatum-purple" />
+        <div className="glass-card rounded-[40px] p-10 shadow-premium">
+          <div className="flex justify-center mb-8">
+            <div className="w-20 h-20 bg-gradient-to-br from-kreatum-purple to-kreatum-purple-dark rounded-[24px] flex items-center justify-center shadow-lg shadow-kreatum-purple/30">
+              <LayoutDashboard className="w-10 h-10 text-white" />
             </div>
           </div>
 
-          <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">
+          <h2 className="text-4xl font-black tracking-tighter text-center mb-2 text-kreatum-dark dark:text-white">
             Acceso Alquimista
           </h2>
+          <p className="text-[10px] font-mono text-center text-kreatum-purple uppercase tracking-[0.3em] font-black opacity-60">Control Central</p>
+
           
           <form onSubmit={handleSubmit} className="space-y-4 mt-8">
             {error && <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center">{error}</div>}
