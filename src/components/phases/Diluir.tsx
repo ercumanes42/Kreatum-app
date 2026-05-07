@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { GameState, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -20,6 +21,9 @@ export function Diluir({ state, updateState }: Props) {
   const challenge = globalState?.challenge || state.challenge || '';
   const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Diluir');
 
+  // Refs for perspective inputs to enable Enter→next focus
+  const perspectiveRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   const handlePerspectiveChange = (index: number, value: string) => {
     const newPerspectives = [...state.perspectives];
     newPerspectives[index] = value;
@@ -28,6 +32,22 @@ export function Diluir({ state, updateState }: Props) {
     }
     updateState({ perspectives: newPerspectives });
   };
+
+  const handlePerspectiveKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nextIndex = index + 1;
+      // If there's no next line yet, create one
+      if (nextIndex >= state.perspectives.length) {
+        const newPerspectives = [...state.perspectives, ''];
+        updateState({ perspectives: newPerspectives });
+      }
+      // Focus next input after state update
+      setTimeout(() => {
+        perspectiveRefs.current[nextIndex]?.focus();
+      }, 50);
+    }
+  }, [state.perspectives, updateState]);
 
   const handleTop3Change = (index: number, value: string) => {
     const newTop3 = [...state.top3Perspectives] as [string, string, string];
@@ -77,6 +97,10 @@ export function Diluir({ state, updateState }: Props) {
       <Card>
         <CardHeader>
           <CardTitle>Nuevas perspectivas del reto</CardTitle>
+          <p className="text-xs text-kreatum-purple font-medium mt-2 flex items-center gap-2">
+            <span className="inline-flex items-center justify-center bg-kreatum-purple/10 text-kreatum-purple font-black text-[10px] px-2 py-0.5 rounded-lg uppercase tracking-wider">CP</span>
+            Inicia cada idea con: <span className="font-bold italic">¿Cómo podríamos...?</span>
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {state.perspectives.map((persp, idx) => (
@@ -85,12 +109,15 @@ export function Diluir({ state, updateState }: Props) {
                 {String(idx + 1).padStart(2, '0')}
               </span>
               <div className="relative flex-1">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-kreatum-purple font-black text-xs select-none pointer-events-none z-10">CP</span>
                 <Input 
+                  ref={(el) => { perspectiveRefs.current[idx] = el; }}
                   value={persp}
                   onChange={(e) => handlePerspectiveChange(idx, e.target.value)}
-                  placeholder="Escribe una nueva línea de pensamiento..."
+                  onKeyDown={(e) => handlePerspectiveKeyDown(e, idx)}
+                  placeholder="¿Cómo podríamos...?"
                   disabled={isLocked}
-                  className="pr-10"
+                  className="pl-12 pr-10"
                 />
                 {!isLocked && persp.trim() !== '' && (
                   <button
@@ -119,7 +146,7 @@ export function Diluir({ state, updateState }: Props) {
             </div>
           ))}
           {state.perspectives[state.perspectives.length - 1] === '' && state.perspectives.length > 1 && (
-             <p className="text-xs text-kreatum-gray/50 dark:text-white/60 mt-4 ml-16 font-mono uppercase tracking-widest">Sigue escribiendo para añadir más líneas...</p>
+             <p className="text-xs text-kreatum-gray/50 dark:text-white/60 mt-4 ml-16 font-mono uppercase tracking-widest">Sigue escribiendo para añadir más líneas... (pulsa Enter para avanzar)</p>
           )}
         </CardContent>
       </Card>

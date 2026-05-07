@@ -18,11 +18,12 @@ interface GameContextType {
   joinGame: (gameIdOrCode: string, joinAs: Team | 'Alchemist') => Promise<void>;
   leaveGame: () => void;
   sendAttack: (content: string, toTeam: Team, fromTeam: Team) => Promise<void>;
+  editAttack: (attackId: string, newContent: string) => Promise<void>;
   sendDefense: (attackId: string, content: string) => Promise<void>;
   updateSolution: (reformulated: string, results: string) => Promise<void>;
   saveSolution: (team: Team, content: string) => Promise<void>;
   validateRoomCode: (code: string) => Promise<boolean>;
-  resetPlatform: () => Promise<void>;
+  purgeAllGames: () => Promise<void>;
   deleteAttack: (attackId: string) => Promise<void>;
 }
 
@@ -102,7 +103,27 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
   const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string; challenge?: string, customCode?: string }): Promise<string> => {
     if (!playerId) throw new Error('No se ha podido identificar al usuario. Reintenta en unos segundos.');
 
-    const code = metadata?.customCode || generateRoomCode();
+    // Validate room code uniqueness
+    let code = metadata?.customCode?.trim().toUpperCase() || '';
+    if (code) {
+      // Custom code: check uniqueness
+      const exists = await validateRoomCode(code);
+      if (exists) {
+        throw new Error(`El código de sala "${code}" ya está en uso. Elige otro código.`);
+      }
+    } else {
+      // Auto-generated code: keep trying until unique
+      let attempts = 0;
+      do {
+        code = generateRoomCode();
+        const exists = await validateRoomCode(code);
+        if (!exists) break;
+        attempts++;
+      } while (attempts < 10);
+      if (attempts >= 10) {
+        throw new Error('No se pudo generar un código único. Inténtalo de nuevo.');
+      }
+    }
 
     const gameRef = await addDoc(collection(db, 'games'), {
       createdAt: Date.now(),
@@ -116,9 +137,6 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     });
 
     const gameId = gameRef.id;
-
-    // Remove the roomCodes collection write to avoid permission errors
-    // await setDoc(doc(db, 'roomCodes', code), { gameId });
 
     if (!asAlchemist && team) {
       await setDoc(doc(db, 'games', gameId, 'teams', team), {
@@ -232,7 +250,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     localStorage.removeItem('kreatum_session_at');
   };
 
-  const resetPlatform = async () => {
+  const purgeAllGames = async () => {
     if (!isAlchemist) return;
 
     const gamesRef = collection(db, 'games');
@@ -280,6 +298,14 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       content,
       timestamp: Date.now(),
       playerId,
+    });
+  };
+
+  const editAttack = async (attackId: string, newContent: string) => {
+    if (!gameId || !playerId) throw new Error('No game or player ID');
+    await updateDoc(doc(db, 'games', gameId, 'attacks', attackId), {
+      content: newContent,
+      editedAt: Date.now(),
     });
   };
 
@@ -332,11 +358,12 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
         joinGame,
         leaveGame,
         sendAttack,
+        editAttack,
         sendDefense,
         updateSolution,
         saveSolution,
         validateRoomCode,
-        resetPlatform,
+        purgeAllGames,
         deleteAttack,
       }}
     >

@@ -18,13 +18,20 @@ import {
   Timer,
   History,
   FileSpreadsheet,
+  Shield,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { GameHistory } from './GameHistory';
 import { WorkshopClosure } from '../phases/WorkshopClosure';
 import { Sparkles } from 'lucide-react';
 
-// PHASES se importa desde '../../types' — no redefinir aquí
+// Fixed color mapping to avoid dynamic Tailwind class issues
+const TEAM_BAR_COLORS: Record<Team, string> = {
+  Fuego: 'bg-kreatum-red',
+  Agua: 'bg-kreatum-blue',
+  Tierra: 'bg-kreatum-green',
+  Aire: 'bg-kreatum-turquoise',
+};
 
 const TEAM_CONFIG: Record<Team, { icon: string; color: string; bg: string }> = {
   Fuego: { icon: '/assets/logos/fuego.png', color: 'text-kreatum-red', bg: 'bg-kreatum-red/5' },
@@ -44,9 +51,9 @@ export function AlchemistPanel({ gameId }: Props) {
   const attackCounts = useAttacksCountByTeam(gameId);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
   const [summaryTeam, setSummaryTeam] = useState<Team | null>(null);
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false);
 
   const currentPhase = globalState.currentPhase || 'Selección';
-  // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir todas las fases
   const hasUnlockedPhases = globalState.unlockedPhases && globalState.unlockedPhases.length > 0;
   const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
@@ -55,7 +62,7 @@ export function AlchemistPanel({ gameId }: Props) {
     try {
       await updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
     } catch (e: any) {
-      alert('Error al actualizar fase: ' + e.message);
+      console.error('Error al actualizar fase:', e);
     }
   };
 
@@ -64,17 +71,22 @@ export function AlchemistPanel({ gameId }: Props) {
     try {
       await updateGlobalState({ unlockedPhases: newUnlocked });
     } catch (e: any) {
-      alert('Error al desbloquear fase: ' + e.message);
+      console.error('Error al desbloquear fase:', e);
+    }
+  };
+
+  const unlockDefense = async () => {
+    try {
+      await updateGlobalState({ sublimarDefenseUnlocked: true, sublimarDefenseUnlockedAt: Date.now() });
+    } catch (e: any) {
+      console.error('Error al desbloquear defensa:', e);
     }
   };
 
   const getTeamProgress = (teamData: any) => {
     if (!teamData) return 0;
     if (teamData.isFinished) return 100;
-    
     const phaseIndex = PHASES.indexOf(teamData.currentPhase || 'Selección');
-    // Si no ha terminado, el máximo progreso mostrado es basado en su fase actual
-    // Seleccion = 0, Calcinar = 14, ..., Proyectar = 85.
     return Math.round((phaseIndex / PHASES.length) * 100);
   };
 
@@ -107,26 +119,22 @@ export function AlchemistPanel({ gameId }: Props) {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export error:', err);
-      alert('Error al exportar: ' + (err as Error).message);
     } finally {
       setIsExporting(false);
     }
   };
 
   const handleFinalize = async () => {
-    if (!confirm('¿Seguro que quieres finalizar el workshop? Esto marcará la sesión como completada.')) return;
+    setShowFinalizeModal(false);
     try {
       await updateDoc(doc(db, 'games', gameId), { status: 'completed', completedAt: Date.now() });
-      alert('Workshop finalizado y marcado como completado.');
       leaveGame();
     } catch (e: any) {
       console.error('Error al finalizar workshop:', e);
-      alert('Error al finalizar workshop: ' + (e.message || 'Error de permisos'));
     }
   };
 
   const [copied, setCopied] = useState(false);
-
   const handleCopyCode = () => {
     if (roomCode) {
       navigator.clipboard.writeText(roomCode);
@@ -134,6 +142,8 @@ export function AlchemistPanel({ gameId }: Props) {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  const isDefenseUnlocked = globalState?.sublimarDefenseUnlocked === true;
 
   return (
     <div className="min-h-screen bg-kreatum-bg-light dark:bg-kreatum-bg-dark p-8 font-sans">
@@ -224,7 +234,6 @@ export function AlchemistPanel({ gameId }: Props) {
               {PHASES.map((phase, idx) => {
                 const isActive = currentPhase === phase;
                 const isPast = PHASES.indexOf(currentPhase) > idx;
-                const isNextUnlocked = idx === PHASES.length - 1 ? true : unlockedPhases.includes(PHASES[idx + 1]);
                 return (
                   <div key={phase} className="relative">
                     <button
@@ -280,20 +289,37 @@ export function AlchemistPanel({ gameId }: Props) {
                       )}
                     </button>
 
-                    {/* Explicit button to unlock Defense when in Phase 4 */}
-                    {isActive && phase === 'Sublimar' && !unlockedPhases.includes('Fermentar') && (
+                    {/* Sublimar: separate buttons for Defense and Fermentar */}
+                    {isActive && phase === 'Sublimar' && (
                       <motion.div 
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
-                        className="mt-2"
+                        className="mt-2 space-y-2"
                       >
+                        {/* Unlock Defense button */}
                         <Button 
-                          onClick={(e) => { e.stopPropagation(); unlockPhase('Fermentar'); }}
-                          className="w-full bg-kreatum-blue hover:bg-kreatum-blue/90 text-white rounded-xl text-xs h-10 shadow-lg shadow-kreatum-blue/20"
+                          onClick={(e) => { e.stopPropagation(); if (!isDefenseUnlocked) unlockDefense(); }}
+                          disabled={isDefenseUnlocked}
+                          className={cn(
+                            "w-full rounded-xl text-xs h-10 shadow-lg",
+                            isDefenseUnlocked 
+                              ? "bg-kreatum-blue/30 text-kreatum-blue cursor-default shadow-none"
+                              : "bg-kreatum-blue hover:bg-kreatum-blue/90 text-white shadow-kreatum-blue/20"
+                          )}
                         >
-                          <ShieldAlert className="w-4 h-4 mr-2" />
-                          Desbloquear Defensa para Equipos
+                          <Shield className="w-4 h-4 mr-2" />
+                          {isDefenseUnlocked ? '✓ Defensa Desbloqueada' : 'Desbloquear Defensa para Equipos'}
                         </Button>
+                        {/* Unlock Fermentar button */}
+                        {!unlockedPhases.includes('Fermentar') && (
+                          <Button 
+                            onClick={(e) => { e.stopPropagation(); unlockPhase('Fermentar'); }}
+                            className="w-full bg-kreatum-green hover:bg-kreatum-green/90 text-white rounded-xl text-xs h-10 shadow-lg shadow-kreatum-green/20"
+                          >
+                            <ChevronRight className="w-4 h-4 mr-2" />
+                            Desbloquear Fermentar (Fase 5)
+                          </Button>
+                        )}
                       </motion.div>
                     )}
                   </div>
@@ -320,11 +346,12 @@ export function AlchemistPanel({ gameId }: Props) {
               {(['Agua', 'Aire', 'Fuego', 'Tierra'] as Team[]).map((teamId) => {
                 const data = teams[teamId];
                 const config = TEAM_CONFIG[teamId];
+                const barColor = TEAM_BAR_COLORS[teamId];
                 const progress = getTeamProgress(data);
                 
                 return (
                   <Card key={teamId} className={cn("overflow-hidden border-black/5 dark:border-white/5 transition-all duration-500 hover:shadow-2xl", data ? "opacity-100" : "opacity-40 grayscale")}>
-                    <div className={cn("h-2 w-full", config.color.replace('text-', 'bg-'))} />
+                    <div className={cn("h-2 w-full", barColor)} />
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -348,7 +375,7 @@ export function AlchemistPanel({ gameId }: Props) {
                           <motion.div 
                             initial={{ width: 0 }}
                             animate={{ width: `${progress}%` }}
-                            className={cn("h-full", config.color.replace('text-', 'bg-'))} 
+                            className={cn("h-full rounded-full", barColor)} 
                           />
                         </div>
                       </div>
@@ -397,6 +424,31 @@ export function AlchemistPanel({ gameId }: Props) {
           />
         )}
 
+        {/* Finalize Modal */}
+        {showFinalizeModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white dark:bg-kreatum-bg-dark p-8 rounded-[32px] max-w-md w-full shadow-2xl border border-kreatum-purple/20"
+            >
+              <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">Finalizar Workshop</h2>
+              <p className="text-sm text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
+                ¿Seguro que quieres finalizar el workshop? Esto marcará la sesión como completada para todos los equipos.
+              </p>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 py-4" onClick={() => setShowFinalizeModal(false)}>Cancelar</Button>
+                <Button 
+                  className="flex-1 py-4 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-lg shadow-kreatum-purple/20"
+                  onClick={handleFinalize}
+                >
+                  Sí, Finalizar
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* Action Bar */}
         <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl p-6 rounded-[32px] border border-black/5 dark:border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -412,7 +464,7 @@ export function AlchemistPanel({ gameId }: Props) {
              <Button variant="outline" className="rounded-2xl px-6 h-12" onClick={handleExportJSON} disabled={isExporting}>
                {isExporting ? 'Exportando...' : 'Exportar Todo (JSON)'}
              </Button>
-             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-2xl px-8 h-12 shadow-lg shadow-kreatum-purple/20" onClick={handleFinalize}>
+             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-2xl px-8 h-12 shadow-lg shadow-kreatum-purple/20" onClick={() => setShowFinalizeModal(true)}>
                Finalizar Workshop
              </Button>
           </div>

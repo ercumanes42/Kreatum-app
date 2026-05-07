@@ -1,260 +1,260 @@
-# Memoria de Análisis y Propuestas de Mejora: Plataforma Kreatum Definitiva
+# Kreatum — Memoria Técnica
 
-**Autor:** Antigravity (Coding Assistant)  
-**Fecha inicial:** 28 de abril de 2026  
-**Última actualización:** 5 de mayo de 2026 (Corrección de Errores Críticos y Advertencias)  
-**Contexto:** Revisión de arquitectura, funcionalidades y UX de la plataforma de workshops colaborativos Kreatum.
+> Última actualización: 7 de mayo de 2026
 
 ---
 
-## Estado del Plan de Evolución por Etapas
+## Arquitectura General
 
-### ✅ ETAPA 1 — Sincronización Total en Tiempo Real (COMPLETADA)
-- Hook `useTeamSync` con `onSnapshot` — cada cambio se persiste en Firestore con `merge: true`
-- Hook `useGameGlobal` — escucha el documento raíz del juego para la fase global
-- Hook `useAttacksSent` / `useAttacksReceived` — escucha colección de ataques en tiempo real
-- Hook `useAllTeams` — usado por AlchemistPanel para ver todos los equipos
-- `App.tsx` sincroniza `globalState.currentPhase` → fuerza cambio de fase en todos los clientes
-
-### ✅ ETAPA 2 — Panel del Alquimista (COMPLETADA)
-- `AlchemistPanel.tsx`: Dashboard funcional con control de fases, estado de equipos, progreso
-- `AdminLoginModal.tsx`: Autenticación Firebase Email/Password (login-only, sin registro público)
-- `AlchemistPanel` muestra: fase actual, porcentaje de progreso por equipo, solución definitiva, ataques enviados
-- El Alquimista puede forzar cambio de fase global para todos los equipos simultáneamente
-- Acceso protegido: solo usuarios con cuenta en Firebase Auth pueden entrar
-- **Nuevo (01/05/2026):** Pestañas Dashboard / Historial de Partidas
-
-### ✅ ETAPA 3 — Resiliencia y Acceso con Room Codes (COMPLETADA + BUGS CRÍTICOS CORREGIDOS el 30/04/2026)
-
-**Lo que estaba implementado:**
-- `generateRoomCode()` — códigos de 6 chars alfanuméricos sin chars confusos (0/O, 1/I)
-- `roomCode` persistido en Firestore (campo en documento `games/{gameId}`)
-- LocalStorage con claves `kreatum_game_id`, `kreatum_team`, `kreatum_is_alchemist`, `kreatum_room_code`
-- `joinGame()` busca por `roomCode` en colección `games` con query Firestore
-- Header muestra el código de sala cuando `gameId` existe
-
-**Bugs críticos corregidos el 30/04/2026:**
-
-| # | Bug | Archivo | Fix aplicado |
-|---|-----|---------|-------------|
-| 1 | `joinGame` con código de sala siempre asignaba equipo "Agua" sin preguntar | `TeamSelection.tsx` | Nuevo flujo de 2 pasos: primero validar código, luego elegir equipo |
-| 2 | `joinGame` no lanzaba error si el código no existía — continuaba silenciosamente con ID corrupto | `GameContext.tsx` | Ahora lanza error descriptivo si `querySnapshot.empty` |
-| 3 | `leaveGame` usaba `localStorage.clear()` borrando TODO el localStorage del navegador | `GameContext.tsx` | Ahora usa `removeItem` solo para las 4 claves de Kreatum |
-| 4 | `state.team` se inicializaba a `null` ignorando el valor persistido en contexto (localStorage) | `App.tsx` | Ahora `useState` se inicializa con `team || null` del contexto + efecto de sincronización |
-| 5 | `AdminLoginModal` usaba códigos de error Firebase deprecated (`auth/user-not-found`, `auth/wrong-password`) | `AdminLoginModal.tsx` | Añadido `auth/invalid-credential` (v9+), `auth/too-many-requests`, `auth/network-request-failed` |
-| 6 | El modal de admin tenía botón público de "Registrarse" — cualquiera podía crear una cuenta admin | `AdminLoginModal.tsx` | Eliminado. Cuentas admin solo se crean via Firebase Console |
-
-## ESTADO DEL REFACTOR: Separación Arquitectónica (COMPLETADO)
-
-Se ha implementado una reestructuración profunda de la aplicación para resolver el problema crítico de fugas de UI de administrador hacia los jugadores.
-
-### Logros Implementados:
-1. **React Router Integrado:**
-   - Se añadió `react-router-dom`.
-   - `main.tsx` ahora rutea `/` hacia `PlayerApp` y `/admin` (y `/alquimista`) hacia `AdminApp`.
-   - `App.tsx` (el antiguo monolito) ha sido dividido y eliminado de la ruta principal.
-
-2. **PlayerApp Limpia:**
-   - Código exclusivo para la vista y flujo de jugadores.
-   - Cero referencias al panel del Alquimista, ni botones ocultos, ni importaciones que revelen la existencia de controles de administración.
-   - **Flujo de 2 pasos en TeamSelection:** 
-     1. El jugador introduce el código.
-     2. Solo si el código es válido se le muestran los equipos para elegir (sin auto-unión accidental).
-
-3. **AdminApp Aislada y Segura:**
-   - Flujo de login a pantalla completa como punto de entrada (ya no es un modal).
-   - Panel del Alquimista mejorado.
-   - **Empty State Inteligente:** Si el Alquimista ingresa pero no hay partida activa, se muestra un dashboard con "Nueva Partida" o "Historial en línea". Ya no se autogeneran partidas basura en Firestore.
-   - Creación de partidas con Metadatos (Cliente y Facilitador) integrados tanto en la creación como en el visualizador del historial.
-   - El header muestra `—:—:—` si el temporizador no corre, y tiene un botón fácil para copiar el código de la sala.
-
-### Próximos Pasos Identificados (Resueltos):
-- **Reglas de Seguridad Firestore (COMPLETADO):** Se desplegó un modelo de seguridad empresarial. Mediante la verificación del proveedor de autenticación (`sign_in_provider`), se diferencian estrictamente los Jugadores (Auth anónimo) del Alquimista (Email/Password). Solo el Alquimista tiene permisos de escritura sobre las colecciones críticas (`games`), impidiendo cualquier intento de manipulación cruzada.
-- **Refinamiento de UI/UX (COMPLETADO):**
-  - Ocultamiento dinámico de la barra de navegación (footer) en `PlayerApp` si el usuario no ha escogido equipo.
-  - Implementación de spinners individuales y opacidad atenuada (dimming) en `TeamSelection` para evitar confusión visual al unirse a una partida.
-  - Ajustes de `padding` y `width` en el código de sala dentro del `GameHistory` para garantizar legibilidad de la cadena de texto de 6 caracteres.
-- **Hardening de Arquitectura y Resiliencia (COMPLETADO):**
-  - Eliminación segura del archivo zombie `App.tsx`.
-  - Prevención de *race conditions* (pantallas de carga infinitas) en `GameContext` mediante `try/catch/finally` en la autenticación anónima de Firebase.
-  - Purgado de redundancia de datos (`gameData`) en el contexto general para evitar desincronizaciones con Firestore.
-  - Mejora crítica en la UX del Jugador: el video `HeroSplash` ahora lee el estado de sesión existente en `localStorage` en su inicialización para no reproducirse al recargar la página en medio de un taller.
-  - Corrección de parpadeo visual (Flicker) en `PlayerApp.tsx`: Se implementó un estado de "Recuperando sesión" (`isGlobalLoading`) que muestra un spinner durante los milisegundos que tarda Firestore en devolver la fase actual al recargar la página, ocultando por completo la interfaz de "Selección de equipo" para jugadores con sesión activa.
-  - Refactorización del renderizado del Historial en `AdminApp.tsx` (cambiando manipulación directa del DOM `document.getElementById` por manejo de estado de React puro `useState`).
-  - Completado el tipado TypeScript en `vite-env.d.ts` agregando soporte estricto a las variables de entorno secundarias de Firebase (`STORAGE_BUCKET`, etc).
-
-### 🚫 ETAPA 4 — Integración de IA Generativa (NO SE IMPLEMENTA — SALTADA)
-- Acordado saltar directamente a la Etapa 6
-- `@google/genai` sigue en `package.json` para uso futuro
-
-### ⏳ ETAPA 5 — Feedback Visual y Gamificación (NO SE IMPLEMENTA — SALTADA)
-- Toasts de notificación, micro-animaciones adicionales
-- Acordado saltar directamente a la Etapa 6
-
-### ✅ ETAPA 6 — Cierre de Workshop y Exportación de Datos (COMPLETADA 01/05/2026)
-
-**Componentes implementados:**
-- `WorkshopClosure.tsx`: Modal fullscreen de cierre con animaciones premium (motion/react)
-  - Hero animado con logo del equipo + gradients
-  - Secciones colapsables con resumen de cada fase
-  - Datos de ataques enviados y recibidos leídos directamente de Firestore (hooks `useAttacksSent` / `useAttacksReceived`)
-  - Botón **"Finalizar"** — llama a `leaveGame()` para limpiar estado y volver a pantalla principal
-  - Diseño: fondo negro 95% opacity, orbs animados, tipografía serif + mono
-  - **Los botones de exportar (Copiar/PDF) fueron removidos de la vista del jugador** — solo el Alquimista tiene exportación
-
-**Funcionalidad de exportación en AlchemistPanel:**
-- Botón "Exportar Todo (JSON)" — descarga JSON con: gameId, roomCode, globalState, todos los equipos con sus datos, ataques, defensas
-- Botón "Finalizar Workshop" — marca la sesión como `status: "completed"` con `completedAt` en Firestore
-
-### ✅ ETAPA 7 — Historial de Partidas y Exportación CSV (COMPLETADA 01/05/2026)
-
-**Nuevo módulo: `GameHistory.tsx`**
-
-- **Ubicación:** Panel del Alquimista → pestaña "Historial de Partidas"
-- **Lista de partidas:** Todas las partidas de Firestore con código de sala, estado, fecha, equipos, total ataques
-- **Filtrado:** Por estado (Todas / Activas / Completadas) + búsqueda por código de sala o ID
-- **Vista detalle:** Click en partida → resumen completo expandible por equipo:
-  - Reto, perspectivas, solución, reformulación, pitch, audiencia, fortalezas, etc.
-  - Ataques enviados y recibidos con detalle
-- **Botón "Finalizar":** Disponible en partidas activas (lista y detalle) → marca `status: completed` en Firestore
-- **Exportar CSV individual:** Descarga CSV de una partida con datos de todos los equipos + detalle de ataques
-- **Exportar CSV global:** Descarga CSV de todas las partidas filtradas en una sola tabla
-- **Compatibilidad:** CSV con BOM UTF-8 para soporte de acentos en Excel/Google Sheets
+- **Framework**: React 19 + TypeScript + Vite 6
+- **Estilos**: Tailwind CSS v4 (via `@tailwindcss/vite` plugin), tema custom en `index.css` con `@theme`
+- **Base de datos**: Firebase Firestore (real-time listeners via `onSnapshot`)
+- **Autenticación**: Firebase Auth — jugadores anónimos, admin con email/password
+- **Animaciones**: `motion/react` (Framer Motion)
+- **Routing**: `react-router-dom` v7 → `/` (jugadores), `/admin` o `/alquimista` (admin)
+- **Deploy**: Vercel
 
 ---
 
-## Branding y Assets (01/05/2026)
+## Estructura de Archivos
 
-### Logos de Elementos
-- **Fuente:** Extraídos de archivos `.pptx` proporcionados por el usuario
-- **Procesamiento:** Scripts de Python (Pillow) para eliminar fondo blanco y halos de compresión
-- **Ubicación:** `/public/assets/logos/` → `agua.png`, `aire.png`, `fuego.png`, `tierra.png`
-- **Uso en UI:**
-  - `TeamSelection.tsx` — tarjetas de selección de equipo (pantalla principal)
-  - `App.tsx` → `TeamIcon` — badge del header en todas las fases
-  - `Sublimar.tsx` → `TEAM_ICONS` — iconos en la fase de ataque/defensa
-  - `AlchemistPanel.tsx` → `TEAM_CONFIG` — dashboard de equipos
-  - `WorkshopClosure.tsx` — logo del equipo en el reporte final
-  - `GameHistory.tsx` — vista de detalle de partidas históricas
-
-### Hero Splash Screen
-- **Componente:** `HeroSplash.tsx`
-- **Video:** `/public/assets/hero-video.mp4` (último: "Nuevo video Hero Kreatum.mp4")
-- **Comportamiento:** Pantalla completa, autoplay, muted, loop — se oculta al hacer click
-- **Integrado en:** `App.tsx` con estado `showSplash`
-
----
-
-## Bugs corregidos el 01/05/2026
-
-| # | Bug | Archivo(s) | Fix aplicado |
-|---|-----|-----------|-------------|
-| 7 | `saveSolution` no guardaba campo `team` en el documento | `GameContext.tsx` | Añadido `team` al documento `solutions/{team}` |
-| 8 | `initialState` tenía datos hardcodeados de Kia | `types.ts` | Limpiado: campos ahora vacíos |
-| 9 | Botones "Exportar JSON" y "Finalizar" del AlchemistPanel sin handler | `AlchemistPanel.tsx` | Handlers completos implementados |
-| 10 | **Ataques recibidos siempre mostraba 0 en el resumen final** | `WorkshopClosure.tsx`, `Proyectar.tsx` | `state.receivedAttacks` nunca se poblaba desde Firestore. Fix: usar hooks `useAttacksReceived`/`useAttacksSent` directamente |
-| 11 | **Logos genéricos en header durante fases** — usaba Lucide icons (Flame, Droplets, etc.) en vez de logos oficiales | `App.tsx` → `TeamIcon` | Reemplazado por `<img>` apuntando a `/assets/logos/{team}.png` |
-| 12 | **Logos genéricos en fase Sublimar** — `TEAM_ICONS` usaba Lucide | `Sublimar.tsx` | Reemplazado por logos de imagen |
-| 13 | **Botones de exportar visibles para jugadores** — Copiar/PDF aparecían en Proyectar y WorkshopClosure | `Proyectar.tsx`, `WorkshopClosure.tsx` | Removidos. Proyectar ahora tiene "Ver Resumen de Partida". Closure tiene solo "Finalizar" |
-| 14 | **Botón Finalizar no volvía a la pantalla principal** — hacía `window.location.reload()` manteniendo estado persistido | `WorkshopClosure.tsx`, `App.tsx` | Usa `leaveGame()` del contexto + efecto de reset en App.tsx cuando `team` y `gameId` son null |
-
----
-
-## Hardening y Resiliencia (02/05/2026)
-
-Se implementaron múltiples mejoras críticas para garantizar la robustez, UX y rendimiento en producción:
-
-| # | Mejora | Archivo(s) | Descripción |
-|---|--------|-----------|-------------|
-| 15 | Prevención de doble equipo | `GameContext.tsx` | Se verifica en la subcolección `teams` si el `playerId` ya está registrado antes de unirse. Previene datos corruptos si un jugador cambia de equipo. |
-| 16 | Caducidad de sesión (24h) | `GameContext.tsx` | Las variables de sesión en `localStorage` ahora guardan un timestamp y expiran a las 24 horas, evitando reconexiones a partidas obsoletas. |
-| 17 | React Error Boundary | `ErrorBoundary.tsx`, `main.tsx` | Se envuelve toda la aplicación para capturar excepciones en tiempo de ejecución, previniendo la "pantalla en blanco" y mostrando una UI amigable de recuperación. |
-| 18 | Validación estricta de Sala | `TeamSelection.tsx`, `GameContext.tsx` | Se valida el código introducido contra Firestore antes de avanzar al paso 2. Evita mostrar equipos si el código no existe. |
-| 19 | Contador real de Ataques | `AlchemistPanel.tsx`, `useRealtime.ts` | Nuevo hook `useAttacksCountByTeam` que cuenta los ataques reales enviados escuchando la subcolección, en vez de un array local obsoleto. |
-| 20 | Limpieza de código zombi | `AdminLoginModal.tsx` | Eliminado el componente obsoleto de login que ya no se utilizaba en ninguna parte. |
-| 21 | Optimización de bundle (Performance) | `Proyectar.tsx` | Eliminados `jsPDF`, `html2canvas` y funciones de exportación inactivas para reducir drásticamente el peso de carga de la app de jugador. |
-| 22 | Sustitución de `alert()` por UI | `Diluir.tsx`, `Conjugar.tsx` | Reemplazados los bloqueos nativos del navegador por alertas inline estéticas integradas en el flujo del usuario. |
+```
+src/
+├── main.tsx                    # Entry point, routing
+├── PlayerApp.tsx               # Vista jugador
+├── AdminApp.tsx                # Vista admin (login + crear partida + reset)
+├── types.ts                    # Team, Phase, GameState, initialState
+├── index.css                   # Tailwind theme + custom colors
+├── contexts/
+│   └── GameContext.tsx          # Auth, create/join/leave game, attacks, solutions
+├── hooks/
+│   └── useRealtime.ts          # onSnapshot hooks: teams, attacks, defenses, solutions, global
+├── components/
+│   ├── admin/
+│   │   ├── AlchemistPanel.tsx   # Dashboard admin, control de fases, progreso equipos
+│   │   └── GameHistory.tsx      # Historial de partidas, exportar CSV/JSON
+│   ├── phases/
+│   │   ├── TeamSelection.tsx    # Código de sala + selección de equipo
+│   │   ├── Calcinar.tsx         # Fase 1 - inspiración
+│   │   ├── Diluir.tsx           # Fase 2 - perspectivas (CP prefix, Enter→next)
+│   │   ├── Conjugar.tsx         # Fase 3 - soluciones
+│   │   ├── Sublimar.tsx         # Fase 4 - ataque/defensa/reformulación
+│   │   ├── Fermentar.tsx        # Fase 5 - audiencia, fortalezas, debilidades, piloto, recursos
+│   │   ├── Proyectar.tsx        # Fase 6 - pitch + Ver Resumen + Finalizar
+│   │   └── WorkshopClosure.tsx  # Modal de resumen completo (reutilizable)
+│   ├── ui/
+│   │   ├── Button.tsx
+│   │   ├── Card.tsx
+│   │   ├── Input.tsx
+│   │   └── Textarea.tsx
+│   ├── ErrorBoundary.tsx
+│   └── HeroSplash.tsx
+├── lib/
+│   ├── firebase.ts             # Firebase config + init
+│   ├── sounds.ts               # Audio feedback
+│   └── utils.ts                # cn() utility
+```
 
 ---
 
-## Optimización Final y Despliegue (03/05/2026)
+## Modelo de Datos (Firestore)
 
-Se realizaron las últimas limpiezas para asegurar un rendimiento óptimo (reducción de bundle size) y correcta configuración de despliegue:
+### Colección `games/{gameId}`
+```
+{
+  createdAt: number,
+  status: 'active' | 'completed',
+  currentPhase: Phase,
+  roomCode: string,
+  client: string,
+  facilitator: string,       // OPCIONAL
+  challenge: string,          // OBLIGATORIO
+  unlockedPhases: string[],   // Fases desbloqueadas por admin
+  sublimarDefenseUnlocked?: boolean,     // Defensa desbloqueada (separado de Fermentar)
+  sublimarDefenseUnlockedAt?: number,
+  completedAt?: number,
+}
+```
 
-| # | Mejora | Archivo(s) | Descripción |
-|---|--------|-----------|-------------|
-| 23 | Limpieza de Bundle | `WorkshopClosure.tsx` | Eliminación de dependencias pesadas (`jsPDF`, `html2canvas`) y código zombi (funciones de exportación del jugador que ya no se usan), reduciendo ~500KB del bundle de producción. |
-| 24 | Limpieza de Imports | `Sublimar.tsx`, `GameHistory.tsx` | Removidos íconos de Lucide y hooks sin uso para evitar warnings en consola y empaquetado innecesario. |
-| 25 | Configuración de Firestore | `firebase.json` | Añadido el target de `firestore` para permitir despliegues de reglas directamente desde el CLI de Firebase. |
-| 26 | Validación de Reglas | `firestore.rules` | Auditoría de las reglas de seguridad. Sintaxis correcta validada y permisos sólidos establecidos para Jugadores (anónimos) vs. Alquimista (Admin). |
+### Subcolección `games/{gameId}/teams/{teamName}`
+Almacena todo el estado del equipo (GameState parcial):
+- `playerId`, `team`, `currentPhase`
+- Diluir: `perspectives[]`, `top3Perspectives`, `perspectiveVotes`, `selectedPerspective`
+- Conjugar: `solutions[]`, `top3Solutions`, `solutionVotes`, `selectedSolution`
+- Sublimar: `defenses[]`, `reformulatedSolution`, `expectedResults`, `sublimarView`, `sublimarDefenseCompleted`
+- Fermentar: `audience`, `strengths`, `weaknesses`, `pilot`, `resources`
+- Proyectar: `pitchStart`, `pitchProblem`, `pitchSolution`, `pitchAction`
+- `isFinished?: boolean` — marcado al 100% cuando jugador finaliza
 
----
+### Subcolección `games/{gameId}/attacks/{attackId}`
+```
+{
+  fromTeam: Team,
+  toTeam: Team,
+  content: string,
+  timestamp: number,
+  playerId: string,
+  editedAt?: number,    // Se añade al editar
+}
+```
 
-## Producción-Readiness
+### Subcolección `games/{gameId}/defenses/{defenseId}`
+```
+{
+  attackId: string,
+  team: Team,
+  content: string,
+  timestamp: number,
+  playerId: string,
+}
+```
 
-### BLOQUEANTES (no lanzar sin esto):
-1. ✅ **Firestore Security Rules** — Definidas y validadas. Bloquean accesos no autorizados y evitan manipulación entre equipos. Despliegue listo vía `firebase.json`.
-2. ~~⚠️ Mover API key a `.env`~~ ✅ Resuelto: variables de entorno con prefijo `VITE_`
-
-### RECOMENDADOS:
-3. Agregar metadata de negocio a la sesión (nombre cliente, facilitador)
-4. ~~Importar Google Fonts~~ ✅ Inter + JetBrains Mono importados en `index.html`
-5. Validación de campos al avanzar de fase
-
-### NICE TO HAVE:
-6. Timer funcional en AlchemistPanel
-7. Mobile-optimized layouts
-8. i18n (internacionalización)
-
----
-
-## Configuración del Entorno
-
-- **Puerto de desarrollo:** `3001` (configurado en `vite.config.ts`)
-- **Firebase:** Proyecto configurado con Firestore + Auth
-- **Build:** `npm run build` → `dist/` listo para Firebase Hosting
-- **Despliegue:** Pendiente `firebase deploy --only hosting`
-
----
-
-## Conclusión
-
-La plataforma tiene todas las etapas funcionales implementadas (1-3 + 6-7) y la identidad visual consolidada. Adicionalmente, cuenta con capas de **Hardening y Resiliencia** (ErrorBoundary, control de sesión de 24h y prevención de equipos duplicados) que la hacen totalmente a prueba de fallos y comportamientos irregulares en eventos en vivo.
-
-Las **Firestore Security Rules** han sido validadas y configuradas, cerrando el último paso pendiente.
-
----
-
-## Corrección de Errores Críticos y Advertencias (05/05/2026)
-
-Se corrigieron todos los errores críticos (Rules of Hooks, z-index roto, datos indefinidos) y advertencias de TypeScript identificados en revisión:
-
-| # | Severidad | Bug | Archivo(s) | Fix aplicado |
-|---|-----------|-----|-----------|-------------|
-| 27 | 🔴 CRÍTICO | **Rules of Hooks:** `useAttacksReceived`, `useAttacksSent`, `useOpponentSolutions`, `useGameGlobal` y dos `useState` se invocaban DESPUÉS del bloque `if (!myTeam) return` | `Sublimar.tsx` | Todos los hooks movidos al inicio del componente, antes de cualquier return condicional |
-| 28 | 🔴 CRÍTICO | **`position:fixed` roto por `transform`:** `WorkshopClosure` con `fixed inset-0` dentro de `<motion.div scale>` → el fixed era relativo al motion.div, no al viewport | `PlayerApp.tsx` | Extraído del `AnimatePresence` y renderizado via `createPortal(…, document.body)` |
-| 29 | 🔴 CRÍTICO | **`globalState` siempre `undefined` en historial:** `data.globalState` accedía a campo anidado inexistente — los campos están directamente en el documento raíz de Firestore | `GameHistory.tsx` | Construcción con campos directos del documento (`data.currentPhase`, `data.challenge`, etc.) |
-| 30 | 🟡 ADVERTENCIA | **Botón "Finalizar Workshop" del jugador con lógica incorrecta:** Ejecutaba `updateState({ currentPhase: 'Selección' as any })` en lugar de completar el workshop | `Proyectar.tsx` | Escribe `{ status: 'completed', completedAt }` en Firestore via import dinámico, disparando el cierre en todos los clientes |
-| 31 | 🟡 ADVERTENCIA | **`resetPlatform` dejaba subcolecciones huérfanas:** Solo borraba el documento raíz, dejando `attacks`, `defenses`, `teams`, `solutions` | `GameContext.tsx` | Nuevo bucle que borra subcolecciones antes del documento padre, en batches de máx. 499 operaciones |
-| 32 | 🟡 ADVERTENCIA | **`PHASES` redefinido localmente:** Definición local duplicada podía desincronizarse con `types.ts` | `AlchemistPanel.tsx` | Eliminada; se importa `PHASES` desde `../../types` |
-| 33 | 🟡 ADVERTENCIA | **Variable `nextPhase` sombreaba función `nextPhase`:** En `isNextDisabled()` y `blockedByAlchemist()` | `PlayerApp.tsx` | Renombrada a `nextPhaseName` en ambas funciones |
-
-**Imports limpiados:** `Textarea` (Diluir), `Phase` (Proyectar), `getDoc`/`query`/`orderBy` (GameHistory, GameContext), `const Icon` sin uso (AlchemistPanel).
-
-**Nota ERROR 4:** El guard `if (state.team)` antes de `saveSolution` ya existía correctamente en `Conjugar.tsx` — no requirió cambios.
+### Subcolección `games/{gameId}/solutions/{teamName}`
+```
+{
+  team: Team,
+  content: string,
+  timestamp: number,
+}
+```
 
 ---
 
-## Mejoras de UX del Alquimista y Sincronización (05/05/2026 - Sesión 2)
+## Control de Fases (Admin)
 
-Se resolvieron bloqueos de UX detectados durante pruebas en vivo donde la comunicación entre el panel del Alquimista y la aplicación del jugador no fluía correctamente:
+El Alquimista controla qué fases están disponibles:
 
-| # | Bug/Mejora | Archivo(s) | Fix aplicado |
-|---|------------|-----------|-------------|
-| 34 | Botón explícito para Fase Defensa | `AlchemistPanel.tsx` | Añadido un botón "Desbloquear Defensa para Equipos" dentro de la fila de Sublimar para evitar que el administrador salte a la fase 5 por accidente al intentar desbloquear. |
-| 35 | Transición Automática a Defensa | `Sublimar.tsx` | El componente detecta automáticamente cuando el Alquimista desbloquea la fase y mueve al jugador directamente a la pestaña "Defensa" sin requerir clics adicionales. |
-| 36 | Intercepción de saltos de Fase | `PlayerApp.tsx` | Si el administrador fuerza la Fase 5 por error, el jugador que no ha completado la Defensa es interceptado y mantenido en la Fase 4 (pestaña Defensa) protegiendo el flujo. |
-| 37 | Sincronización real de progreso al administrador | `PlayerApp.tsx` | Cambiado `setState` a `updateState` al recibir la señal de forzado de fase del administrador. Ahora el documento de Firebase se actualiza, y el panel del administrador refleja en 100% de tiempo real exactamente en qué fase están los jugadores. |
-| 38 | Progreso al 100% al finalizar | `PlayerApp.tsx`, `AlchemistPanel.tsx`, `types.ts` | Agregado `isFinished: true` cuando el jugador hace clic en "Finalizar Workshop". El AlchemistPanel ahora lee esto y sube la barra de progreso al 100% solo en ese momento preciso. |
+1. **`currentPhase`** — fase activa global
+2. **`unlockedPhases[]`** — lista de fases desbloqueadas
+3. **`sublimarDefenseUnlocked`** — flag independiente para desbloquear Defensa en Sublimar
 
-**Plataforma lista para producción. Sin errores críticos pendientes.**
+### Reglas de Progresión
+- Jugadores NO avanzan libremente a partir de Diluir→Conjugar (índice ≥ 2)
+- El admin desbloquea cada fase con `unlockPhase()`
+- En Sublimar: hay 2 botones separados:
+  - **"Desbloquear Defensa"** → `updateGlobalState({ sublimarDefenseUnlocked: true })`
+  - **"Desbloquear Fermentar"** → `unlockPhase('Fermentar')`
+- NO se usa `Fermentar` como bandera para abrir Defensa
+
+### Progreso del Equipo en Dashboard
+- `getTeamProgress()` devuelve 100% si `isFinished === true`
+- En caso contrario: `(phaseIndex / totalPhases) * 100`
+- Colores de barra de progreso: mapeo literal `TEAM_BAR_COLORS` (evita clases Tailwind dinámicas)
+
+---
+
+## Fase 2 — Diluir
+
+- Cada input de perspectiva tiene prefijo visual **CP** (¿Cómo podríamos...?)
+- Ayuda visible: "Inicia cada idea con: ¿Cómo podríamos...?"
+- **Enter** → foco automático al siguiente campo (refs + setTimeout)
+- El guardado de perspectivas no se ve afectado por el prefijo (el valor NO incluye "CP")
+
+---
+
+## Fase 4 — Sublimar
+
+### Ataque
+- Se muestra la solución definitiva propia del equipo
+- Se muestra la solución del equipo rival (según `ATTACK_MAP`)
+- Máximo 10 ataques por equipo
+- Los ataques se pueden **editar** inline (botón lápiz → input → guardar)
+- Los ataques se pueden **borrar** (botón X)
+- `editAttack()` usa `updateDoc()` en Firestore
+
+### Defensa
+- Solo visible si: `attacksSent.length >= 10 && globalState.sublimarDefenseUnlocked === true`
+- Layout horizontal: ataque a la izquierda ↔ mitigación a la derecha (grid 2 cols)
+- Se muestra la solución definitiva propia como referencia
+- Si ataques completos pero defensa no desbloqueada → mensaje de espera
+
+### Reformulación
+- `reformulatedSolution` + `expectedResults`
+- Se guarda en `teams/{teamName}` con merge
+
+---
+
+## Fase 5 — Fermentar
+
+Campos:
+- Audiencia
+- Fortalezas
+- **Debilidades** (campo añadido, card amarilla)
+- Prueba Piloto / Prototipo
+- Recursos Necesarios
+
+---
+
+## Fase 6 — Proyectar
+
+- Estructura del pitch: 4 cards (Inicio, Problema, Solución, Acción)
+- **Botón "Ver Resumen"**: abre `WorkshopClosure` como modal/portal
+- **Botón "Finalizar Workshop"**:
+  1. Guarda el pitch
+  2. Marca `isFinished: true` en Firestore
+  3. Muestra pantalla de felicitación: "¡Enhorabuena! Vamos a las votaciones."
+  4. NO llama `leaveGame()` — el jugador ve la pantalla de éxito
+  5. Admin ve progreso 100% en tiempo real
+
+### WorkshopClosure (Modal Resumen)
+- Reutilizable por jugadores y admin
+- NO llama `leaveGame()` internamente — solo `onClose()`
+- Muestra: Diluir, Conjugar, Sublimar, Fermentar (con debilidades), Proyectar
+- El padre decide qué hacer al cerrar
+
+---
+
+## Seguridad
+
+### AdminApp
+- Facilitador: **OPCIONAL** (no validación obligatoria)
+- Reto/Challenge: **OBLIGATORIO**
+- `KREATUM2026` **ELIMINADO** completamente
+- Reset usa confirmación **"BORRAR TODO"** (no código secreto)
+- Función renombrada a `purgeAllGames()` — no expuesta como acción normal
+- Modales propios en lugar de `alert()`/`confirm()` nativos
+
+### Room Codes
+- Al crear partida: se valida unicidad del código
+- Código automático: reintenta hasta 10 veces si existe
+- Código personalizado: error claro si ya existe
+
+### Firestore Rules
+- Games: read=auth, create=auth, update/delete=admin (email)
+- Teams: create=auth, update=owner OR admin
+- Attacks: create=owner, update=owner (editar), delete=owner OR admin
+- Defenses: create=owner, update=owner, delete=owner OR admin
+- Solutions: read=auth, write=auth
+
+---
+
+## Colores de Equipo (Tailwind)
+
+| Equipo | Color | Clase |
+|--------|-------|-------|
+| Fuego  | Rojo  | `kreatum-red` (#E73F1E) |
+| Agua   | Azul  | `kreatum-blue` (#4486C6) |
+| Tierra | Verde | `kreatum-green` (#59B7A9) |
+| Aire   | Turquesa | `kreatum-turquoise` (#17ABBD) |
+
+⚠️ Las barras de progreso usan `TEAM_BAR_COLORS` (mapeo literal) para evitar clases Tailwind dinámicas que no se generan en producción.
+
+---
+
+## Assets
+
+- **Logos de equipo**: `/public/assets/logos/{fuego,agua,tierra,aire}.png`
+- **Logos de fases**: Están en el archivo PPTX `Logo Kreatum/Logos de las fases.pptx` — pendiente de extraer a PNG individuales
+- **Logo principal**: `/public/logo.png`
+- **Video hero**: `/public/assets/hero-video.mp4`
+
+---
+
+## Decisiones Técnicas
+
+1. **Hooks antes de returns condicionales** — Sublimar mueve todos los hooks antes del `if (!myTeam) return`
+2. **Refs para focus** — Diluir usa `useRef<HTMLInputElement[]>` para Enter→next
+3. **Portal para modales** — WorkshopClosure y Proyectar summary usan `createPortal` para evitar issues con `transform` de motion.div
+4. **Debounce implícito** — updateTeamSync es merge, no replace
+5. **Estado global vs local** — `sublimarDefenseUnlocked` en doc de game (global), `defenses[]` en doc de team (local)
+6. **Build**: Vite build pasa sin errores TS (los errores de ErrorBoundary son pre-existentes y no afectan la build)

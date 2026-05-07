@@ -8,34 +8,43 @@ service cloud.firestore {
     match /games/{gameId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-// Only allow updating specific fields (phase control, status, challenge, unlocked phases)
+      // Only admin (email/password users) can update or delete game documents
       allow update, delete: if request.auth != null && request.auth.token.email != null;
 
       // ─── TEAMS ───────────────────────────────────────────
       // A team document can be read by anyone in the game.
       // It can only be written by the player who owns it
-      // (playerId must match auth uid) OR during initial creation.
+      // (playerId must match auth uid) OR during initial creation,
+      // OR by admin (email auth).
       match /teams/{teamName} {
         allow read: if request.auth != null;
         // Allow create if authenticated (first join)
         allow create: if request.auth != null;
-        // Allow update only if the document's playerId matches the caller
-        // OR if playerId field is being set for the first time (merge join)
+        // Allow update only if the document's playerId matches the caller,
+        // OR if playerId field is being set for the first time (merge join),
+        // OR if the caller is an admin (email auth).
         allow update: if request.auth != null
           && (resource.data.playerId == request.auth.uid
-              || !('playerId' in resource.data));
+              || !('playerId' in resource.data)
+              || request.auth.token.email != null);
       }
 
       // ─── ATTACKS ─────────────────────────────────────────
       // Anyone in the game can read attacks (needed for defense view).
       // Only authenticated users can create attacks.
-      // Attacks cannot be updated or deleted once sent.
+      // Only the attack owner can edit. Only owner or admin can delete.
       match /attacks/{attackId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null
           && request.resource.data.keys().hasAll(['fromTeam', 'toTeam', 'content', 'timestamp', 'playerId'])
           && request.resource.data.playerId == request.auth.uid;
-        allow update, delete: if false;
+        // Allow update only by the original creator (edit own attacks)
+        allow update: if request.auth != null
+          && resource.data.playerId == request.auth.uid;
+        // Allow delete by owner or admin
+        allow delete: if request.auth != null
+          && (resource.data.playerId == request.auth.uid
+              || request.auth.token.email != null);
       }
 
       // ─── DEFENSES ────────────────────────────────────────
@@ -44,12 +53,16 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if request.auth != null
           && request.resource.data.playerId == request.auth.uid;
-        allow update, delete: if false;
+        allow update: if request.auth != null
+          && resource.data.playerId == request.auth.uid;
+        allow delete: if request.auth != null
+          && (resource.data.playerId == request.auth.uid
+              || request.auth.token.email != null);
       }
 
       // ─── SOLUTIONS ───────────────────────────────────────
       // Solutions are readable by all teams (needed for cross-team attacks).
-      // Writable only by authenticated users.
+      // Writable by authenticated users (team members write their own).
       match /solutions/{teamName} {
         allow read: if request.auth != null;
         allow write: if request.auth != null;

@@ -44,6 +44,7 @@ export interface GameState {
   reformulatedSolution: string;
   expectedResults: string;
   sublimarView: 'Ataque' | 'Defensa';
+  sublimarDefenseCompleted?: boolean;
 
   // Fermentar
   audience: string;

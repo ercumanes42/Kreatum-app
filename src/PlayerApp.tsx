@@ -366,14 +366,13 @@ export default function PlayerApp() {
             <Button 
               onClick={() => {
                 if (currentIndex === PHASES.length - 1) {
-                  sounds.playSuccess();
-                  updateState({ isFinished: true });
-                  leaveGame();
+                  // Finalization is handled inside Proyectar component
+                  return;
                 } else {
                   nextPhase();
                 }
               }}
-              disabled={currentIndex === PHASES.length - 1 ? false : isNextDisabled()}
+              disabled={currentIndex === PHASES.length - 1 ? true : isNextDisabled()}
               title={blockedByAlchemist() ? 'El Alquimista aún no ha desbloqueado esta fase' : ''}
               className={cn(
                 "flex gap-2",

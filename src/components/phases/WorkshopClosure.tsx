@@ -15,7 +15,7 @@ interface Props {
 
 export function WorkshopClosure({ state, isOpen, onClose }: Props) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
-  const { gameId, leaveGame } = useGame();
+  const { gameId } = useGame();
 
   // Fetch real attack data from Firestore
   const { attacks: firestoreAttacksReceived } = useAttacksReceived(gameId, state.team);
@@ -72,7 +72,9 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
       items: [
         { label: 'Audiencia', value: state.audience },
         { label: 'Fortalezas', value: state.strengths },
+        { label: 'Debilidades', value: state.weaknesses },
         { label: 'Prueba Piloto', value: state.pilot },
+        { label: 'Recursos', value: state.resources },
       ]
     },
     {
@@ -250,12 +252,11 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                 onClick={() => {
                   sounds.playSuccess();
                   onClose();
-                  leaveGame();
                 }}
                 className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-base"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                Volver al Inicio
+                Cerrar Resumen
               </Button>
             </motion.div>
           </div>

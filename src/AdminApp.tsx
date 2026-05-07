@@ -32,15 +32,14 @@ export default function AdminApp() {
     return () => unsubscribe();
   }, []);
 
+  const [createError, setCreateError] = useState('');
+
   const handleCreateGame = async () => {
-    if (!newGameFacilitator.trim()) {
-      alert('Por favor, introduce el nombre del facilitador (es obligatorio).');
-      return;
-    }
     if (!newGameChallenge.trim()) {
-      alert('Por favor, introduce el Reto del Workshop (es obligatorio).');
+      setCreateError('Por favor, introduce el Reto del Workshop (es obligatorio).');
       return;
     }
+    setCreateError('');
     setIsCreatingGame(true);
     try {
       await createGame(null, true, { 
@@ -51,7 +50,7 @@ export default function AdminApp() {
       });
       handleCloseModal();
     } catch (e: any) {
-      alert('Error al crear partida: ' + e.message);
+      setCreateError(e.message || 'Error al crear partida.');
     } finally {
       setIsCreatingGame(false);
     }
@@ -188,23 +187,25 @@ export default function AdminApp() {
 
 // ─────────────────── RESET MODAL ───────────────────
 function ResetModal({ onClose }: { onClose: () => void }) {
-  const { resetPlatform } = useGame();
+  const { purgeAllGames } = useGame();
   const [confirmCode, setConfirmCode] = useState('');
   const [isResetting, setIsResetting] = useState(false);
-  const SECURITY_CODE = 'KREATUM2026';
+  const [resetError, setResetError] = useState('');
+  const CONFIRM_PHRASE = 'BORRAR TODO';
 
   const handleReset = async () => {
-    if (confirmCode !== SECURITY_CODE) {
-      alert('Código de seguridad incorrecto.');
+    if (confirmCode !== CONFIRM_PHRASE) {
+      setResetError('Escribe exactamente "BORRAR TODO" para confirmar.');
       return;
     }
 
     setIsResetting(true);
+    setResetError('');
     try {
-      await resetPlatform();
+      await purgeAllGames();
       onClose();
     } catch (e: any) {
-      alert('Error al resetear: ' + e.message);
+      setResetError(e.message || 'Error al resetear la plataforma.');
     } finally {
       setIsResetting(false);
     }
@@ -220,20 +221,24 @@ function ResetModal({ onClose }: { onClose: () => void }) {
         <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
           <History className="w-8 h-8 text-red-500" />
         </div>
-        <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">Reiniciar Plataforma</h2>
+        <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">Purgar Todas las Partidas</h2>
         <p className="text-sm text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
           Esta acción <span className="text-red-500 font-bold uppercase">eliminará todas las partidas</span>, equipos y datos históricos. No se puede deshacer.
         </p>
 
+        {resetError && (
+          <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center mb-4">{resetError}</div>
+        )}
+
         <div className="mb-8">
           <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
-            Escribe el código de seguridad: <span className="text-kreatum-purple font-bold">{SECURITY_CODE}</span>
+            Escribe <span className="text-red-500 font-bold">BORRAR TODO</span> para confirmar
           </label>
           <input
             type="text"
             value={confirmCode}
             onChange={(e) => setConfirmCode(e.target.value.toUpperCase())}
-            placeholder="Introduce el código..."
+            placeholder="BORRAR TODO"
             className="w-full px-4 py-4 bg-black/5 dark:bg-white/5 border-2 border-red-500/20 focus:border-red-500 rounded-2xl outline-none transition-all text-center font-bold tracking-[0.2em]"
           />
         </div>
@@ -243,9 +248,9 @@ function ResetModal({ onClose }: { onClose: () => void }) {
           <Button 
             className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20"
             onClick={handleReset}
-            disabled={isResetting || confirmCode !== SECURITY_CODE}
+            disabled={isResetting || confirmCode !== CONFIRM_PHRASE}
           >
-            {isResetting ? 'Borrando...' : 'Borrar Todo'}
+            {isResetting ? 'Borrando...' : 'Purgar Todo'}
           </Button>
         </div>
       </motion.div>

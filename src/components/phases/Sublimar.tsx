@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Shield, Zap, Lock, ChevronRight, X } from 'lucide-react';
+import { Send, Shield, Zap, Lock, ChevronRight, X, Pencil, Check } from 'lucide-react';
 import { useAttacksReceived, useOpponentSolutions, useAttacksSent, Attack, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 import { cn } from '../../lib/utils';
@@ -13,13 +13,6 @@ interface Props {
   state: GameState;
   updateState: (updates: Partial<GameState>) => void;
 }
-
-const TEAM_COLORS: Record<Team, string> = {
-  Fuego: 'border-kreatum-red bg-kreatum-red/5',
-  Agua: 'border-kreatum-blue bg-kreatum-blue/5',
-  Tierra: 'border-kreatum-green bg-kreatum-green/5',
-  Aire: 'border-kreatum-turquoise bg-kreatum-turquoise/5',
-};
 
 const TEAM_ICONS: Record<Team, React.ReactNode> = {
   Fuego: <img src="/assets/logos/fuego.png" alt="Fuego" className="w-5 h-5 object-contain" />,
@@ -40,17 +33,18 @@ const ATTACK_MAP: Record<Team, Team> = {
 };
 
 export function Sublimar({ state, updateState }: Props) {
-  const { sendAttack, deleteAttack, gameId } = useGame();
-
+  const { sendAttack, deleteAttack, editAttack, gameId, playerId } = useGame();
   const myTeam = state.team;
   const targetTeam = myTeam ? ATTACK_MAP[myTeam] : null;
 
-  // TODOS los hooks ANTES del return condicional (Rules of Hooks)
+  // ALL hooks BEFORE conditional return (Rules of Hooks)
   const { attacks: attacksReceived, isLoading: loadingAttacks } = useAttacksReceived(gameId, myTeam);
   const { attacks: attacksSent, isLoading: loadingAttacksSent } = useAttacksSent(gameId, myTeam);
   const { solutions: opponentSolutions } = useOpponentSolutions(gameId, myTeam);
   const [attackInput, setAttackInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
   const { globalState } = useGameGlobal(gameId);
 
   if (!myTeam) {
@@ -69,47 +63,57 @@ export function Sublimar({ state, updateState }: Props) {
   const setSubView = (view: 'Ataque' | 'Defensa') => updateState({ sublimarView: view });
 
   const currentRivalSolution = targetTeam ? opponentSolutions[targetTeam] || state.receivedSolutionToAttack : state.receivedSolutionToAttack;
+  const ownSolution = state.selectedSolution || state.reformulatedSolution || '';
 
-  // Get attack count for our target team from Firestore data
-  const getSentAttackCount = (): number => {
-    return attacksSent.length;
-  };
+  const totalAttacksSent = attacksSent.length;
+  const requiredTotalAttacks = MIN_ATTACKS_PER_TEAM;
+  const isAttackPhaseComplete = totalAttacksSent >= requiredTotalAttacks;
+
+  // Defense is unlocked via dedicated global flag, NOT via Fermentar unlock
+  const isDefenseUnlocked = globalState?.sublimarDefenseUnlocked === true;
+  const isFermentarUnlocked = globalState?.unlockedPhases?.includes('Fermentar');
+  const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Sublimar');
+
+  // Auto-transition to Defensa if defense unlocked and attacks are complete
+  React.useEffect(() => {
+    if (isAttackPhaseComplete && isDefenseUnlocked && subView === 'Ataque') {
+      setSubView('Defensa');
+    }
+  }, [isAttackPhaseComplete, isDefenseUnlocked, subView]);
 
   const handleSendAttack = async () => {
     if (!attackInput.trim() || !targetTeam || !myTeam || isSending) return;
-
-    // Check if max attacks reached
-    const currentCount = getSentAttackCount();
-    if (currentCount >= MAX_ATTACKS_PER_TEAM) return;
+    if (totalAttacksSent >= MAX_ATTACKS_PER_TEAM) return;
 
     setIsSending(true);
     try {
       await sendAttack(attackInput, targetTeam, myTeam);
-      
-      // Update local state if needed
       const newAttacks = [...state.attacksOnOthers];
       newAttacks.push(attackInput);
       updateState({ attacksOnOthers: newAttacks });
-
       setAttackInput('');
     } finally {
       setIsSending(false);
     }
   };
 
-  const totalAttacksSent = getSentAttackCount();
-  const requiredTotalAttacks = MIN_ATTACKS_PER_TEAM;
-  const isAttackPhaseComplete = totalAttacksSent >= requiredTotalAttacks;
+  const handleStartEdit = (attack: Attack) => {
+    setEditingId(attack.id);
+    setEditingContent(attack.content);
+  };
 
-  const isNextUnlocked = globalState?.unlockedPhases?.includes('Fermentar');
-  const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Sublimar');
-
-  // Auto-transition to Defensa if unlocked and attacks are complete
-  React.useEffect(() => {
-    if (isAttackPhaseComplete && isNextUnlocked && subView === 'Ataque') {
-      setSubView('Defensa');
+  const handleSaveEdit = async () => {
+    if (!editingId || !editingContent.trim()) return;
+    try {
+      await editAttack(editingId, editingContent.trim());
+      setEditingId(null);
+      setEditingContent('');
+    } catch (e) {
+      console.error('Error editing attack:', e);
     }
-  }, [isAttackPhaseComplete, isNextUnlocked, subView]);
+  };
+
+  const canShowDefenseTab = isAttackPhaseComplete;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
@@ -129,7 +133,7 @@ export function Sublimar({ state, updateState }: Props) {
           </div>
         </div>
 
-        {isAttackPhaseComplete && (
+        {canShowDefenseTab && (
           <div className="flex gap-2 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
             <button
               onClick={() => setSubView('Ataque')}
@@ -141,13 +145,15 @@ export function Sublimar({ state, updateState }: Props) {
               Ataque
             </button>
             <button
-              onClick={() => setSubView('Defensa')}
+              onClick={() => { if (isDefenseUnlocked) setSubView('Defensa'); }}
               className={cn(
                 "px-6 py-2 rounded-xl text-xs font-bold transition-all",
-                subView === 'Defensa' ? "bg-white dark:bg-white/10 shadow-sm text-kreatum-blue" : "text-kreatum-gray/60 hover:text-kreatum-gray"
+                subView === 'Defensa' ? "bg-white dark:bg-white/10 shadow-sm text-kreatum-blue" : "text-kreatum-gray/60 hover:text-kreatum-gray",
+                !isDefenseUnlocked && "opacity-40 cursor-not-allowed"
               )}
+              title={!isDefenseUnlocked ? "El Alquimista aún no ha desbloqueado la Defensa" : ""}
             >
-              Defensa y Reformulación
+              {!isDefenseUnlocked && '🔒 '}Defensa y Reformulación
             </button>
           </div>
         )}
@@ -162,7 +168,6 @@ export function Sublimar({ state, updateState }: Props) {
             exit={{ opacity: 0, x: 20 }}
             className="space-y-12"
           >
-            {/* ATAQUE */}
             <div className="space-y-8">
               <h3 className="text-sm font-black uppercase tracking-[0.3em] text-kreatum-red dark:text-red-500 flex items-center gap-4">
                 <div className="h-px bg-kreatum-red/20 dark:bg-red-500/30 flex-1"></div>
@@ -171,7 +176,17 @@ export function Sublimar({ state, updateState }: Props) {
                 <div className="h-px bg-kreatum-red/20 dark:bg-red-500/30 w-12"></div>
               </h3>
 
-              {/* Progress bar for our target */}
+              {/* Own solution card */}
+              {ownSolution && (
+                <Card className="border-l-4 border-l-kreatum-green bg-kreatum-green/5">
+                  <CardHeader><CardTitle>Nuestra Solución Definitiva</CardTitle></CardHeader>
+                  <CardContent>
+                    <p className="text-lg font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed italic">"{ownSolution}"</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Progress bar */}
               <div className="bg-kreatum-gray/5 dark:bg-white/5 rounded-xl p-4 border border-kreatum-gray/10">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase text-kreatum-gray dark:text-white/60">Progreso de Ataques</span>
@@ -194,7 +209,7 @@ export function Sublimar({ state, updateState }: Props) {
                   </p>
                 ) : (
                   <p className="text-xs text-kreatum-green mt-2 font-bold flex items-center gap-1">
-                    <Shield className="w-3 h-3" /> ¡Objetivo de ataques completado! Ya puedes pasar a Defensa.
+                    <Shield className="w-3 h-3" /> ¡Objetivo de ataques completado!
                   </p>
                 )}
               </div>
@@ -257,16 +272,44 @@ export function Sublimar({ state, updateState }: Props) {
                         <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center bg-kreatum-red/10 text-kreatum-red rounded-lg text-[10px] font-mono font-bold">
                           {String(idx + 1).padStart(2, '0')}
                         </span>
-                        <span className="text-xs text-kreatum-dark dark:text-white/80 line-clamp-2 pr-6">{attack.content}</span>
-                        
-                        {!isLocked && (
-                          <button
-                            onClick={() => deleteAttack(attack.id)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-kreatum-red/40 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                            title="Eliminar ataque"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                        {editingId === attack.id ? (
+                          <div className="flex-1 flex items-center gap-2">
+                            <Input
+                              value={editingContent}
+                              onChange={(e) => setEditingContent(e.target.value)}
+                              className="flex-1 h-8 text-xs"
+                              onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                              autoFocus
+                            />
+                            <button onClick={handleSaveEdit} className="p-1 text-kreatum-green hover:text-kreatum-green/80" title="Guardar">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setEditingId(null)} className="p-1 text-kreatum-gray/40 hover:text-kreatum-gray" title="Cancelar">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-xs text-kreatum-dark dark:text-white/80 line-clamp-2 pr-14 flex-1">{attack.content}</span>
+                            {!isLocked && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                <button
+                                  onClick={() => handleStartEdit(attack)}
+                                  className="p-1.5 text-kreatum-blue/40 hover:text-kreatum-blue"
+                                  title="Editar ataque"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => deleteAttack(attack.id)}
+                                  className="p-1.5 text-kreatum-red/40 hover:text-red-500"
+                                  title="Eliminar ataque"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </motion.div>
                     ))}
@@ -281,20 +324,20 @@ export function Sublimar({ state, updateState }: Props) {
                   className="flex justify-center pt-8"
                 >
                   <button
-                    onClick={() => setSubView('Defensa')}
-                    disabled={!isNextUnlocked}
+                    onClick={() => { if (isDefenseUnlocked) setSubView('Defensa'); }}
+                    disabled={!isDefenseUnlocked}
                     className={cn(
                       "group relative px-12 py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl transition-all overflow-hidden",
-                      isNextUnlocked 
+                      isDefenseUnlocked 
                         ? "bg-kreatum-blue text-white shadow-kreatum-blue/20 hover:scale-105" 
                         : "bg-kreatum-gray/20 text-kreatum-gray/40 cursor-not-allowed"
                     )}
                   >
                     <span className="relative z-10 flex items-center gap-3">
-                      {isNextUnlocked ? 'Continuar a Defensa' : '🔒 Esperando al Alquimista'} 
-                      {isNextUnlocked && <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                      {isDefenseUnlocked ? 'Continuar a Defensa' : '🔒 Esperando al Alquimista'} 
+                      {isDefenseUnlocked && <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                     </span>
-                    {isNextUnlocked && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />}
+                    {isDefenseUnlocked && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />}
                   </button>
                 </motion.div>
               )}
@@ -308,75 +351,57 @@ export function Sublimar({ state, updateState }: Props) {
             exit={{ opacity: 0, x: -20 }}
             className="space-y-16"
           >
+            {/* Own solution reminder */}
+            {ownSolution && (
+              <Card className="border-l-4 border-l-kreatum-green bg-kreatum-green/5">
+                <CardHeader><CardTitle>Nuestra Solución Definitiva (referencia)</CardTitle></CardHeader>
+                <CardContent>
+                  <p className="text-lg font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed italic">"{ownSolution}"</p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* DEFENSA */}
             <div className="space-y-8">
               <h3 className="text-sm font-black uppercase tracking-[0.3em] text-kreatum-blue dark:text-blue-400 flex items-center gap-4">
                 <div className="h-px bg-kreatum-blue/20 dark:bg-blue-400/30 w-12"></div>
                 <Shield className="w-4 h-4" />
-                Defensa
+                Defensa — Ataques y Mitigaciones
                 <div className="h-px bg-kreatum-blue/20 dark:bg-blue-400/30 flex-1"></div>
               </h3>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Attacks Received - REAL TIME */}
-                <Card className="border-l-4 border-l-kreatum-blue dark:border-l-blue-500 bg-kreatum-blue/5 dark:bg-blue-500/5">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-kreatum-blue dark:bg-blue-400 rounded-full animate-pulse"></span>
-                      Ataques recibidos
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {loadingAttacks ? (
-                      <div className="text-center py-8 text-kreatum-gray dark:text-white/60">Cargando...</div>
-                    ) : attacksReceived.length === 0 ? (
-                      <div className="text-center py-8 text-kreatum-gray dark:text-white/60 italic text-sm">
-                        Esperando ataques de otros equipos...
-                      </div>
-                    ) : (
-                      <AnimatePresence mode="popLayout">
-                        {attacksReceived.map((attack, idx) => (
-                          <motion.div
-                            key={attack.id}
-                            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            transition={{ duration: 0.3, type: 'spring', stiffness: 300 }}
-                            className="w-full p-4 rounded-2xl border bg-white dark:bg-white/5 border-kreatum-blue/20 flex gap-4 items-center shadow-sm"
-                          >
-                            <span className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-kreatum-blue dark:bg-blue-500 text-white rounded-full text-xs font-bold shadow-lg shadow-kreatum-blue/30">
-                              {idx + 1}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-black text-kreatum-blue dark:text-blue-400 uppercase tracking-tighter">
-                                  EQUIPO {attack.fromTeam}
-                                </span>
-                              </div>
-                              <p className="text-sm text-kreatum-dark dark:text-white/90 font-medium leading-tight">{attack.content}</p>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Nuestras Defensas / Mitigaciones */}
-                <Card className="border-l-4 border-l-kreatum-blue dark:border-l-blue-500">
-                  <CardHeader>
-                    <CardTitle>Mitigaciones</CardTitle>
-                    <p className="text-[10px] text-kreatum-gray/60 dark:text-white/40 uppercase font-bold tracking-widest mt-1">Escribe tus respuestas a cada ataque recibido</p>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {attacksReceived.length > 0 ? (
-                      <div className="space-y-6">
-                        {attacksReceived.map((attack, idx) => (
-                          <div key={attack.id} className="space-y-2 p-4 bg-kreatum-blue/5 dark:bg-blue-400/5 rounded-2xl border border-kreatum-blue/10">
+              {/* Aligned: Attack left ↔ Mitigation right */}
+              <Card className="border-l-4 border-l-kreatum-blue dark:border-l-blue-500 bg-kreatum-blue/5 dark:bg-blue-500/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-kreatum-blue dark:bg-blue-400 rounded-full animate-pulse"></span>
+                    Ataques recibidos y Mitigaciones
+                  </CardTitle>
+                  <p className="text-[10px] text-kreatum-gray/60 dark:text-white/40 uppercase font-bold tracking-widest mt-1">Cada ataque tiene su campo de respuesta alineado a la derecha</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {loadingAttacks ? (
+                    <div className="text-center py-8 text-kreatum-gray dark:text-white/60">Cargando...</div>
+                  ) : attacksReceived.length === 0 ? (
+                    <div className="text-center py-8 text-kreatum-gray dark:text-white/60 italic text-sm">
+                      Esperando ataques de otros equipos...
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {attacksReceived.map((attack, idx) => (
+                        <div key={attack.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 bg-white dark:bg-white/5 rounded-2xl border border-kreatum-blue/10">
+                          {/* Left: Attack received */}
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-kreatum-red uppercase tracking-wider flex items-center gap-2">
+                              <span className="w-6 h-6 flex items-center justify-center bg-kreatum-red/10 text-kreatum-red rounded-full text-[10px] font-bold">{idx + 1}</span>
+                              Ataque de {attack.fromTeam}
+                            </p>
+                            <p className="text-sm text-kreatum-dark dark:text-white/90 font-medium leading-tight bg-kreatum-red/5 p-3 rounded-xl border border-kreatum-red/10">{attack.content}</p>
+                          </div>
+                          {/* Right: Mitigation */}
+                          <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <p className="text-[10px] font-bold text-kreatum-blue dark:text-blue-400 uppercase">
-                                Para Ataque #{idx + 1}
-                              </p>
+                              <p className="text-[10px] font-bold text-kreatum-blue uppercase tracking-wider">Mitigación #{idx + 1}</p>
                               {state.defenses[idx] && state.defenses[idx].trim() && (
                                 <span className="text-[10px] text-kreatum-green font-bold">✓ Guardado</span>
                               )}
@@ -385,7 +410,6 @@ export function Sublimar({ state, updateState }: Props) {
                               value={state.defenses[idx] || ''}
                               onChange={(e) => {
                                 const newDefenses = [...state.defenses];
-                                // Ensure the array is large enough
                                 while (newDefenses.length <= idx) {
                                   newDefenses.push('');
                                 }
@@ -393,22 +417,15 @@ export function Sublimar({ state, updateState }: Props) {
                                 updateState({ defenses: newDefenses });
                               }}
                               placeholder="Escribe tu mitigación aquí..."
-                              className="w-full bg-white dark:bg-black/20 border-none shadow-inner"
+                              className="w-full bg-white dark:bg-black/20 border-kreatum-blue/20 shadow-inner"
                             />
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12 px-6 border-2 border-dashed border-kreatum-gray/10 rounded-2xl">
-                        <Shield className="w-8 h-8 text-kreatum-gray/20 mx-auto mb-4" />
-                        <p className="text-sm text-kreatum-gray dark:text-white/40 italic">
-                          Cuando recibas ataques de otros equipos, aquí podrás escribir tus mitigaciones.
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
             {/* REFORMULACIÓN */}
