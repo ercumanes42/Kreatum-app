@@ -5,6 +5,7 @@ import { Textarea } from '../ui/Textarea';
 import { motion } from 'motion/react';
 import { useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
+import { PhaseHeader } from './PhaseHeader';
 
 interface Props {
   state: GameState;
@@ -17,10 +18,10 @@ export function Fermentar({ state, updateState }: Props) {
   const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Fermentar');
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
-      <div className="mb-10">
-        <h2 className="text-5xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-4">Fase 5: Fermentar</h2>
-        <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80 uppercase tracking-widest">Aterriza la solución. Dále forma para poder presentarla.</p>
-      </div>
+      <PhaseHeader
+        phase="Fermentar"
+        subtitle="Aterriza la solución. Dále forma para poder presentarla."
+      />
 
       <div className="grid lg:grid-cols-2 gap-8">
         <Card>

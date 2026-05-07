@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { GameState, Team, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -8,6 +8,7 @@ import { Send, Shield, Zap, Lock, ChevronRight, X, Pencil, Check } from 'lucide-
 import { useAttacksReceived, useOpponentSolutions, useAttacksSent, Attack, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 import { cn } from '../../lib/utils';
+import { PhaseHeader } from './PhaseHeader';
 
 interface Props {
   state: GameState;
@@ -46,6 +47,7 @@ export function Sublimar({ state, updateState }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const { globalState } = useGameGlobal(gameId);
+  const attackInputRef = useRef<HTMLInputElement>(null);
 
   if (!myTeam) {
     return (
@@ -92,6 +94,10 @@ export function Sublimar({ state, updateState }: Props) {
       newAttacks.push(attackInput);
       updateState({ attacksOnOthers: newAttacks });
       setAttackInput('');
+      // Auto-focus after send
+      setTimeout(() => {
+        attackInputRef.current?.focus();
+      }, 50);
     } finally {
       setIsSending(false);
     }
@@ -117,22 +123,10 @@ export function Sublimar({ state, updateState }: Props) {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
-      <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h2 className="text-5xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-4">Fase 4: Sublimar</h2>
-          <div className="flex items-center gap-3">
-            <span className={cn(
-              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-              subView === 'Ataque' ? "bg-kreatum-red text-white" : "bg-kreatum-blue text-white"
-            )}>
-              {subView}
-            </span>
-            <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80 uppercase tracking-widest">
-              {subView === 'Ataque' ? 'Focalización en debilidades rivales' : 'Mitigación y ajuste de nuestra solución'}
-            </p>
-          </div>
-        </div>
-
+      <PhaseHeader
+        phase="Sublimar"
+        subtitle={subView === 'Ataque' ? 'Focalización en debilidades rivales' : 'Mitigación y ajuste de nuestra solución'}
+      >
         {canShowDefenseTab && (
           <div className="flex gap-2 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
             <button
@@ -157,7 +151,7 @@ export function Sublimar({ state, updateState }: Props) {
             </button>
           </div>
         )}
-      </div>
+      </PhaseHeader>
 
       <AnimatePresence mode="wait">
         {subView === 'Ataque' ? (
@@ -237,6 +231,7 @@ export function Sublimar({ state, updateState }: Props) {
                 <CardContent className="space-y-4">
                   <div className="flex gap-3">
                     <Input
+                      ref={attackInputRef}
                       value={attackInput}
                       onChange={(e) => setAttackInput(e.target.value)}
                       placeholder={totalAttacksSent >= MAX_ATTACKS_PER_TEAM

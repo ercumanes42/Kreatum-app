@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { ArrowDown, X } from 'lucide-react';
 import { useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
+import { PhaseHeader } from './PhaseHeader';
 
 interface Props {
   state: GameState;
@@ -78,10 +79,10 @@ export function Diluir({ state, updateState }: Props) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
       
-      <div className="mb-10">
-        <h2 className="text-5xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-4">Fase 2: Diluir</h2>
-        <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80 uppercase tracking-widest">Disgregación del reto. Encuentra nuevas perspectivas.</p>
-      </div>
+      <PhaseHeader
+        phase="Diluir"
+        subtitle="Disgregación del reto. Encuentra nuevas perspectivas."
+      />
 
       <Card className="border-l-4 border-l-kreatum-purple">
         <CardHeader>

@@ -10,6 +10,7 @@ import { useGame } from '../../contexts/GameContext';
 import { useTeamSync, useAttacksSent, useAttacksReceived } from '../../hooks/useRealtime';
 import { WorkshopClosure } from './WorkshopClosure';
 import { createPortal } from 'react-dom';
+import { PhaseHeader } from './PhaseHeader';
 
 interface Props {
   state: GameState;
@@ -107,11 +108,10 @@ export function Proyectar({ state, updateState }: Props) {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
-      <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h2 className="text-5xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-4">Fase 6: Proyectar</h2>
-          <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80 uppercase tracking-widest">Prepara tu presentación y speech (Pitch).</p>
-        </div>
+      <PhaseHeader
+        phase="Proyectar"
+        subtitle="Prepara tu presentación y speech (Pitch)."
+      >
         <Button
           variant="outline"
           className="flex gap-2 items-center rounded-2xl px-6 h-12 border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
@@ -120,7 +120,7 @@ export function Proyectar({ state, updateState }: Props) {
           <Eye className="w-5 h-5" />
           Ver Resumen
         </Button>
-      </div>
+      </PhaseHeader>
 
       {/* Summary Modal */}
       {showSummary && createPortal(

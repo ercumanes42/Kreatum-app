@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { GameState, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { motion } from 'motion/react';
 import { Button } from '../ui/Button';
 import { ArrowDown, X } from 'lucide-react';
-
 import { useGame } from '../../contexts/GameContext';
 import { useGameGlobal } from '../../hooks/useRealtime';
+import { PhaseHeader } from './PhaseHeader';
 
 interface Props {
   state: GameState;
@@ -19,6 +19,9 @@ export function Conjugar({ state, updateState }: Props) {
   const [selectionError, setSelectionError] = useState('');
   const { globalState } = useGameGlobal(gameId);
   const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Conjugar');
+
+  // Refs for solution inputs to enable Enter→next focus
+  const solutionRefs = useRef<(HTMLInputElement | null)[]>([]);
   
   const handleSolutionChange = (index: number, value: string) => {
     const newSolutions = [...state.solutions];
@@ -28,6 +31,20 @@ export function Conjugar({ state, updateState }: Props) {
     }
     updateState({ solutions: newSolutions });
   };
+
+  const handleSolutionKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nextIndex = index + 1;
+      if (nextIndex >= state.solutions.length) {
+        const newSolutions = [...state.solutions, ''];
+        updateState({ solutions: newSolutions });
+      }
+      setTimeout(() => {
+        solutionRefs.current[nextIndex]?.focus();
+      }, 50);
+    }
+  }, [state.solutions, updateState]);
 
   const handleTop3Change = (index: number, value: string) => {
     const newTop3 = [...state.top3Solutions] as [string, string, string];
@@ -58,10 +75,10 @@ export function Conjugar({ state, updateState }: Props) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
       
-      <div className="mb-10">
-        <h2 className="text-5xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-4">Fase 3: Conjugar</h2>
-        <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80 uppercase tracking-widest">Generación de soluciones abstractas para la línea elegida.</p>
-      </div>
+      <PhaseHeader
+        phase="Conjugar"
+        subtitle="Generación de soluciones abstractas para la línea elegida."
+      />
 
       <Card className="border-l-4 border-l-kreatum-turquoise">
         <CardHeader>
@@ -86,8 +103,10 @@ export function Conjugar({ state, updateState }: Props) {
               </span>
               <div className="relative flex-1">
                 <Input 
+                  ref={(el) => { solutionRefs.current[idx] = el; }}
                   value={sol}
                   onChange={(e) => handleSolutionChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleSolutionKeyDown(e, idx)}
                   placeholder="Plantea una solución..."
                   disabled={isLocked}
                   className="pr-10"
