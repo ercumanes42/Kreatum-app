@@ -30,23 +30,27 @@ export default function PlayerApp() {
     if (localStorage.getItem('kreatum_splash_seen') === 'true') {
       return false;
     }
-    const hasExistingSession =
-      localStorage.getItem('kreatum_game_id') &&
-      localStorage.getItem('kreatum_team');
-    return !hasExistingSession;
+    return true;
   });
-  const { teamState, updateTeamSync } = useTeamSync(gameId, team || state.team);
 
+  const { teamState, updateTeamSync } = useTeamSync(gameId, team || state.team);
   const { attacks: attacksSent } = useAttacksSent(gameId, team || state.team);
   const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
+
   const challenge = globalState?.challenge || '';
   // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir progreso libre
   const hasUnlockedPhases = globalState?.unlockedPhases && globalState.unlockedPhases.length > 0;
   const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
+  // Ref to hold the latest leaveGame function so the timeout always uses the current one
+  // without causing the useEffect to re-run (leaveGame is not memoized in GameContext).
+  const leaveGameRef = useRef(leaveGame);
+  useEffect(() => { leaveGameRef.current = leaveGame; }, [leaveGame]);
+
+
   // Sync context team into local state
   useEffect(() => {
-    if (team && team !== state.team) {
+    if (team) {
       setState(prev => ({ ...prev, team }));
     }
     if (!team && !gameId && state.team) {
@@ -79,13 +83,13 @@ export default function PlayerApp() {
   useEffect(() => {
     if (globalState?.status === 'completed' && !isAlchemist && !workshopEnded) {
       setWorkshopEnded(true);
-      // Brief message, then redirect
+      // Brief message, then redirect via ref (avoids effect re-run cycle)
       const timer = setTimeout(() => {
-        leaveGame();
+        leaveGameRef.current();
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [globalState?.status, isAlchemist, workshopEnded, leaveGame]);
+  }, [globalState?.status, isAlchemist, workshopEnded]);
 
   // Sync Firestore team state to local state
   useEffect(() => {
