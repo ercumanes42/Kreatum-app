@@ -49,21 +49,21 @@ export function Proyectar({ state, updateState }: Props) {
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }} 
         animate={{ opacity: 1, scale: 1 }} 
-        className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-8"
+        transition={{ duration: 0.25 }}
+        className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-7"
       >
         <motion.div
-          initial={{ scale: 0 }}
+          initial={{ scale: 0.94, opacity: 0 }}
           animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
-          className="w-28 h-28 relative"
+          transition={{ duration: 0.25, delay: 0.1 }}
+          className="w-24 h-24 relative"
         >
-          <div className="absolute inset-0 bg-kreatum-purple/30 rounded-[32px] blur-xl animate-pulse" />
-          <div className="relative w-full h-full bg-gradient-to-br from-kreatum-purple to-kreatum-turquoise rounded-[32px] flex items-center justify-center shadow-2xl shadow-kreatum-purple/40">
+          <div className="relative w-full h-full bg-kreatum-purple rounded-2xl flex items-center justify-center shadow-[0_18px_40px_-26px_rgba(162,84,156,0.85)]">
             {state.team ? (
               <img 
                 src={`/assets/logos/${state.team.toLowerCase()}.png`} 
                 alt={state.team}
-                className="w-20 h-20 object-contain drop-shadow-2xl" 
+                className="w-16 h-16 object-contain" 
               />
             ) : (
               <PartyPopper className="w-14 h-14 text-white" />
@@ -74,12 +74,12 @@ export function Proyectar({ state, updateState }: Props) {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.2 }}
         >
-          <h1 className="text-5xl md:text-6xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-4">
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-normal text-kreatum-dark dark:text-white mb-3">
             ¡Enhorabuena!
           </h1>
-          <p className="text-lg text-kreatum-gray/70 dark:text-white/60 font-mono max-w-md mx-auto">
+          <p className="text-base font-medium text-kreatum-gray/70 dark:text-white/60 max-w-md mx-auto">
             Has finalizado el workshop. Vamos a las votaciones.
           </p>
         </motion.div>
@@ -87,18 +87,18 @@ export function Proyectar({ state, updateState }: Props) {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="flex items-center gap-3 px-6 py-3 bg-kreatum-green/10 text-kreatum-green rounded-2xl border border-kreatum-green/20"
+          transition={{ delay: 0.3 }}
+          className="flex items-center gap-3 px-5 py-3 bg-kreatum-green/10 text-kreatum-green rounded-xl border border-kreatum-green/20"
         >
           <CheckCircle2 className="w-5 h-5" />
-          <span className="text-sm font-bold uppercase tracking-widest">Workshop completado al 100%</span>
+          <span className="text-sm font-bold">Workshop completado al 100%</span>
         </motion.div>
 
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.0 }}
-          className="text-sm text-kreatum-gray/40 dark:text-white/30 font-mono"
+          transition={{ delay: 0.4 }}
+          className="text-sm font-medium text-kreatum-gray/45 dark:text-white/35"
         >
           Equipo {state.team || '—'} · {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </motion.p>
@@ -114,7 +114,7 @@ export function Proyectar({ state, updateState }: Props) {
       >
         <Button
           variant="outline"
-          className="flex gap-2 items-center rounded-2xl px-6 h-12 border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
+          className="flex gap-2 items-center rounded-xl px-5 h-11 border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
           onClick={() => setShowSummary(true)}
         >
           <Eye className="w-5 h-5" />
@@ -132,7 +132,7 @@ export function Proyectar({ state, updateState }: Props) {
         document.body
       )}
 
-      <Card className="bg-kreatum-purple/5 border-kreatum-purple/20 shadow-[0_0_30px_rgba(162,84,156,0.1)]">
+      <Card className="bg-kreatum-purple/[0.04] border-kreatum-purple/20">
         <CardHeader className="border-b border-kreatum-purple/10 pb-6">
           <CardTitle className="text-kreatum-purple">
             Estructura tu Pitch
@@ -140,11 +140,11 @@ export function Proyectar({ state, updateState }: Props) {
         </CardHeader>
         <CardContent className="pt-8">
           <div className="grid sm:grid-cols-2 gap-6">
-            <Card className="bg-white/40 dark:bg-white/5 shadow-none border-dashed border-2 hover:border-kreatum-purple/50 transition-colors">
+            <Card className="bg-white dark:bg-white/[0.04] shadow-none border border-kreatum-purple/10 hover:border-kreatum-purple/30 transition-colors">
               <CardContent className="p-6 flex flex-col gap-4 h-full">
                 <div>
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-kreatum-purple font-black block mb-1">1. Llamada de atención</span>
-                  <p className="text-xs text-kreatum-gray/80 dark:text-white/60 font-mono">¿Cómo vas a empezar?</p>
+                  <span className="text-sm text-kreatum-purple font-bold block mb-1">1. Llamada de atención</span>
+                  <p className="text-xs font-medium text-kreatum-gray/70 dark:text-white/55">¿Cómo vas a empezar?</p>
                 </div>
                 <Textarea
                   value={state.pitchStart}
@@ -155,11 +155,11 @@ export function Proyectar({ state, updateState }: Props) {
               </CardContent>
             </Card>
             
-            <Card className="bg-white/40 dark:bg-black/20 shadow-none border-dashed border-2 hover:border-kreatum-purple/50 transition-colors">
+            <Card className="bg-white dark:bg-white/[0.04] shadow-none border border-kreatum-purple/10 hover:border-kreatum-purple/30 transition-colors">
               <CardContent className="p-6 flex flex-col gap-4 h-full">
                 <div>
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-kreatum-purple font-black block mb-1">2. Problema</span>
-                  <p className="text-xs text-kreatum-gray/80 dark:text-white/60 font-mono">¿Qué dolor estás resolviendo?</p>
+                  <span className="text-sm text-kreatum-purple font-bold block mb-1">2. Problema</span>
+                  <p className="text-xs font-medium text-kreatum-gray/70 dark:text-white/55">¿Qué dolor estás resolviendo?</p>
                 </div>
                 <Textarea
                   value={state.pitchProblem}
@@ -170,11 +170,11 @@ export function Proyectar({ state, updateState }: Props) {
               </CardContent>
             </Card>
             
-            <Card className="bg-white/40 dark:bg-black/20 shadow-none border-dashed border-2 hover:border-kreatum-purple/50 transition-colors">
+            <Card className="bg-white dark:bg-white/[0.04] shadow-none border border-kreatum-purple/10 hover:border-kreatum-purple/30 transition-colors">
               <CardContent className="p-6 flex flex-col gap-4 h-full">
                 <div>
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-kreatum-purple font-black block mb-1">3. Solución</span>
-                  <p className="text-xs text-kreatum-gray/80 dark:text-white/60 font-mono">Explica tu solución y cómo probarla rápido y barato.</p>
+                  <span className="text-sm text-kreatum-purple font-bold block mb-1">3. Solución</span>
+                  <p className="text-xs font-medium text-kreatum-gray/70 dark:text-white/55">Explica tu solución y cómo probarla rápido y barato.</p>
                 </div>
                 <Textarea
                   value={state.pitchSolution}
@@ -185,11 +185,11 @@ export function Proyectar({ state, updateState }: Props) {
               </CardContent>
             </Card>
 
-            <Card className="bg-white/40 dark:bg-black/20 shadow-none border-dashed border-2 hover:border-kreatum-purple/50 transition-colors">
+            <Card className="bg-white dark:bg-white/[0.04] shadow-none border border-kreatum-purple/10 hover:border-kreatum-purple/30 transition-colors">
               <CardContent className="p-6 flex flex-col gap-4 h-full">
                 <div>
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-kreatum-purple font-black block mb-1">4. Llamada a la acción</span>
-                  <p className="text-xs text-kreatum-gray/80 dark:text-white/60 font-mono">¿Qué pides?</p>
+                  <span className="text-sm text-kreatum-purple font-bold block mb-1">4. Llamada a la acción</span>
+                  <p className="text-xs font-medium text-kreatum-gray/70 dark:text-white/55">¿Qué pides?</p>
                 </div>
                 <Textarea
                   value={state.pitchAction}
@@ -205,7 +205,7 @@ export function Proyectar({ state, updateState }: Props) {
             <Button
               onClick={handleFinalize}
               disabled={isSaving}
-              className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-lg"
+              className="px-10 flex gap-3 items-center rounded-xl h-14 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white text-base"
             >
               <Sparkles className="w-5 h-5" />
               {isSaving ? 'Guardando...' : 'Finalizar Workshop'}

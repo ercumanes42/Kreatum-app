@@ -14,18 +14,11 @@ import { Proyectar } from './components/phases/Proyectar';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTeamSync, useGameGlobal } from './hooks/useRealtime';
 import { useGame } from './contexts/GameContext';
-import { HeroSplash } from './components/HeroSplash';
 
 export default function PlayerApp() {
   const { gameId, team, isAlchemist, leaveGame, roomCode } = useGame();
   const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
   const [isDark, setIsDark] = useState(false);
-  const [showSplash, setShowSplash] = useState(() => {
-    if (localStorage.getItem('kreatum_splash_seen') === 'true') {
-      return false;
-    }
-    return true;
-  });
 
   const { teamState, updateTeamSync } = useTeamSync(gameId, team || state.team);
   const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
@@ -112,21 +105,6 @@ export default function PlayerApp() {
     return <Hexagon className={className} />;
   };
 
-  const getBgColors = (phase: Phase) => {
-    switch(phase) {
-      case 'Selección': return { bg1: 'bg-kreatum-blue/10 dark:bg-kreatum-blue/20', bg2: 'bg-kreatum-turquoise/10 dark:bg-kreatum-turquoise/10' };
-      case 'Calcinar': return { bg1: 'bg-kreatum-red/10 dark:bg-kreatum-red/20', bg2: 'bg-kreatum-orange/10 dark:bg-kreatum-orange/10' };
-      case 'Diluir': return { bg1: 'bg-kreatum-turquoise/10 dark:bg-kreatum-turquoise/20', bg2: 'bg-kreatum-blue/10 dark:bg-kreatum-blue/10' };
-      case 'Conjugar': return { bg1: 'bg-kreatum-purple/10 dark:bg-kreatum-purple/20', bg2: 'bg-kreatum-blue/10 dark:bg-kreatum-blue/10' };
-      case 'Sublimar': return { bg1: 'bg-kreatum-red/10 dark:bg-kreatum-red/20', bg2: 'bg-black/10 dark:bg-white/5' };
-      case 'Fermentar': return { bg1: 'bg-kreatum-green/10 dark:bg-kreatum-green/20', bg2: 'bg-kreatum-turquoise/10 dark:bg-kreatum-turquoise/10' };
-      case 'Proyectar': return { bg1: 'bg-amber-500/10 dark:bg-amber-500/20', bg2: 'bg-kreatum-purple/10 dark:bg-kreatum-purple/10' };
-      default: return { bg1: 'bg-kreatum-purple/10 dark:bg-kreatum-purple/20', bg2: 'bg-kreatum-orange/10 dark:bg-kreatum-orange/10' };
-    }
-  };
-
-  const { bg1, bg2 } = getBgColors(state.currentPhase);
-
   // Evitar parpadeo de Selección al recargar con sesión activa
   const isRecoveringSession = gameId && team && isGlobalLoading;
 
@@ -139,44 +117,33 @@ export default function PlayerApp() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark text-kreatum-gray dark:text-white transition-colors duration-500 font-sans">
-      <div className="grain-overlay" />
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[linear-gradient(180deg,#f8fafc_0%,#eef3f8_100%)] text-kreatum-gray transition-colors duration-300 dark:bg-[linear-gradient(180deg,#0d0f15_0%,#090a0e_100%)] dark:text-white font-sans">
       
-      {/* Hero Video Splash */}
-      {showSplash && <HeroSplash onDismiss={() => {
-        setShowSplash(false);
-        localStorage.setItem('kreatum_splash_seen', 'true');
-      }} />}
-
-      {/* Immersive background orbs - Refined for senior depth */}
-      <div className={cn("fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[200px] pointer-events-none z-0 transition-colors duration-1000 opacity-30", bg1)}></div>
-      <div className={cn("fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[200px] pointer-events-none z-0 transition-colors duration-1000 opacity-30", bg2)}></div>
-
       {/* Header */}
-      <header className="bg-white/60 dark:bg-black/60 backdrop-blur-3xl border-b border-black/5 dark:border-white/10 sticky top-0 z-20 transition-colors duration-500">
+      <header className="sticky top-0 z-20 border-b border-black/[0.06] bg-white/[0.92] backdrop-blur-md transition-colors duration-300 dark:border-white/[0.08] dark:bg-[#0f1117]/95">
 
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative group">
               <img 
                 src="/logo.png" 
                 alt="Kreatum Logo" 
-                className="h-10 w-auto object-contain transition-transform duration-500 group-hover:scale-105" 
+                className="h-9 w-auto object-contain" 
               />
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             {gameId && (
-              <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
-                <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Sala:</span>
+              <div className="hidden md:flex h-9 items-center gap-2 rounded-xl border border-black/[0.06] bg-black/[0.03] px-3 dark:border-white/[0.08] dark:bg-white/[0.04]">
+                <span className="text-xs font-semibold text-kreatum-gray/55 dark:text-white/45">Sala</span>
                 <span className="font-mono font-bold text-kreatum-purple">{roomCode || '---'}</span>
               </div>
             )}
             
             <button
               onClick={() => setIsDark(!isDark)}
-              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-kreatum-gray dark:text-white/60 focus:outline-none"
+              className="p-2 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-kreatum-gray dark:text-white/60 focus:outline-none"
               aria-label="Toggle Theme"
             >
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -194,7 +161,7 @@ export default function PlayerApp() {
             )}
 
             {state.team && state.currentPhase !== 'Selección' && (
-              <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium backdrop-blur-md", getTeamColor(state.team))}>
+              <div className={cn("flex h-9 items-center gap-2 rounded-xl border px-3 text-sm font-semibold", getTeamColor(state.team))}>
                 <TeamIcon team={state.team} className="w-4 h-4" />
                 Equipo {state.team}
               </div>
@@ -204,9 +171,9 @@ export default function PlayerApp() {
         
         {/* Progress Stepper — desktop: full labels, mobile: compact dots */}
         {state.currentPhase !== 'Selección' && (
-          <div className="bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5 transition-colors duration-300">
+          <div className="border-t border-black/[0.06] bg-white/70 transition-colors duration-300 dark:border-white/[0.08] dark:bg-white/[0.03]">
             {/* Desktop stepper */}
-            <div className="hidden md:flex max-w-7xl mx-auto px-6 lg:px-8 py-3 items-center gap-6 text-[10px] uppercase tracking-widest font-semibold whitespace-nowrap overflow-x-auto">
+            <div className="hidden md:flex max-w-7xl mx-auto px-6 lg:px-8 py-3 items-center gap-5 text-xs font-semibold whitespace-nowrap overflow-x-auto">
               {PHASES.slice(1).map((phase, idx) => {
                 const isActive = phase === state.currentPhase;
                 const isPassed = PHASES.indexOf(phase) < currentIndex;
@@ -216,10 +183,10 @@ export default function PlayerApp() {
                     isActive ? "text-kreatum-purple" : isPassed ? "text-kreatum-gray dark:text-white/60" : "text-kreatum-gray-light/60 dark:text-white/30"
                   )}>
                     <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all",
-                      isActive ? "bg-kreatum-purple/20 text-kreatum-purple border border-kreatum-purple/50 shadow-[0_0_15px_rgba(162,84,156,0.3)]" : isPassed ? "bg-black/10 dark:bg-white/10 text-kreatum-gray dark:text-white/80" : "bg-black/5 dark:bg-white/5 text-kreatum-gray-light dark:text-white/30"
+                      "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors border",
+                      isActive ? "bg-kreatum-purple text-white border-kreatum-purple" : isPassed ? "bg-white dark:bg-white/[0.08] text-kreatum-gray dark:text-white/80 border-black/[0.08] dark:border-white/[0.08]" : "bg-transparent text-kreatum-gray-light dark:text-white/30 border-black/[0.08] dark:border-white/[0.08]"
                     )}>
-                      {isPassed ? <span className="text-[8px]">✓</span> : idx + 1}
+                      {isPassed ? <span className="text-[10px]">✓</span> : idx + 1}
                     </div>
                     <span className="hidden lg:block">{phase}</span>
                   </div>
@@ -227,14 +194,14 @@ export default function PlayerApp() {
               })}
             </div>
             {/* Mobile stepper: compact progress bar + current phase name */}
-            <div className="md:hidden flex items-center gap-3 px-4 py-2">
+            <div className="md:hidden flex items-center gap-3 px-4 py-2.5">
               <div className="flex-1 h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-kreatum-purple rounded-full transition-all duration-500"
                   style={{ width: `${Math.round((currentIndex / (PHASES.length - 1)) * 100)}%` }}
                 />
               </div>
-              <span className="text-[10px] font-mono font-bold text-kreatum-purple whitespace-nowrap">
+              <span className="text-xs font-bold text-kreatum-purple whitespace-nowrap">
                 {currentIndex}/{PHASES.length - 1} &middot; {state.currentPhase}
               </span>
             </div>
@@ -242,40 +209,38 @@ export default function PlayerApp() {
         )}
       </header>
 
-      {/* Premium Challenge Banner */}
+      {/* Challenge Banner */}
       {challenge && state.team && !['Selección', 'Calcinar', 'Diluir'].includes(state.currentPhase) && (
-        <div className="sticky top-[80px] z-20 px-4 md:px-6 py-3 pointer-events-none">
+        <div className="sticky top-16 z-20 px-4 md:px-6 py-3 pointer-events-none">
           <div className="max-w-7xl mx-auto flex justify-end">
             <motion.div 
-              initial={{ x: 50, opacity: 0 }}
+              initial={{ x: 16, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              className="pointer-events-auto relative group"
+              transition={{ duration: 0.25 }}
+              className="pointer-events-auto"
             >
-              {/* Glow */}
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-kreatum-purple to-kreatum-turquoise rounded-[2rem] blur opacity-20 group-hover:opacity-40 transition duration-500" />
-              
               {/* Mobile: compact pill */}
-              <div className="md:hidden relative flex items-center gap-3 pl-4 pr-3 py-2 bg-white/90 dark:bg-black/70 backdrop-blur-xl rounded-full border border-white/20 dark:border-white/10 shadow-xl shadow-kreatum-purple/10">
-                <div className="w-6 h-6 bg-gradient-to-br from-kreatum-purple to-kreatum-purple-dark rounded-full flex items-center justify-center shrink-0">
+              <div className="md:hidden relative flex items-center gap-3 pl-4 pr-3 py-2 bg-white/95 dark:bg-[#11141b] rounded-xl border border-black/[0.08] dark:border-white/[0.08] shadow-[0_14px_30px_-24px_rgba(16,47,64,0.55)]">
+                <div className="w-6 h-6 bg-kreatum-purple rounded-lg flex items-center justify-center shrink-0">
                   <Hexagon className="w-3 h-3 text-white" />
                 </div>
-                <p className="text-xs font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-90 max-w-[160px] line-clamp-1">
+                <p className="text-xs font-semibold text-kreatum-dark dark:text-white leading-tight max-w-[180px] line-clamp-1">
                   "{challenge}"
                 </p>
               </div>
 
               {/* Desktop: full pill */}
-              <div className="hidden md:flex relative items-center gap-6 pl-8 pr-4 py-2.5 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-[2rem] border border-white/20 dark:border-white/10 shadow-2xl shadow-kreatum-purple/10">
+              <div className="hidden md:flex relative items-center gap-4 pl-5 pr-4 py-3 bg-white/95 dark:bg-[#11141b] rounded-2xl border border-black/[0.08] dark:border-white/[0.08] shadow-[0_16px_36px_-28px_rgba(16,47,64,0.6)]">
                 <div className="flex flex-col items-end">
-                  <span className="text-[9px] font-mono uppercase tracking-[0.3em] text-kreatum-purple/70 font-black mb-1">
+                  <span className="text-xs font-bold text-kreatum-purple/80 mb-1">
                     Reto Activo
                   </span>
-                  <p className="text-base font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-90 text-right max-w-[300px] line-clamp-2">
+                  <p className="text-sm font-semibold text-kreatum-dark dark:text-white leading-snug text-right max-w-[360px] line-clamp-2">
                     "{challenge}"
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-kreatum-purple to-kreatum-purple-dark rounded-full flex items-center justify-center shadow-lg shadow-kreatum-purple/20 shrink-0">
-                  <Hexagon className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 bg-kreatum-purple rounded-xl flex items-center justify-center shrink-0">
+                  <Hexagon className="w-5 h-5 text-white" />
                 </div>
               </div>
             </motion.div>
@@ -284,14 +249,14 @@ export default function PlayerApp() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-12 relative z-10">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-10 md:py-12 relative z-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={state.currentPhase}
-            initial={{ opacity: 0, y: 40, filter: 'blur(10px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -40, filter: 'blur(10px)' }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
             className="reveal-cascade"
           >
 
@@ -308,11 +273,11 @@ export default function PlayerApp() {
 
       {/* Footer / Status */}
       {state.team && !state.isFinished && (
-        <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-t border-black/5 dark:border-white/5 mt-auto relative z-20 transition-colors duration-300">
+        <footer className="bg-white/[0.88] dark:bg-[#0f1117]/[0.92] border-t border-black/[0.06] dark:border-white/[0.08] mt-auto relative z-20 transition-colors duration-300">
 
-          <div className="max-w-4xl mx-auto px-4 py-5 flex items-center justify-center">
-            <div className="px-5 py-2 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-center">
-              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-kreatum-purple font-black">
+          <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-center">
+            <div className="px-5 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] text-center">
+              <p className="text-xs font-bold text-kreatum-purple">
                 Fase controlada por el Alquimista
               </p>
               <p className="text-sm text-kreatum-gray/60 dark:text-white/50 mt-1">

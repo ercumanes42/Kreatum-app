@@ -263,19 +263,19 @@ export function GameHistory() {
         </div>
 
         {/* Game header */}
-        <div className="bg-white/50 dark:bg-white/5 backdrop-blur-xl rounded-[28px] border border-black/5 dark:border-white/5 p-8">
+        <div className="bg-white/90 dark:bg-white/[0.04] rounded-2xl border border-black/[0.06] dark:border-white/[0.08] p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl font-bold font-mono text-kreatum-purple tracking-wider">{selectedGame.roomCode}</span>
                 <span className={cn(
-                  "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                  "px-3 py-1 rounded-lg text-xs font-bold",
                   selectedGame.status === 'completed' ? "bg-green-500/10 text-green-600" : "bg-amber-500/10 text-amber-600"
                 )}>
                   {selectedGame.status === 'completed' ? 'Completada' : 'Activa'}
                 </span>
               </div>
-              <p className="text-sm font-mono text-kreatum-gray/60 dark:text-white/50">
+              <p className="text-sm font-medium text-kreatum-gray/60 dark:text-white/50">
                 {formatDate(selectedGame.createdAt)}
                 {selectedGame.completedAt && ` → ${formatDate(selectedGame.completedAt)}`}
               </p>
@@ -344,7 +344,7 @@ export function GameHistory() {
                             { label: 'Pitch - Acción', value: data.pitchAction },
                           ].filter(item => item.value).map(item => (
                             <div key={item.label} className="bg-black/[0.03] dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/5">
-                              <p className="text-[10px] font-mono uppercase tracking-widest opacity-50 mb-1.5">{item.label}</p>
+                              <p className="text-xs font-bold opacity-55 mb-1.5">{item.label}</p>
                               <p className="text-sm leading-relaxed">{item.value}</p>
                             </div>
                           ))}
@@ -374,8 +374,8 @@ export function GameHistory() {
             <History className="w-6 h-6 text-kreatum-purple" />
           </div>
           <div>
-            <h2 className="text-2xl font-serif font-light tracking-tight text-kreatum-dark dark:text-white">Historial de Partidas</h2>
-            <p className="text-xs font-mono text-kreatum-gray/50 dark:text-white/40 uppercase tracking-widest">{games.length} partidas registradas</p>
+            <h2 className="text-2xl font-extrabold tracking-normal text-kreatum-dark dark:text-white">Historial de Partidas</h2>
+            <p className="text-sm font-medium text-kreatum-gray/55 dark:text-white/45">{games.length} partidas registradas</p>
           </div>
         </div>
         <Button variant="outline" className="rounded-xl gap-2 h-10" onClick={exportAllToCSV} disabled={filteredGames.length === 0}>
@@ -392,7 +392,7 @@ export function GameHistory() {
             placeholder="Buscar por código de sala o ID..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 h-11 rounded-xl bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 text-sm font-mono outline-none focus:ring-2 focus:ring-kreatum-purple/30 transition-all"
+            className="w-full pl-11 pr-4 h-11 rounded-xl bg-white dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] text-sm font-medium outline-none focus:ring-2 focus:ring-kreatum-purple/25 focus:border-kreatum-purple/35 transition-colors"
           />
         </div>
         <div className="flex gap-1 p-1 bg-white dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/10">
@@ -416,10 +416,10 @@ export function GameHistory() {
       {isLoading ? (
         <div className="text-center py-20">
           <div className="w-8 h-8 border-2 border-kreatum-purple/30 border-t-kreatum-purple rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm font-mono text-kreatum-gray/50">Cargando partidas...</p>
+          <p className="text-sm font-medium text-kreatum-gray/50">Cargando partidas...</p>
         </div>
       ) : filteredGames.length === 0 ? (
-        <div className="text-center py-20 bg-white/30 dark:bg-white/5 rounded-[28px] border border-black/5 dark:border-white/5">
+        <div className="text-center py-20 bg-white/75 dark:bg-white/[0.04] rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
           <History className="w-12 h-12 text-kreatum-gray/20 dark:text-white/10 mx-auto mb-4" />
           <p className="text-kreatum-gray/50 dark:text-white/30 font-medium">No se encontraron partidas</p>
           <p className="text-xs text-kreatum-gray/30 dark:text-white/20 mt-1">Intenta con otros filtros</p>
@@ -435,16 +435,16 @@ export function GameHistory() {
             >
               <button
                 onClick={() => setSelectedGame(game)}
-                className="w-full bg-white/50 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-black/5 dark:border-white/5 p-5 flex items-center justify-between gap-4 hover:shadow-lg hover:border-kreatum-purple/20 transition-all group text-left"
+                className="w-full bg-white/90 dark:bg-white/[0.04] rounded-2xl border border-black/[0.06] dark:border-white/[0.08] p-5 flex items-center justify-between gap-4 hover:border-kreatum-purple/25 transition-colors group text-left"
               >
                 <div className="flex items-center gap-5 min-w-0">
                   <div className="shrink-0 w-24 h-14 bg-kreatum-purple/10 rounded-2xl flex items-center justify-center">
-                    <span className="text-lg font-bold font-mono text-kreatum-purple tracking-widest">{game.roomCode}</span>
+                    <span className="text-lg font-bold font-mono text-kreatum-purple tracking-wider">{game.roomCode}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={cn(
-                        "px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest",
+                        "px-2 py-0.5 rounded-md text-xs font-bold",
                         game.status === 'completed' ? "bg-green-500/10 text-green-600" : "bg-amber-500/10 text-amber-600"
                       )}>
                         {game.status === 'completed' ? 'Completada' : 'Activa'}
@@ -478,7 +478,7 @@ export function GameHistory() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="rounded-xl gap-1.5 h-8 text-[10px] font-bold border-amber-500/30 text-amber-600 hover:bg-amber-500/10 hover:border-amber-500/50 uppercase tracking-wider"
+                      className="rounded-xl gap-1.5 h-8 text-xs font-bold border-amber-500/30 text-amber-600 hover:bg-amber-500/10 hover:border-amber-500/50"
                       onClick={(e) => finalizeGame(game.id, e)}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />

@@ -103,17 +103,12 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center"
-        style={{ backgroundColor: 'rgba(5,5,5,0.95)' }}
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-[#090a0e]/95"
       >
-        {/* Animated glow orbs */}
-        <div className="absolute top-[-200px] left-[-200px] w-[600px] h-[600px] bg-kreatum-purple/20 rounded-full blur-[200px] pointer-events-none animate-pulse" />
-        <div className="absolute bottom-[-200px] right-[-200px] w-[500px] h-[500px] bg-kreatum-turquoise/15 rounded-full blur-[180px] pointer-events-none" />
-
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-8 right-8 z-[110] p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all group"
+          className="absolute top-6 right-6 z-[110] p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] transition-colors group"
           aria-label="Cerrar"
         >
           <X className="w-6 h-6 text-white/60 group-hover:text-white transition-colors" />
@@ -125,24 +120,23 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
 
             {/* Hero section */}
             <motion.div
-              initial={{ opacity: 0, y: 40, scale: 0.9 }}
+              initial={{ opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="text-center mb-16 max-w-2xl"
+              transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
+              className="text-center mb-12 max-w-2xl"
             >
               <motion.div
-                initial={{ scale: 0 }}
+                initial={{ scale: 0.94, opacity: 0 }}
                 animate={{ scale: 1 }}
-                transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
-                className="w-28 h-28 mx-auto mb-10 relative"
+                transition={{ delay: 0.1, duration: 0.25 }}
+                className="w-24 h-24 mx-auto mb-8 relative"
               >
-                <div className="absolute inset-0 bg-kreatum-purple/30 rounded-[32px] blur-xl animate-pulse" />
-                <div className="relative w-full h-full bg-gradient-to-br from-kreatum-purple to-kreatum-turquoise rounded-[32px] flex items-center justify-center shadow-2xl shadow-kreatum-purple/40 overflow-hidden">
+                <div className="relative w-full h-full bg-kreatum-purple rounded-2xl flex items-center justify-center shadow-[0_18px_40px_-26px_rgba(162,84,156,0.85)] overflow-hidden">
                   {state.team ? (
                     <img 
                       src={`/assets/logos/${state.team.toLowerCase()}.png`} 
                       alt={state.team}
-                      className="w-20 h-20 object-contain drop-shadow-2xl" 
+                      className="w-16 h-16 object-contain" 
                     />
                   ) : (
                     <Trophy className="w-14 h-14 text-white" />
@@ -153,8 +147,8 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="text-6xl md:text-7xl font-light tracking-tighter text-white font-serif mb-6"
+                transition={{ delay: 0.2 }}
+                className="text-4xl md:text-5xl font-extrabold tracking-normal text-white mb-5"
               >
                 ¡Enhorabuena!
               </motion.h1>
@@ -163,12 +157,12 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.7 }}
+                transition={{ delay: 0.25 }}
                 className="flex items-center justify-center gap-4 mb-6"
               >
                 <div className="h-px w-16 bg-gradient-to-r from-transparent to-kreatum-purple/50" />
                 <Sparkles className="w-5 h-5 text-kreatum-purple" />
-                <span className="text-sm font-mono uppercase tracking-[0.3em] text-kreatum-purple">
+                <span className="text-sm font-bold text-kreatum-purple">
                   Equipo {state.team || '—'}
                 </span>
                 <Sparkles className="w-5 h-5 text-kreatum-purple" />
@@ -178,8 +172,8 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.9 }}
-                className="text-white/40 text-sm font-mono"
+                transition={{ delay: 0.3 }}
+                className="text-white/45 text-sm font-medium"
               >
                 {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </motion.p>
@@ -189,26 +183,26 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.0 }}
+              transition={{ delay: 0.35 }}
               className="w-full max-w-2xl space-y-4 mb-16"
             >
               {sections.map((section, idx) => (
                 <motion.div
                   key={section.key}
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 1.1 + idx * 0.1 }}
+                  transition={{ delay: 0.4 + idx * 0.04 }}
                 >
                   <button
                     onClick={() => toggleSection(section.key)}
-                    className="w-full text-left p-5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.12] transition-all group"
+                    className="w-full text-left p-5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] hover:border-white/[0.14] transition-colors group"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className={`w-8 h-8 rounded-xl ${SECTION_COLORS[section.color]?.bg || 'bg-white/10'} flex items-center justify-center`}>
                           <CheckCircle2 className={`w-4 h-4 ${SECTION_COLORS[section.color]?.text || 'text-white'}`} />
                         </div>
-                        <span className="text-sm font-bold text-white/90 uppercase tracking-wide">
+                        <span className="text-sm font-bold text-white/90">
                           {section.title}
                         </span>
                       </div>
@@ -230,7 +224,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                           <div className="pt-5 mt-4 border-t border-white/5 space-y-3">
                             {section.items.map((item, i) => (
                               <div key={i} className="flex flex-col gap-1">
-                                <span className="text-[10px] font-mono uppercase tracking-widest text-white/30">
+                                <span className="text-xs font-bold text-white/35">
                                   {item.label}
                                 </span>
                                 <span className="text-sm text-white/70 leading-relaxed">
@@ -251,7 +245,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.6 }}
+              transition={{ delay: 0.55 }}
               className="flex justify-center mb-20"
             >
               <Button
@@ -260,7 +254,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
                   sounds.playSuccess();
                   onClose();
                 }}
-                className="px-12 flex gap-3 items-center rounded-2xl h-14 bg-gradient-to-r from-kreatum-purple to-kreatum-purple-dark hover:from-kreatum-purple-dark hover:to-kreatum-purple text-white shadow-xl shadow-kreatum-purple/30 text-base"
+                className="px-10 flex gap-3 items-center rounded-xl h-14 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white text-base"
               >
                 <CheckCircle2 className="w-5 h-5" />
                 Cerrar Resumen

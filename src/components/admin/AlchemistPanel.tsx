@@ -19,6 +19,8 @@ import {
   History,
   FileSpreadsheet,
   Shield,
+  LockKeyhole,
+  UnlockKeyhole,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { GameHistory } from './GameHistory';
@@ -150,55 +152,55 @@ export function AlchemistPanel({ gameId }: Props) {
   const isDefenseUnlocked = globalState?.sublimarDefenseUnlocked === true;
 
   return (
-    <div className="min-h-screen bg-kreatum-bg-light dark:bg-kreatum-bg-dark p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-12">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef3f8_100%)] dark:bg-[linear-gradient(180deg,#0d0f15_0%,#090a0e_100%)] p-4 sm:p-6 lg:p-8 font-sans">
+      <div className="max-w-7xl mx-auto space-y-8">
         
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <header className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-kreatum-purple rounded-3xl flex items-center justify-center shadow-xl transform -rotate-3">
-              <LayoutDashboard className="w-8 h-8 text-white" />
+            <div className="w-14 h-14 bg-kreatum-purple rounded-2xl flex items-center justify-center shadow-[0_16px_34px_-24px_rgba(162,84,156,0.85)]">
+              <LayoutDashboard className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif">Panel del Alquimista</h1>
-              <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/60 uppercase tracking-widest">Moderador Maestro de Kreatum</p>
+              <h1 className="text-3xl font-extrabold tracking-normal text-kreatum-dark dark:text-white">Panel del Alquimista</h1>
+              <p className="text-sm font-medium text-kreatum-gray/65 dark:text-white/55">Control del workshop y avance de fases</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-4 bg-white/50 dark:bg-white/5 backdrop-blur-xl p-2 rounded-2xl border border-black/5 dark:border-white/5">
+          <div className="flex flex-wrap items-center gap-3 bg-white/90 dark:bg-white/[0.04] p-2 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
             <button 
               className={cn(
-                "px-4 py-2 rounded-xl transition-all group flex flex-col items-center justify-center min-w-[120px]",
-                copied ? "bg-green-500/20 text-green-600" : "bg-kreatum-purple/10 hover:bg-kreatum-purple/20"
+                "px-4 py-2 rounded-xl transition-colors group flex flex-col items-center justify-center min-w-[126px]",
+                copied ? "bg-green-500/15 text-green-600" : "bg-kreatum-purple/10 hover:bg-kreatum-purple/15"
               )}
               onClick={handleCopyCode}
               title="Haz clic para copiar"
             >
-               <p className="text-[10px] font-mono uppercase tracking-widest opacity-60 mb-0.5">
+               <p className="text-xs font-bold opacity-65 mb-0.5">
                  {copied ? "¡Copiado!" : "Código de Sala"}
                </p>
                <p className={cn(
-                 "text-xl font-bold font-mono tracking-wider transition-transform",
-                 copied ? "scale-105" : "text-kreatum-purple group-hover:scale-105"
+                 "text-xl font-bold font-mono tracking-wider",
+                 copied ? "" : "text-kreatum-purple"
                )}>
                  {roomCode || '---'}
                </p>
             </button>
             <div className="h-10 w-px bg-black/10 dark:bg-white/10" />
-            <div className="flex items-center gap-2 px-2">
+            <div className="flex h-10 items-center gap-2 px-2">
               <Timer className="w-5 h-5 text-kreatum-purple" />
-              <span className="font-mono text-lg font-bold px-2 opacity-40">—:—:—</span>
+              <span className="font-mono text-base font-bold px-2 opacity-45">—:—:—</span>
             </div>
             <Button size="sm" variant="ghost" className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={leaveGame}>Salir</Button>
           </div>
         </header>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 p-1 bg-white/50 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5 w-fit">
+        <div className="flex gap-1 p-1 bg-white/90 dark:bg-white/[0.04] rounded-xl border border-black/[0.06] dark:border-white/[0.08] w-fit">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={cn(
-              "px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+              "px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
               activeTab === 'dashboard'
                 ? "bg-kreatum-purple text-white shadow-sm"
                 : "text-kreatum-gray/50 hover:text-kreatum-gray dark:text-white/40"
@@ -210,7 +212,7 @@ export function AlchemistPanel({ gameId }: Props) {
           <button
             onClick={() => setActiveTab('history')}
             className={cn(
-              "px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+              "px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
               activeTab === 'history'
                 ? "bg-kreatum-purple text-white shadow-sm"
                 : "text-kreatum-gray/50 hover:text-kreatum-gray dark:text-white/40"
@@ -226,12 +228,12 @@ export function AlchemistPanel({ gameId }: Props) {
           <GameHistory />
         ) : (
           <>
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-6">
           
           {/* Phase Control */}
-          <Card className="lg:col-span-1 border-kreatum-purple/20 bg-kreatum-purple/5">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
-              <CardTitle className="text-xl font-serif text-kreatum-purple">Control de Fases</CardTitle>
+          <Card className="lg:col-span-1 border-kreatum-purple/20 bg-kreatum-purple/[0.04]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-5">
+              <CardTitle className="text-lg text-kreatum-purple">Control de Fases</CardTitle>
               <Settings className="w-5 h-5 text-kreatum-purple opacity-50" />
             </CardHeader>
             <CardContent className="space-y-3">
@@ -243,19 +245,19 @@ export function AlchemistPanel({ gameId }: Props) {
                     <button
                       onClick={() => setGlobalPhase(phase)}
                       className={cn(
-                        "w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border",
+                        "w-full flex items-center justify-between p-3.5 rounded-xl transition-colors duration-200 border text-left",
                         isActive 
-                          ? "bg-kreatum-purple text-white border-kreatum-purple shadow-lg scale-[1.02] z-10" 
+                          ? "bg-kreatum-purple text-white border-kreatum-purple" 
                           : isPast 
-                            ? "bg-white dark:bg-white/5 text-kreatum-purple border-kreatum-purple/20 opacity-70"
-                            : "bg-white dark:bg-white/5 text-kreatum-gray/60 border-black/5 dark:border-white/5 hover:border-kreatum-purple/30"
+                            ? "bg-white dark:bg-white/[0.04] text-kreatum-purple border-kreatum-purple/20"
+                            : "bg-white dark:bg-white/[0.04] text-kreatum-gray/65 border-black/[0.06] dark:border-white/[0.08] hover:border-kreatum-purple/30"
                       )}
                     >
                       <div className="flex items-center gap-3">
                         <span className="w-6 h-6 rounded-full flex items-center justify-center border border-current text-[10px] font-bold">
                           {idx + 1}
                         </span>
-                        <span className="font-medium tracking-tight">{phase}</span>
+                        <span className="font-semibold tracking-normal">{phase}</span>
                       </div>
                       {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? (
                         <div className="flex items-center gap-2">
@@ -275,18 +277,20 @@ export function AlchemistPanel({ gameId }: Props) {
                               )}
                               title={unlockedPhases.includes(PHASES[idx+1]) ? "Siguiente fase ya abierta" : "Avanzar a la siguiente fase"}
                             >
-                              {unlockedPhases.includes(PHASES[idx+1]) ? '🔓' : '🔒'}
+                              {unlockedPhases.includes(PHASES[idx+1])
+                                ? <UnlockKeyhole className="w-4 h-4" />
+                                : <LockKeyhole className="w-4 h-4" />}
                             </div>
                           )}
-                          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                          <div className="w-2 h-2 rounded-full bg-white" />
                         </div>
                       ) : (idx >= 2 && !unlockedPhases.includes(phase)) ? (
                         <div 
                           onClick={(e) => { e.stopPropagation(); unlockPhase(phase); }}
-                          className="text-white hover:scale-110 transition-transform p-1 hover:bg-kreatum-purple/20 rounded-md cursor-pointer"
+                          className="text-kreatum-purple hover:text-kreatum-purple-dark transition-colors p-1 hover:bg-kreatum-purple/10 rounded-md cursor-pointer"
                           title="Avanzar a esta fase"
                         >
-                          🔒
+                          <LockKeyhole className="w-4 h-4" />
                         </div>
                       ) : (
                         <ChevronRight className="w-4 h-4 opacity-30" />
@@ -305,10 +309,10 @@ export function AlchemistPanel({ gameId }: Props) {
                           onClick={(e) => { e.stopPropagation(); if (!isDefenseUnlocked) unlockDefense(); }}
                           disabled={isDefenseUnlocked}
                           className={cn(
-                            "w-full rounded-xl text-xs h-10 shadow-lg",
+                            "w-full rounded-xl text-sm h-10",
                             isDefenseUnlocked 
                               ? "bg-kreatum-blue/30 text-kreatum-blue cursor-default shadow-none"
-                              : "bg-kreatum-blue hover:bg-kreatum-blue/90 text-white shadow-kreatum-blue/20"
+                              : "bg-kreatum-blue hover:bg-kreatum-blue/90 text-white"
                           )}
                         >
                           <Shield className="w-4 h-4 mr-2" />
@@ -318,7 +322,7 @@ export function AlchemistPanel({ gameId }: Props) {
                         {!unlockedPhases.includes('Fermentar') && (
                           <Button 
                             onClick={(e) => { e.stopPropagation(); unlockPhase('Fermentar'); }}
-                            className="w-full bg-kreatum-green hover:bg-kreatum-green/90 text-white rounded-xl text-xs h-10 shadow-lg shadow-kreatum-green/20"
+                            className="w-full bg-kreatum-green hover:bg-kreatum-green/90 text-white rounded-xl text-sm h-10"
                           >
                             <ChevronRight className="w-4 h-4 mr-2" />
                             Avanzar a Fermentar (Fase 5)
@@ -334,19 +338,19 @@ export function AlchemistPanel({ gameId }: Props) {
 
           {/* Teams Status */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-2xl font-serif flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+              <h2 className="text-2xl font-extrabold flex items-center gap-3 text-kreatum-dark dark:text-white">
                 <Users className="w-6 h-6 text-kreatum-purple" />
                 Estado de los Equipos
               </h2>
               <div className="flex gap-4">
-                 <span className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest opacity-50">
+                 <span className="flex items-center gap-2 text-xs font-semibold opacity-60">
                    <div className="w-2 h-2 rounded-full bg-kreatum-green" /> Conectados
                  </span>
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-6">
+            <div className="grid sm:grid-cols-2 gap-5">
               {(['Agua', 'Aire', 'Fuego', 'Tierra'] as Team[]).map((teamId) => {
                 const data = teams[teamId];
                 const config = TEAM_CONFIG[teamId];
@@ -354,7 +358,7 @@ export function AlchemistPanel({ gameId }: Props) {
                 const progress = getTeamProgress(data);
                 
                 return (
-                  <Card key={teamId} className={cn("overflow-hidden border-black/5 dark:border-white/5 transition-all duration-500 hover:shadow-2xl", data ? "opacity-100" : "opacity-40 grayscale")}>
+                  <Card key={teamId} className={cn("overflow-hidden border-black/[0.06] dark:border-white/[0.08] transition-colors duration-200", data ? "opacity-100" : "opacity-45 grayscale")}>
                     <div className={cn("h-2 w-full", barColor)} />
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
@@ -371,7 +375,7 @@ export function AlchemistPanel({ gameId }: Props) {
                     </CardHeader>
                     <CardContent className="space-y-4 pt-4">
                       <div className="space-y-1">
-                        <div className="flex justify-between text-xs font-mono uppercase tracking-widest opacity-60 mb-2">
+                        <div className="flex justify-between text-xs font-bold opacity-60 mb-2">
                           <span>Progreso</span>
                           <span>{progress}%</span>
                         </div>
@@ -386,17 +390,17 @@ export function AlchemistPanel({ gameId }: Props) {
 
                       <div className="grid grid-cols-2 gap-3">
                          <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
-                            <p className="text-[10px] font-mono uppercase tracking-widest opacity-50 mb-1">Fase Actual</p>
+                            <p className="text-xs font-bold opacity-55 mb-1">Fase Actual</p>
                             <p className="text-sm font-bold truncate">{data?.currentPhase || 'Selección'}</p>
                          </div>
                          <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
-                            <p className="text-[10px] font-mono uppercase tracking-widest opacity-50 mb-1">Ataques</p>
+                            <p className="text-xs font-bold opacity-55 mb-1">Ataques</p>
                             <p className="text-sm font-bold">{attackCounts[teamId] || 0} enviados</p>
                          </div>
                       </div>
 
                       <div className="bg-black/5 dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/5">
-                        <p className="text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">Solución Definitiva</p>
+                        <p className="text-xs font-bold opacity-55 mb-2">Solución Definitiva</p>
                         <div className="flex justify-between items-start gap-4">
                           <p className="text-sm italic line-clamp-2 leading-relaxed flex-1">
                             {data?.reformulatedSolution || data?.selectedSolution || <span className="opacity-30">Aún no definida...</span>}
@@ -404,7 +408,7 @@ export function AlchemistPanel({ gameId }: Props) {
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="shrink-0 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
+                            className="shrink-0 h-8 px-3 text-xs font-bold border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
                             onClick={() => setSummaryTeam(teamId)}
                           >
                             <Sparkles className="w-3 h-3 mr-1" />
@@ -430,20 +434,20 @@ export function AlchemistPanel({ gameId }: Props) {
 
         {/* Finalize Modal */}
         {showFinalizeModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white dark:bg-kreatum-bg-dark p-8 rounded-[32px] max-w-md w-full shadow-2xl border border-kreatum-purple/20"
+              className="bg-white dark:bg-kreatum-bg-dark p-7 rounded-2xl max-w-md w-full shadow-[0_24px_60px_-34px_rgba(0,0,0,0.75)] border border-kreatum-purple/20"
             >
-              <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">Finalizar Workshop</h2>
+              <h2 className="text-2xl font-extrabold text-center mb-2 text-kreatum-dark dark:text-white">Finalizar Workshop</h2>
               <p className="text-sm text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
                 ¿Seguro que quieres finalizar el workshop? Esto marcará la sesión como completada para todos los equipos.
               </p>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 py-4" onClick={() => setShowFinalizeModal(false)}>Cancelar</Button>
                 <Button 
-                  className="flex-1 py-4 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-lg shadow-kreatum-purple/20"
+                  className="flex-1 py-4 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white"
                   onClick={handleFinalize}
                 >
                   Sí, Finalizar
@@ -454,21 +458,21 @@ export function AlchemistPanel({ gameId }: Props) {
         )}
 
         {/* Action Bar */}
-        <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl p-6 rounded-[32px] border border-black/5 dark:border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
+        <footer className="bg-white/90 dark:bg-white/[0.04] p-5 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+          <div className="flex items-start gap-4">
              <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center">
                <ShieldAlert className="w-5 h-5 text-amber-500" />
              </div>
-             <p className="text-sm font-medium text-kreatum-gray/80 dark:text-white/80 max-w-md">
+             <p className="text-sm font-medium leading-relaxed text-kreatum-gray/75 dark:text-white/70 max-w-md">
                Como Alquimista, puedes forzar el cambio de fase para todos los equipos. Úsalo con sabiduría para mantener el ritmo del workshop.
              </p>
           </div>
           
-          <div className="flex gap-4">
-             <Button variant="outline" className="rounded-2xl px-6 h-12" onClick={handleExportJSON} disabled={isExporting}>
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+             <Button variant="outline" className="rounded-xl px-6 h-12 w-full sm:w-auto" onClick={handleExportJSON} disabled={isExporting}>
                {isExporting ? 'Exportando...' : 'Exportar Todo (JSON)'}
              </Button>
-             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-2xl px-8 h-12 shadow-lg shadow-kreatum-purple/20" onClick={() => setShowFinalizeModal(true)}>
+             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-xl px-8 h-12 w-full sm:w-auto" onClick={() => setShowFinalizeModal(true)}>
                Finalizar Workshop
              </Button>
           </div>

@@ -88,36 +88,32 @@ export default function AdminApp() {
   // Authenticated but no active game — show empty state
   if (!gameId) {
     return (
-      <div className="min-h-screen bg-kreatum-bg-light dark:bg-kreatum-bg-dark relative overflow-hidden font-sans">
-        <div className="grain-overlay" />
-        {/* Background orbs */}
-        <div className="fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-purple/10 opacity-30" />
-        <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-blue/10 opacity-30" />
-
+      <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef3f8_100%)] dark:bg-[linear-gradient(180deg,#0d0f15_0%,#090a0e_100%)] relative overflow-hidden font-sans">
         <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
             className="text-center max-w-lg"
           >
-            <div className="w-20 h-20 bg-kreatum-purple rounded-3xl flex items-center justify-center shadow-xl mx-auto mb-8 transform -rotate-3">
-              <LayoutDashboard className="w-10 h-10 text-white" />
+            <div className="w-16 h-16 bg-kreatum-purple rounded-2xl flex items-center justify-center shadow-[0_16px_34px_-24px_rgba(162,84,156,0.85)] mx-auto mb-6">
+              <LayoutDashboard className="w-8 h-8 text-white" />
             </div>
             
-            <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-kreatum-dark dark:text-white leading-none mb-4">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-normal text-kreatum-dark dark:text-white leading-tight mb-3">
               Panel del Alquimista
             </h1>
-            <p className="text-sm font-mono text-kreatum-purple uppercase tracking-[0.3em] font-black mb-12">
+            <p className="text-sm font-bold text-kreatum-purple mb-8">
               No hay ninguna partida activa
             </p>
 
-            <p className="text-kreatum-gray/70 dark:text-white/60 mb-10 leading-relaxed">
+            <p className="text-base font-medium text-kreatum-gray/70 dark:text-white/60 mb-8 leading-relaxed">
               Crea una nueva partida para comenzar el workshop, o revisa el historial de partidas anteriores.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
-                className="px-10 h-14 rounded-2xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-premium btn-premium flex gap-3 items-center text-base"
+                className="px-8 h-12 rounded-xl bg-kreatum-purple hover:bg-kreatum-purple-dark text-white"
                 onClick={() => setShowNewGameModal(true)}
               >
                 <Plus className="w-5 h-5" />
@@ -125,7 +121,7 @@ export default function AdminApp() {
               </Button>
               <Button
                 variant="outline"
-                className="px-8 h-14 rounded-2xl flex gap-3 items-center text-base border-black/10 dark:border-white/10"
+                className="px-8 h-12 rounded-xl border-black/10 dark:border-white/10"
                 onClick={() => setShowHistory(true)}
               >
                 <History className="w-5 h-5" />
@@ -136,14 +132,14 @@ export default function AdminApp() {
             <div className="mt-8 flex flex-col items-center gap-4">
               <button
                 onClick={() => setShowResetModal(true)}
-                className="text-xs font-mono text-red-500/40 hover:text-red-500 transition-colors uppercase tracking-widest border border-red-500/20 px-4 py-2 rounded-lg"
+                className="text-xs font-semibold text-red-500/60 hover:text-red-500 transition-colors border border-red-500/20 px-4 py-2 rounded-lg"
               >
                 Resetear Plataforma (Danger Zone)
               </button>
               
               <button
                 onClick={handleLogout}
-                className="text-xs font-mono text-kreatum-gray/40 hover:text-red-500 transition-colors uppercase tracking-widest"
+                className="text-xs font-semibold text-kreatum-gray/45 hover:text-red-500 transition-colors"
               >
                 Cerrar Sesión
               </button>
@@ -216,26 +212,26 @@ function ResetModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white dark:bg-kreatum-bg-dark p-8 rounded-[32px] max-w-md w-full shadow-2xl border border-red-500/20"
+        className="bg-white dark:bg-kreatum-bg-dark p-7 rounded-2xl max-w-md w-full shadow-[0_24px_60px_-34px_rgba(0,0,0,0.75)] border border-red-500/20"
       >
         <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
           <History className="w-8 h-8 text-red-500" />
         </div>
-        <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">Purgar Todas las Partidas</h2>
+        <h2 className="text-2xl font-extrabold text-center mb-2 text-kreatum-dark dark:text-white">Purgar Todas las Partidas</h2>
         <p className="text-sm text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
           Esta acción <span className="text-red-500 font-bold uppercase">eliminará todas las partidas</span>, equipos y datos históricos. No se puede deshacer.
         </p>
 
         {resetError && (
-          <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center mb-4">{resetError}</div>
+          <div className="p-3 text-sm font-medium text-red-500 bg-red-500/10 rounded-xl text-center mb-4">{resetError}</div>
         )}
 
         <div className="mb-8">
-          <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
+          <label className="block text-xs font-bold opacity-60 mb-2">
             Escribe <span className="text-red-500 font-bold">BORRAR TODO</span> para confirmar
           </label>
           <input
@@ -243,14 +239,14 @@ function ResetModal({ onClose }: { onClose: () => void }) {
             value={confirmCode}
             onChange={(e) => setConfirmCode(e.target.value.toUpperCase())}
             placeholder="BORRAR TODO"
-            className="w-full px-4 py-4 bg-black/5 dark:bg-white/5 border-2 border-red-500/20 focus:border-red-500 rounded-2xl outline-none transition-all text-center font-bold tracking-[0.2em]"
+            className="w-full px-4 py-4 bg-white dark:bg-white/[0.04] border border-red-500/20 focus:border-red-500 rounded-xl outline-none transition-colors text-center font-mono font-bold tracking-[0.2em]"
           />
         </div>
 
         <div className="flex gap-3">
           <Button variant="outline" className="flex-1 py-4" onClick={onClose}>Cancelar</Button>
           <Button 
-            className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20"
+            className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white"
             onClick={handleReset}
             disabled={isResetting || confirmCode !== CONFIRM_PHRASE}
           >
@@ -284,46 +280,43 @@ function AdminLoginScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-kreatum-bg-light dark:bg-kreatum-bg-dark font-sans">
-      <div className="grain-overlay" />
-      <div className="fixed -top-40 -left-40 w-[600px] h-[600px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-purple/20 opacity-30" />
-      <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full blur-[200px] pointer-events-none z-0 bg-kreatum-blue/15 opacity-30" />
-
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[linear-gradient(180deg,#f8fafc_0%,#eef3f8_100%)] dark:bg-[linear-gradient(180deg,#0d0f15_0%,#090a0e_100%)] font-sans">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
         className="relative z-10 w-full max-w-md mx-4 reveal-cascade"
       >
-        <div className="glass-card rounded-[40px] p-10 shadow-premium">
-          <div className="flex justify-center mb-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-kreatum-purple to-kreatum-purple-dark rounded-[24px] flex items-center justify-center shadow-lg shadow-kreatum-purple/30">
-              <LayoutDashboard className="w-10 h-10 text-white" />
+        <div className="glass-card rounded-2xl p-8">
+          <div className="flex justify-center mb-7">
+            <div className="w-16 h-16 bg-kreatum-purple rounded-2xl flex items-center justify-center shadow-[0_16px_34px_-24px_rgba(162,84,156,0.85)]">
+              <LayoutDashboard className="w-8 h-8 text-white" />
             </div>
           </div>
 
-          <h2 className="text-4xl font-black tracking-tighter text-center mb-2 text-kreatum-dark dark:text-white">
+          <h2 className="text-3xl font-extrabold tracking-normal text-center mb-2 text-kreatum-dark dark:text-white">
             Acceso Alquimista
           </h2>
-          <p className="text-[10px] font-mono text-center text-kreatum-purple uppercase tracking-[0.3em] font-black opacity-60">Control Central</p>
+          <p className="text-sm font-bold text-center text-kreatum-purple/80">Control Central</p>
 
           
           <form onSubmit={handleSubmit} className="space-y-4 mt-8">
-            {error && <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center">{error}</div>}
+            {error && <div className="p-3 text-sm font-medium text-red-500 bg-red-500/10 rounded-xl text-center">{error}</div>}
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
-              className="w-full px-4 py-4 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
+              className="w-full px-4 py-3.5 bg-white dark:bg-white/[0.04] border border-black/10 dark:border-white/[0.08] focus:border-kreatum-purple/45 focus:ring-2 focus:ring-kreatum-purple/25 rounded-xl outline-none transition-colors"
             />
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Contraseña"
-              className="w-full px-4 py-4 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
+              className="w-full px-4 py-3.5 bg-white dark:bg-white/[0.04] border border-black/10 dark:border-white/[0.08] focus:border-kreatum-purple/45 focus:ring-2 focus:ring-kreatum-purple/25 rounded-xl outline-none transition-colors"
             />
-            <Button type="submit" disabled={isLoading} className="w-full py-6 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-2xl">
+            <Button type="submit" disabled={isLoading} className="w-full h-12 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-xl">
               {isLoading ? 'Entrando...' : 'Entrar al Panel'}
             </Button>
           </form>
@@ -360,24 +353,24 @@ function NewGameModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="relative w-full max-w-md overflow-hidden bg-white dark:bg-kreatum-bg-dark border border-black/10 dark:border-white/10 rounded-[32px] shadow-2xl"
+        className="relative w-full max-w-md overflow-hidden bg-white dark:bg-kreatum-bg-dark border border-black/10 dark:border-white/10 rounded-2xl shadow-[0_24px_60px_-34px_rgba(0,0,0,0.75)]"
       >
-        <div className="p-8">
-          <h2 className="text-2xl font-serif font-bold text-center mb-2 text-kreatum-dark dark:text-white">
+        <div className="p-7">
+          <h2 className="text-2xl font-extrabold text-center mb-2 text-kreatum-dark dark:text-white">
             Nueva Partida
           </h2>
-          <p className="text-sm font-mono text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
+          <p className="text-sm font-medium text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
             Define los detalles del workshop
           </p>
 
           <div className="space-y-4 mb-8">
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center">
+              <div className="p-3 text-sm font-medium text-red-500 bg-red-500/10 rounded-xl text-center">
                 {error}
               </div>
             )}
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
+              <label className="block text-xs font-bold opacity-60 mb-2">
                 Reto del Workshop <span className="text-red-400">*</span>
               </label>
               <textarea
@@ -386,7 +379,7 @@ function NewGameModal({
                 placeholder="Ej: ¿Cómo podemos mejorar la experiencia?"
                 required
                 rows={3}
-                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none transition-colors text-kreatum-dark dark:text-white resize-none text-sm"
+                className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-black/10 dark:border-white/[0.08] focus:border-kreatum-purple/45 focus:ring-2 focus:ring-kreatum-purple/25 rounded-xl outline-none transition-colors text-kreatum-dark dark:text-white resize-none text-sm"
               />
             </div>
             
@@ -396,19 +389,19 @@ function NewGameModal({
                 value={client}
                 onChange={(e) => onClientChange(e.target.value)}
                 placeholder="Cliente"
-                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
+                className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-black/10 dark:border-white/[0.08] focus:border-kreatum-purple/45 focus:ring-2 focus:ring-kreatum-purple/25 rounded-xl outline-none transition-colors"
               />
               <input
                 type="text"
                 value={facilitator}
                 onChange={(e) => onFacilitatorChange(e.target.value)}
                 placeholder="Facilitador"
-                className="w-full px-4 py-3 bg-black/5 dark:bg-white/5 border border-transparent focus:border-kreatum-purple rounded-2xl outline-none"
+                className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-black/10 dark:border-white/[0.08] focus:border-kreatum-purple/45 focus:ring-2 focus:ring-kreatum-purple/25 rounded-xl outline-none transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
+              <label className="block text-xs font-bold opacity-60 mb-2">
                 Código Personalizado (opcional)
               </label>
               <input
@@ -417,7 +410,7 @@ function NewGameModal({
                 onChange={(e) => onCustomCodeChange(e.target.value.toUpperCase())}
                 placeholder="Ej: PRUEBA"
                 maxLength={ROOM_CODE_MAX_LENGTH}
-                className="w-full px-4 py-3 bg-kreatum-purple/5 border-dashed border-2 border-kreatum-purple/20 focus:border-kreatum-purple rounded-2xl outline-none text-center font-bold tracking-widest text-kreatum-purple"
+                className="w-full px-4 py-3 bg-kreatum-purple/5 border border-kreatum-purple/20 focus:border-kreatum-purple/45 focus:ring-2 focus:ring-kreatum-purple/25 rounded-xl outline-none text-center font-mono font-bold tracking-[0.2em] text-kreatum-purple"
               />
             </div>
           </div>
@@ -425,7 +418,7 @@ function NewGameModal({
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1 py-4" onClick={onClose} disabled={isCreating}>Cancelar</Button>
             <Button
-              className="flex-1 py-4 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-2xl disabled:opacity-50"
+              className="flex-1 py-4 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-xl disabled:opacity-50"
               onClick={onCreate}
               disabled={isCreating || !challenge.trim()}
             >

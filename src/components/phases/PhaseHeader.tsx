@@ -31,30 +31,28 @@ export function PhaseHeader({ phase, subtitle, children }: PhaseHeaderProps) {
   const number = PHASE_NUMBERS[phase];
 
   return (
-    <div className="mb-14 flex flex-col md:flex-row md:items-center justify-between gap-8">
-      <div className="flex items-center gap-8">
+    <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-5">
         {logo && (
-          <div className="relative flex-shrink-0 group">
-            {/* Intense Brand Glow */}
-            <div className="absolute inset-0 rounded-full bg-kreatum-purple/20 blur-2xl scale-150 animate-pulse" />
+          <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-black/[0.06] bg-white shadow-[0_14px_28px_-24px_rgba(16,47,64,0.65)] dark:border-white/[0.08] dark:bg-white/[0.05]">
             <img
               src={logo}
               alt={`Logo fase ${phase}`}
-              className="relative w-24 h-24 object-contain transition-transform duration-700 group-hover:scale-110 drop-shadow-[0_0_15px_rgba(162,84,156,0.3)]"
+              className="h-11 w-11 object-contain"
             />
           </div>
         )}
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <span className="h-0.5 w-8 bg-kreatum-purple rounded-full" />
-            <p className="text-[11px] font-mono font-black uppercase tracking-[0.4em] text-kreatum-purple opacity-90">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-kreatum-purple" />
+            <p className="text-xs font-bold text-kreatum-purple">
               Fase {number}
             </p>
           </div>
-          <h2 className="text-6xl md:text-7xl font-black tracking-tighter text-kreatum-dark dark:text-white leading-[0.85] pt-1">
+          <h2 className="text-4xl font-extrabold leading-tight text-kreatum-dark dark:text-white md:text-5xl">
             {phase}
           </h2>
-          <p className="text-sm font-mono text-kreatum-gray/60 dark:text-white/60 uppercase tracking-[0.2em] pt-2">
+          <p className="max-w-2xl text-sm font-medium leading-relaxed text-kreatum-gray/65 dark:text-white/60">
             {subtitle}
           </p>
         </div>

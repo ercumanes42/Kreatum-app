@@ -25,10 +25,10 @@ export function TeamSelection({ state, updateState }: Props) {
   const [joiningTeam, setJoiningTeam] = useState<Team | null>(null);
   
   const teams: { id: Team; name: string; icon: string; color: string; bg: string }[] = [
-    { id: 'Agua', name: 'Equipo Agua', icon: '/assets/logos/agua.png', color: 'text-kreatum-blue dark:text-blue-400', bg: 'bg-kreatum-blue/5 hover:bg-kreatum-blue/10 border-kreatum-blue/20 dark:bg-gradient-to-br dark:from-blue-500/10 dark:to-blue-900/20 dark:hover:from-blue-500/20 dark:hover:to-blue-900/30' },
-    { id: 'Aire', name: 'Equipo Aire', icon: '/assets/logos/aire.png', color: 'text-kreatum-turquoise dark:text-cyan-400', bg: 'bg-kreatum-turquoise/5 hover:bg-kreatum-turquoise/10 border-kreatum-turquoise/20 dark:bg-gradient-to-br dark:from-cyan-500/10 dark:to-cyan-900/20 dark:hover:from-cyan-500/20 dark:hover:to-cyan-900/30' },
-    { id: 'Fuego', name: 'Equipo Fuego', icon: '/assets/logos/fuego.png', color: 'text-kreatum-red dark:text-red-400', bg: 'bg-kreatum-red/5 hover:bg-kreatum-red/10 border-kreatum-red/20 dark:bg-gradient-to-br dark:from-red-500/10 dark:to-red-900/20 dark:hover:from-red-500/20 dark:hover:to-red-900/30' },
-    { id: 'Tierra', name: 'Equipo Tierra', icon: '/assets/logos/tierra.png', color: 'text-kreatum-green dark:text-green-400', bg: 'bg-kreatum-green/5 hover:bg-kreatum-green/10 border-kreatum-green/20 dark:bg-gradient-to-br dark:from-green-500/10 dark:to-green-900/20 dark:hover:from-green-500/20 dark:hover:to-green-900/30' },
+    { id: 'Agua', name: 'Equipo Agua', icon: '/assets/logos/agua.png', color: 'text-kreatum-blue dark:text-blue-400', bg: 'bg-kreatum-blue/[0.04] hover:bg-kreatum-blue/[0.07] border-kreatum-blue/20' },
+    { id: 'Aire', name: 'Equipo Aire', icon: '/assets/logos/aire.png', color: 'text-kreatum-turquoise dark:text-cyan-400', bg: 'bg-kreatum-turquoise/[0.04] hover:bg-kreatum-turquoise/[0.07] border-kreatum-turquoise/20' },
+    { id: 'Fuego', name: 'Equipo Fuego', icon: '/assets/logos/fuego.png', color: 'text-kreatum-red dark:text-red-400', bg: 'bg-kreatum-red/[0.04] hover:bg-kreatum-red/[0.07] border-kreatum-red/20' },
+    { id: 'Tierra', name: 'Equipo Tierra', icon: '/assets/logos/tierra.png', color: 'text-kreatum-green dark:text-green-400', bg: 'bg-kreatum-green/[0.04] hover:bg-kreatum-green/[0.07] border-kreatum-green/20' },
   ];
 
   // Step 1: Validate the room code exists in Firestore
@@ -81,29 +81,30 @@ export function TeamSelection({ state, updateState }: Props) {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-2xl mx-auto text-center"
+        transition={{ duration: 0.25 }}
+        className="max-w-3xl mx-auto text-center"
       >
         {pendingCode && (
           <div className="flex items-center justify-center gap-3 mb-4">
-            <span className="px-4 py-1.5 bg-kreatum-purple/10 text-kreatum-purple font-mono text-sm font-bold rounded-full tracking-widest border border-kreatum-purple/20">
+            <span className="px-3 py-1.5 bg-kreatum-purple/10 text-kreatum-purple font-mono text-sm font-bold rounded-lg border border-kreatum-purple/20">
               SALA: {pendingCode}
             </span>
           </div>
         )}
-        <h1 className="text-4xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-3">
+        <h1 className="text-4xl font-extrabold tracking-normal text-kreatum-dark dark:text-white mb-3">
           Elige tu equipo
         </h1>
-        <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80 mb-12 uppercase tracking-widest">
+        <p className="text-base font-medium text-kreatum-gray/65 dark:text-white/60 mb-10">
           Selecciona tu equipo para comenzar
         </p>
 
         {codeError && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-sm font-mono text-center">
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm font-medium text-center">
             {codeError}
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
           {teams.map((t) => {
             const isSelected = state.team === t.id;
             const isOtherSelected = state.team && state.team !== t.id;
@@ -116,40 +117,40 @@ export function TeamSelection({ state, updateState }: Props) {
                 disabled={isAnyJoining || !!state.team}
                 onClick={() => handleJoinWithTeam(t.id)}
                 className={cn(
-                  "group relative p-10 rounded-[40px] border transition-all duration-500 ease-out text-center backdrop-blur-xl",
+                  "group relative p-7 rounded-2xl border transition-colors duration-200 text-center bg-white dark:bg-white/[0.04] shadow-[0_18px_38px_-34px_rgba(16,47,64,0.6)]",
                   t.bg,
                   "focus:outline-none",
-                  isSelected ? "ring-4 ring-offset-4 ring-kreatum-purple dark:ring-offset-kreatum-bg-dark bg-white/80 dark:bg-white/10" : "bg-white/50 dark:bg-transparent",
+                  isSelected ? "ring-2 ring-offset-2 ring-kreatum-purple dark:ring-offset-kreatum-bg-dark bg-white dark:bg-white/[0.07]" : "",
                   (isOtherSelected || (isAnyJoining && !isCurrentlyJoining)) && "opacity-30 grayscale cursor-not-allowed",
-                  (isAnyJoining || !!state.team) && "cursor-default hover:scale-100"
+                  (isAnyJoining || !!state.team) && "cursor-default"
                 )}
               >
                 {isCurrentlyJoining ? (
-                  <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center">
+                  <div className="w-16 h-16 mx-auto mb-5 flex items-center justify-center">
                     <div className="w-8 h-8 border-4 border-kreatum-purple border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : (
-                  <div className="relative w-24 h-24 mx-auto mb-6">
+                  <div className="relative w-20 h-20 mx-auto mb-5">
                     <img 
                       src={t.icon} 
                       alt={t.name}
                       className={cn(
-                        "w-full h-full object-contain drop-shadow-md transition-transform duration-500",
-                        !state.team && !isAnyJoining && "group-hover:scale-110"
+                        "w-full h-full object-contain drop-shadow-sm transition-transform duration-200",
+                        !state.team && !isAnyJoining && "group-hover:scale-[1.03]"
                       )} 
                     />
                     {isSelected && (
                       <motion.div 
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        className="absolute -bottom-2 -right-2 bg-kreatum-purple text-white p-1.5 rounded-full shadow-lg"
+                        className="absolute -bottom-2 -right-2 bg-kreatum-purple text-white p-1.5 rounded-lg shadow-lg"
                       >
                         <LogIn className="w-5 h-5" />
                       </motion.div>
                     )}
                   </div>
                 )}
-                <h3 className={cn("text-xl font-bold tracking-tight", t.color)}>
+                <h3 className={cn("text-lg font-bold tracking-normal", t.color)}>
                   {isSelected ? `¡Eres ${t.name}!` : t.name}
                 </h3>
               </button>
@@ -160,7 +161,7 @@ export function TeamSelection({ state, updateState }: Props) {
         {pendingCode && (
           <button
             onClick={() => { setStep('code'); setCodeError(''); }}
-            className="flex items-center gap-2 mx-auto text-sm font-mono text-kreatum-gray/60 dark:text-white/40 hover:text-kreatum-purple transition-colors"
+            className="flex items-center gap-2 mx-auto text-sm font-semibold text-kreatum-gray/60 dark:text-white/45 hover:text-kreatum-purple transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Cambiar código
@@ -175,22 +176,26 @@ export function TeamSelection({ state, updateState }: Props) {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-md mx-auto text-center"
+      transition={{ duration: 0.25 }}
+      className="max-w-lg mx-auto"
     >
-      <h1 className="text-5xl font-light tracking-tighter text-kreatum-dark dark:text-white font-serif mb-4">
-        Bienvenido a Kreatum
-      </h1>
-      <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/60 mb-16 uppercase tracking-widest">
-        Ingresa el código de sala que te compartió tu facilitador
-      </p>
+      <div className="glass-card rounded-2xl p-7 sm:p-8">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-extrabold tracking-normal text-kreatum-dark dark:text-white mb-3">
+            Bienvenido a Kreatum
+          </h1>
+          <p className="text-base font-medium leading-relaxed text-kreatum-gray/65 dark:text-white/60">
+            Ingresa el código de sala que te compartió tu facilitador
+          </p>
+        </div>
 
-      <div className="space-y-4">
+        <div className="space-y-4">
         {codeError && (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm font-mono text-center">
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm font-medium text-center">
             {codeError}
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <input 
             id="room-code-input"
             type="text" 
@@ -201,12 +206,12 @@ export function TeamSelection({ state, updateState }: Props) {
             }}
             onKeyDown={(e) => e.key === 'Enter' && handleCodeSubmit()}
             placeholder="CÓDIGO" 
-            className="w-full bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl px-6 py-4 text-center font-mono text-2xl font-bold tracking-[0.3em] uppercase focus:outline-none focus:ring-2 focus:ring-kreatum-purple/50 transition-all"
+            className="h-14 w-full rounded-xl border border-black/10 bg-white px-5 text-center font-mono text-xl font-bold uppercase tracking-[0.22em] text-kreatum-dark outline-none transition-colors focus:border-kreatum-purple/45 focus:ring-2 focus:ring-kreatum-purple/25 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white"
             maxLength={ROOM_CODE_MAX_LENGTH}
             autoFocus
           />
           <Button 
-            className="rounded-2xl px-6 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white h-auto"
+            className="h-14 rounded-xl px-6 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white"
             disabled={isValidating || !roomCodeInput.trim()}
             onClick={handleCodeSubmit}
           >
@@ -216,6 +221,7 @@ export function TeamSelection({ state, updateState }: Props) {
               <LogIn className="w-5 h-5" />
             )}
           </Button>
+        </div>
         </div>
       </div>
     </motion.div>

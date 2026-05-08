@@ -163,7 +163,7 @@ export function Sublimar({ state, updateState }: Props) {
             className="space-y-12"
           >
             <div className="space-y-8">
-              <h3 className="text-sm font-black uppercase tracking-[0.3em] text-kreatum-red dark:text-red-500 flex items-center gap-4">
+              <h3 className="text-sm font-bold text-kreatum-red dark:text-red-500 flex items-center gap-4">
                 <div className="h-px bg-kreatum-red/20 dark:bg-red-500/30 flex-1"></div>
                 <Zap className="w-4 h-4" />
                 Nuestra Ofensiva contra {targetTeam}
@@ -175,7 +175,7 @@ export function Sublimar({ state, updateState }: Props) {
                 <Card className="border-l-4 border-l-kreatum-green bg-kreatum-green/5">
                   <CardHeader><CardTitle>Nuestra Solución Definitiva</CardTitle></CardHeader>
                   <CardContent>
-                    <p className="text-lg font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed italic">"{ownSolution}"</p>
+                    <p className="text-lg font-semibold text-kreatum-dark/90 dark:text-white/90 leading-relaxed">"{ownSolution}"</p>
                   </CardContent>
                 </Card>
               )}
@@ -213,7 +213,7 @@ export function Sublimar({ state, updateState }: Props) {
                   <CardTitle>Solución del Equipo {targetTeam || '...'}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xl font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed italic">
+                  <p className="text-lg font-semibold text-kreatum-dark/90 dark:text-white/90 leading-relaxed">
                     "{currentRivalSolution || 'Cargando solución del rival...'}"
                   </p>
                 </CardContent>
@@ -324,9 +324,9 @@ export function Sublimar({ state, updateState }: Props) {
                     onClick={() => { if (isDefenseUnlocked) setSubView('Defensa'); }}
                     disabled={!isDefenseUnlocked}
                     className={cn(
-                      "group relative px-12 py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl transition-all overflow-hidden",
+                      "group relative px-10 py-4 rounded-xl font-bold text-sm transition-colors overflow-hidden",
                       isDefenseUnlocked 
-                        ? "bg-kreatum-blue text-white shadow-kreatum-blue/20 hover:scale-105" 
+                        ? "bg-kreatum-blue text-white" 
                         : "bg-kreatum-gray/20 text-kreatum-gray/40 cursor-not-allowed"
                     )}
                   >
@@ -334,7 +334,7 @@ export function Sublimar({ state, updateState }: Props) {
                       {isDefenseUnlocked ? 'Continuar a Defensa' : <><Lock className="w-4 h-4" /> Esperando al Alquimista</>} 
                       {isDefenseUnlocked && <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                     </span>
-                    {isDefenseUnlocked && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />}
+                    {isDefenseUnlocked && <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-200" />}
                   </button>
                 </motion.div>
               )}
@@ -353,14 +353,14 @@ export function Sublimar({ state, updateState }: Props) {
               <Card className="border-l-4 border-l-kreatum-green bg-kreatum-green/5">
                 <CardHeader><CardTitle>Nuestra Solución Definitiva (referencia)</CardTitle></CardHeader>
                 <CardContent>
-                  <p className="text-lg font-light text-kreatum-dark/90 dark:text-white/90 font-serif leading-relaxed italic">"{ownSolution}"</p>
+                  <p className="text-lg font-semibold text-kreatum-dark/90 dark:text-white/90 leading-relaxed">"{ownSolution}"</p>
                 </CardContent>
               </Card>
             )}
 
             {/* DEFENSA */}
             <div className="space-y-8">
-              <h3 className="text-sm font-black uppercase tracking-[0.3em] text-kreatum-blue dark:text-blue-400 flex items-center gap-4">
+              <h3 className="text-sm font-bold text-kreatum-blue dark:text-blue-400 flex items-center gap-4">
                 <div className="h-px bg-kreatum-blue/20 dark:bg-blue-400/30 w-12"></div>
                 <Shield className="w-4 h-4" />
                 Defensa — Ataques y Mitigaciones
@@ -371,10 +371,10 @@ export function Sublimar({ state, updateState }: Props) {
               <Card className="border-l-4 border-l-kreatum-blue dark:border-l-blue-500 bg-kreatum-blue/5 dark:bg-blue-500/5">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-kreatum-blue dark:bg-blue-400 rounded-full animate-pulse"></span>
+                    <span className="w-2 h-2 bg-kreatum-blue dark:bg-blue-400 rounded-full"></span>
                     Ataques recibidos y Mitigaciones
                   </CardTitle>
-                  <p className="text-[10px] text-kreatum-gray/60 dark:text-white/40 uppercase font-bold tracking-widest mt-1">Cada ataque tiene su campo de respuesta alineado a la derecha</p>
+                  <p className="text-xs text-kreatum-gray/60 dark:text-white/40 font-semibold mt-1">Cada ataque tiene su campo de respuesta alineado a la derecha</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {loadingAttacks ? (
@@ -427,7 +427,7 @@ export function Sublimar({ state, updateState }: Props) {
 
             {/* REFORMULACIÓN */}
             <div className="space-y-8">
-              <h3 className="text-sm font-black uppercase tracking-[0.3em] text-kreatum-purple dark:text-purple-400 flex items-center gap-4">
+              <h3 className="text-sm font-bold text-kreatum-purple dark:text-purple-400 flex items-center gap-4">
                 <div className="h-px bg-kreatum-purple/20 dark:bg-purple-400/30 w-12"></div>
                 Reformulación
                 <div className="h-px bg-kreatum-purple/20 dark:bg-purple-400/30 flex-1"></div>
@@ -436,7 +436,7 @@ export function Sublimar({ state, updateState }: Props) {
               <Card>
                 <CardHeader>
                   <CardTitle>Solución reformulada</CardTitle>
-                  <p className="text-sm font-mono text-kreatum-gray/70 dark:text-white/80">Teniendo en cuenta los ataques y defensas, pivotamos y reformulamos.</p>
+                  <p className="text-sm font-medium text-kreatum-gray/70 dark:text-white/70">Teniendo en cuenta los ataques y defensas, pivotamos y reformulamos.</p>
                 </CardHeader>
                 <CardContent>
                   <Textarea
