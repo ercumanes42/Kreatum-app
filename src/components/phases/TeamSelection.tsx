@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GameState, Team } from '../../types';
+import { GameState, ROOM_CODE_MAX_LENGTH, ROOM_CODE_MIN_LENGTH, Team } from '../../types';
 import { ArrowLeft, LogIn } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion } from 'motion/react';
@@ -34,8 +34,12 @@ export function TeamSelection({ state, updateState }: Props) {
   // Step 1: Validate the room code exists in Firestore
   const handleCodeSubmit = async () => {
     const code = roomCodeInput.trim().toUpperCase();
-    if (code.length < 4) {
-      setCodeError('El código debe tener al menos 4 caracteres.');
+    if (code.length < ROOM_CODE_MIN_LENGTH || code.length > ROOM_CODE_MAX_LENGTH) {
+      setCodeError(`El código debe tener entre ${ROOM_CODE_MIN_LENGTH} y ${ROOM_CODE_MAX_LENGTH} caracteres.`);
+      return;
+    }
+    if (!/^[A-Z0-9]+$/.test(code)) {
+      setCodeError('El código solo puede contener letras y números.');
       return;
     }
     setCodeError('');
@@ -198,7 +202,7 @@ export function TeamSelection({ state, updateState }: Props) {
             onKeyDown={(e) => e.key === 'Enter' && handleCodeSubmit()}
             placeholder="CÓDIGO" 
             className="w-full bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl px-6 py-4 text-center font-mono text-2xl font-bold tracking-[0.3em] uppercase focus:outline-none focus:ring-2 focus:ring-kreatum-purple/50 transition-all"
-            maxLength={8}
+            maxLength={ROOM_CODE_MAX_LENGTH}
             autoFocus
           />
           <Button 

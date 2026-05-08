@@ -53,12 +53,16 @@ export function AlchemistPanel({ gameId }: Props) {
   const [summaryTeam, setSummaryTeam] = useState<Team | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
 
-  const currentPhase = globalState.currentPhase || 'Selección';
+  const currentPhase = (globalState.currentPhase || 'Selección') as Phase;
   const hasUnlockedPhases = globalState.unlockedPhases && globalState.unlockedPhases.length > 0;
   const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
+  const phasesThrough = (phase: Phase) => {
+    const phaseIndex = PHASES.indexOf(phase);
+    return phaseIndex >= 0 ? PHASES.slice(0, phaseIndex + 1) : ['Selección'];
+  };
 
   const setGlobalPhase = async (phase: Phase) => {
-    const newUnlocked = Array.from(new Set([...unlockedPhases, phase]));
+    const newUnlocked = Array.from(new Set([...unlockedPhases, ...phasesThrough(phase)]));
     try {
       await updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
     } catch (e: any) {
@@ -67,11 +71,11 @@ export function AlchemistPanel({ gameId }: Props) {
   };
 
   const unlockPhase = async (phase: Phase) => {
-    const newUnlocked = Array.from(new Set([...unlockedPhases, phase]));
+    const newUnlocked = Array.from(new Set([...unlockedPhases, ...phasesThrough(phase)]));
     try {
-      await updateGlobalState({ unlockedPhases: newUnlocked });
+      await updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
     } catch (e: any) {
-      console.error('Error al desbloquear fase:', e);
+      console.error('Error al avanzar fase:', e);
     }
   };
 
@@ -269,7 +273,7 @@ export function AlchemistPanel({ gameId }: Props) {
                                   ? "text-white/40 cursor-default" 
                                   : "text-white hover:bg-white/20 hover:scale-110 active:scale-95 cursor-pointer"
                               )}
-                              title={unlockedPhases.includes(PHASES[idx+1]) ? "Siguiente fase desbloqueada" : "Hacer clic para desbloquear siguiente fase"}
+                              title={unlockedPhases.includes(PHASES[idx+1]) ? "Siguiente fase ya abierta" : "Avanzar a la siguiente fase"}
                             >
                               {unlockedPhases.includes(PHASES[idx+1]) ? '🔓' : '🔒'}
                             </div>
@@ -280,7 +284,7 @@ export function AlchemistPanel({ gameId }: Props) {
                         <div 
                           onClick={(e) => { e.stopPropagation(); unlockPhase(phase); }}
                           className="text-white hover:scale-110 transition-transform p-1 hover:bg-kreatum-purple/20 rounded-md cursor-pointer"
-                          title="Clic para desbloquear"
+                          title="Avanzar a esta fase"
                         >
                           🔒
                         </div>
@@ -317,7 +321,7 @@ export function AlchemistPanel({ gameId }: Props) {
                             className="w-full bg-kreatum-green hover:bg-kreatum-green/90 text-white rounded-xl text-xs h-10 shadow-lg shadow-kreatum-green/20"
                           >
                             <ChevronRight className="w-4 h-4 mr-2" />
-                            Desbloquear Fermentar (Fase 5)
+                            Avanzar a Fermentar (Fase 5)
                           </Button>
                         )}
                       </motion.div>

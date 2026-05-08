@@ -2,74 +2,146 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─── GAMES ───────────────────────────────────────────────
-    // Anyone authenticated (including anonymous) can read games
-    // to join via room code. Only authenticated users can create.
-    match /games/{gameId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      // Only admin (email/password users) can update or delete game documents
-      allow update, delete: if request.auth != null && request.auth.token.email != null;
-
-      // ─── TEAMS ───────────────────────────────────────────
-      // A team document can be read by anyone in the game.
-      // It can only be written by the player who owns it
-      // (playerId must match auth uid) OR during initial creation,
-      // OR by admin (email auth).
-      match /teams/{teamName} {
-        allow read: if request.auth != null;
-        // Allow create if authenticated (first join)
-        allow create: if request.auth != null;
-        // Allow update only if the document's playerId matches the caller,
-        // OR if playerId field is being set for the first time (merge join),
-        // OR if the caller is an admin (email auth).
-        allow update: if request.auth != null
-          && (resource.data.playerId == request.auth.uid
-              || !('playerId' in resource.data)
-              || request.auth.token.email != null);
-      }
-
-      // ─── ATTACKS ─────────────────────────────────────────
-      // Anyone in the game can read attacks (needed for defense view).
-      // Only authenticated users can create attacks.
-      // Only the attack owner can edit. Only owner or admin can delete.
-      match /attacks/{attackId} {
-        allow read: if request.auth != null;
-        allow create: if request.auth != null
-          && request.resource.data.keys().hasAll(['fromTeam', 'toTeam', 'content', 'timestamp', 'playerId'])
-          && request.resource.data.playerId == request.auth.uid;
-        // Allow update only by the original creator (edit own attacks)
-        allow update: if request.auth != null
-          && resource.data.playerId == request.auth.uid;
-        // Allow delete by owner or admin
-        allow delete: if request.auth != null
-          && (resource.data.playerId == request.auth.uid
-              || request.auth.token.email != null);
-      }
-
-      // ─── DEFENSES ────────────────────────────────────────
-      // Same pattern as attacks: readable by all, writable by auth users.
-      match /defenses/{defenseId} {
-        allow read: if request.auth != null;
-        allow create: if request.auth != null
-          && request.resource.data.playerId == request.auth.uid;
-        allow update: if request.auth != null
-          && resource.data.playerId == request.auth.uid;
-        allow delete: if request.auth != null
-          && (resource.data.playerId == request.auth.uid
-              || request.auth.token.email != null);
-      }
-
-      // ─── SOLUTIONS ───────────────────────────────────────
-      // Solutions are readable by all teams (needed for cross-team attacks).
-      // Writable by authenticated users (team members write their own).
-      match /solutions/{teamName} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
-      }
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // ─── DENY EVERYTHING ELSE ──────────────────────────────
-    // Any collection not explicitly matched above is denied.
+    function isAdmin() {
+      return signedIn() && request.auth.token.email != null;
+    }
+
+    function isValidTeamName(teamName) {
+      return teamName in ['Fuego', 'Agua', 'Aire', 'Tierra'];
+    }
+
+    function isTeamOwner(gameId, teamName) {
+      return signedIn()
+        && isValidTeamName(teamName)
+        && exists(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName))
+        && get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.playerId == request.auth.uid;
+    }
+
+    function isGamePhase(gameId, phase) {
+      return exists(/databases/$(database)/documents/games/$(gameId))
+        && get(/databases/$(database)/documents/games/$(gameId)).data.currentPhase == phase;
+    }
+
+    match /games/{gameId} {
+      // Players need read access to join by room code and listen to the active phase.
+      allow read: if signedIn();
+
+      // Only the Alchemist/admin can create, update, complete, or purge games.
+      allow create: if isAdmin()
+        && request.resource.data.roomCode is string
+        && request.resource.data.roomCode.size() >= 4
+        && request.resource.data.roomCode.size() <= 10
+        && request.resource.data.currentPhase == 'Selección'
+        && request.resource.data.status == 'active';
+      allow update, delete: if isAdmin();
+
+      match /teams/{teamName} {
+        allow read: if signedIn();
+
+        allow create: if signedIn()
+          && isValidTeamName(teamName)
+          && request.resource.data.playerId == request.auth.uid
+          && request.resource.data.team == teamName;
+
+        allow update: if isAdmin()
+          || (
+            signedIn()
+            && isValidTeamName(teamName)
+            && resource.data.playerId == request.auth.uid
+            && request.resource.data.playerId == resource.data.playerId
+            && request.resource.data.team == resource.data.team
+          );
+
+        allow delete: if isAdmin();
+      }
+
+      match /attacks/{attackId} {
+        allow read: if signedIn();
+
+        allow create: if signedIn()
+          && isGamePhase(gameId, 'Sublimar')
+          && request.resource.data.keys().hasAll(['fromTeam', 'toTeam', 'content', 'timestamp', 'playerId'])
+          && request.resource.data.playerId == request.auth.uid
+          && isValidTeamName(request.resource.data.fromTeam)
+          && isValidTeamName(request.resource.data.toTeam)
+          && isTeamOwner(gameId, request.resource.data.fromTeam)
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0;
+
+        allow update: if signedIn()
+          && isGamePhase(gameId, 'Sublimar')
+          && resource.data.playerId == request.auth.uid
+          && isTeamOwner(gameId, resource.data.fromTeam)
+          && request.resource.data.playerId == resource.data.playerId
+          && request.resource.data.fromTeam == resource.data.fromTeam
+          && request.resource.data.toTeam == resource.data.toTeam
+          && request.resource.data.timestamp == resource.data.timestamp
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0;
+
+        allow delete: if isAdmin()
+          || (
+            signedIn()
+            && isGamePhase(gameId, 'Sublimar')
+            && resource.data.playerId == request.auth.uid
+            && isTeamOwner(gameId, resource.data.fromTeam)
+          );
+      }
+
+      match /defenses/{defenseId} {
+        allow read: if signedIn();
+
+        allow create: if signedIn()
+          && isGamePhase(gameId, 'Sublimar')
+          && request.resource.data.keys().hasAll(['attackId', 'team', 'content', 'timestamp', 'playerId'])
+          && request.resource.data.playerId == request.auth.uid
+          && isValidTeamName(request.resource.data.team)
+          && isTeamOwner(gameId, request.resource.data.team)
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0;
+
+        allow update: if signedIn()
+          && isGamePhase(gameId, 'Sublimar')
+          && resource.data.playerId == request.auth.uid
+          && isTeamOwner(gameId, resource.data.team)
+          && request.resource.data.playerId == resource.data.playerId
+          && request.resource.data.team == resource.data.team
+          && request.resource.data.attackId == resource.data.attackId
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0;
+
+        allow delete: if isAdmin()
+          || (
+            signedIn()
+            && isGamePhase(gameId, 'Sublimar')
+            && resource.data.playerId == request.auth.uid
+            && isTeamOwner(gameId, resource.data.team)
+          );
+      }
+
+      match /solutions/{teamName} {
+        allow read: if signedIn();
+
+        allow create, update: if isAdmin()
+          || (
+            signedIn()
+            && isValidTeamName(teamName)
+            && isTeamOwner(gameId, teamName)
+            && request.resource.data.team == teamName
+            && request.resource.data.content is string
+          );
+
+        allow delete: if isAdmin()
+          || (
+            signedIn()
+            && isValidTeamName(teamName)
+            && isTeamOwner(gameId, teamName)
+          );
+      }
+    }
   }
 }

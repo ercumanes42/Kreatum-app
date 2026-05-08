@@ -2,6 +2,12 @@ node_modules/
 build/
 dist/
 coverage/
+.npm-cache/
+public-kreatum/
+.codex-push-worktree-*/
+.codex-push-wt-*/
+.codex-gitdir-*/
+.codex-index-*
 .DS_Store
 *.log
 .env*

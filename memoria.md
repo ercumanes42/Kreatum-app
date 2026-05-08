@@ -1,260 +1,137 @@
-# Kreatum — Memoria Técnica
+# Kreatum - Memoria tecnica
 
-> Última actualización: 7 de mayo de 2026
+Ultima actualizacion: 8 de mayo de 2026
 
----
+## Objetivo de la plataforma
 
-## Arquitectura General
+Kreatum es una plataforma de workshop en tiempo real con dos superficies:
 
-- **Framework**: React 19 + TypeScript + Vite 6
-- **Estilos**: Tailwind CSS v4 (via `@tailwindcss/vite` plugin), tema custom en `index.css` con `@theme`
-- **Base de datos**: Firebase Firestore (real-time listeners via `onSnapshot`)
-- **Autenticación**: Firebase Auth — jugadores anónimos, admin con email/password
-- **Animaciones**: `motion/react` (Framer Motion)
-- **Routing**: `react-router-dom` v7 → `/` (jugadores), `/admin` o `/alquimista` (admin)
-- **Deploy**: Vercel
+- Jugadores: entran desde `/`, introducen codigo de sala, eligen equipo y trabajan las fases.
+- Alquimista/admin: entra desde `/admin` o `/alquimista`, crea la partida y controla el avance global.
 
----
+La regla central es que el Alquimista es la fuente de verdad de la fase activa. Los jugadores no avanzan fases manualmente: cuando el admin cambia la fase global, todos los equipos pasan automaticamente a esa fase.
 
-## Estructura de Archivos
+## Flujo funcional
 
-```
-src/
-├── main.tsx                    # Entry point, routing
-├── PlayerApp.tsx               # Vista jugador
-├── AdminApp.tsx                # Vista admin (login + crear partida + reset)
-├── types.ts                    # Team, Phase, GameState, initialState
-├── index.css                   # Tailwind theme + custom colors
-├── contexts/
-│   └── GameContext.tsx          # Auth, create/join/leave game, attacks, solutions
-├── hooks/
-│   └── useRealtime.ts          # onSnapshot hooks: teams, attacks, defenses, solutions, global
-├── components/
-│   ├── admin/
-│   │   ├── AlchemistPanel.tsx   # Dashboard admin, control de fases, progreso equipos
-│   │   └── GameHistory.tsx      # Historial de partidas, exportar CSV/JSON
-│   ├── phases/
-│   │   ├── TeamSelection.tsx    # Código de sala + selección de equipo
-│   │   ├── Calcinar.tsx         # Fase 1 - inspiración
-│   │   ├── Diluir.tsx           # Fase 2 - perspectivas (CP prefix, Enter→next)
-│   │   ├── Conjugar.tsx         # Fase 3 - soluciones
-│   │   ├── Sublimar.tsx         # Fase 4 - ataque/defensa/reformulación
-│   │   ├── Fermentar.tsx        # Fase 5 - audiencia, fortalezas, debilidades, piloto, recursos
-│   │   ├── Proyectar.tsx        # Fase 6 - pitch + Ver Resumen + Finalizar
-│   │   └── WorkshopClosure.tsx  # Modal de resumen completo (reutilizable)
-│   ├── ui/
-│   │   ├── Button.tsx
-│   │   ├── Card.tsx
-│   │   ├── Input.tsx
-│   │   └── Textarea.tsx
-│   ├── ErrorBoundary.tsx
-│   └── HeroSplash.tsx
-├── lib/
-│   ├── firebase.ts             # Firebase config + init
-│   ├── sounds.ts               # Audio feedback
-│   └── utils.ts                # cn() utility
-```
+1. El admin inicia sesion con Firebase Auth email/password.
+2. El admin crea una partida con reto obligatorio, cliente/facilitador opcionales y codigo automatico o personalizado.
+3. Firestore crea `games/{gameId}` con `status: active`, `currentPhase: Selección`, `roomCode` y `unlockedPhases`.
+4. Los jugadores introducen el codigo, eligen equipo y se crea/actualiza `games/{gameId}/teams/{teamName}`.
+5. El admin cambia fases desde el panel. `currentPhase` en `games/{gameId}` mueve a todos los jugadores.
+6. En Sublimar, Defensa se desbloquea con un flag independiente: `sublimarDefenseUnlocked`.
+7. Cuando el admin finaliza el workshop, la partida pasa a `status: completed` y los jugadores salen automaticamente a la pantalla inicial de codigo.
 
----
+## Fases
 
-## Modelo de Datos (Firestore)
+Orden oficial:
 
-### Colección `games/{gameId}`
-```
-{
-  createdAt: number,
-  status: 'active' | 'completed',
-  currentPhase: Phase,
-  roomCode: string,
-  client: string,
-  facilitator: string,       // OPCIONAL
-  challenge: string,          // OBLIGATORIO
-  unlockedPhases: string[],   // Fases desbloqueadas por admin
-  sublimarDefenseUnlocked?: boolean,     // Defensa desbloqueada (separado de Fermentar)
-  sublimarDefenseUnlockedAt?: number,
-  completedAt?: number,
-}
-```
+1. Selección
+2. Calcinar
+3. Diluir
+4. Conjugar
+5. Sublimar
+6. Fermentar
+7. Proyectar
 
-### Subcolección `games/{gameId}/teams/{teamName}`
-Almacena todo el estado del equipo (GameState parcial):
-- `playerId`, `team`, `currentPhase`
-- Diluir: `perspectives[]`, `top3Perspectives`, `perspectiveVotes`, `selectedPerspective`
-- Conjugar: `solutions[]`, `top3Solutions`, `solutionVotes`, `selectedSolution`
-- Sublimar: `defenses[]`, `reformulatedSolution`, `expectedResults`, `sublimarView`, `sublimarDefenseCompleted`
-- Fermentar: `audience`, `strengths`, `weaknesses`, `pilot`, `resources`
-- Proyectar: `pitchStart`, `pitchProblem`, `pitchSolution`, `pitchAction`
-- `isFinished?: boolean` — marcado al 100% cuando jugador finaliza
+`PHASES` esta definido en `src/types.ts`.
 
-### Subcolección `games/{gameId}/attacks/{attackId}`
-```
-{
-  fromTeam: Team,
-  toTeam: Team,
-  content: string,
-  timestamp: number,
-  playerId: string,
-  editedAt?: number,    // Se añade al editar
-}
-```
+## Modelo Firestore
 
-### Subcolección `games/{gameId}/defenses/{defenseId}`
-```
-{
-  attackId: string,
-  team: Team,
-  content: string,
-  timestamp: number,
-  playerId: string,
-}
-```
+### `games/{gameId}`
 
-### Subcolección `games/{gameId}/solutions/{teamName}`
-```
-{
-  team: Team,
-  content: string,
-  timestamp: number,
-}
-```
+Campos principales:
 
----
+- `createdAt`
+- `status`: `active` o `completed`
+- `currentPhase`
+- `roomCode`
+- `client`
+- `facilitator`
+- `challenge`
+- `unlockedPhases`
+- `sublimarDefenseUnlocked`
+- `sublimarDefenseUnlockedAt`
+- `completedAt`
 
-## Control de Fases (Admin)
+### `games/{gameId}/teams/{teamName}`
 
-El Alquimista controla qué fases están disponibles:
+Guarda el estado del equipo:
 
-1. **`currentPhase`** — fase activa global
-2. **`unlockedPhases[]`** — lista de fases desbloqueadas
-3. **`sublimarDefenseUnlocked`** — flag independiente para desbloquear Defensa en Sublimar
+- `playerId`
+- `team`
+- `currentPhase`
+- respuestas de Diluir, Conjugar, Sublimar, Fermentar y Proyectar
+- `isFinished`
 
-### Reglas de Progresión
-- Jugadores NO avanzan libremente a partir de Diluir→Conjugar (índice ≥ 2)
-- El admin desbloquea cada fase con `unlockPhase()`
-- En Sublimar: hay 2 botones separados:
-  - **"Desbloquear Defensa"** → `updateGlobalState({ sublimarDefenseUnlocked: true })`
-  - **"Desbloquear Fermentar"** → `unlockPhase('Fermentar')`
-- NO se usa `Fermentar` como bandera para abrir Defensa
+El modelo actual es un documento por equipo. Si en el futuro se quiere multiples jugadores por equipo, habria que anadir una subcoleccion de miembros.
 
-### Progreso del Equipo en Dashboard
-- `getTeamProgress()` devuelve 100% si `isFinished === true`
-- En caso contrario: `(phaseIndex / totalPhases) * 100`
-- Colores de barra de progreso: mapeo literal `TEAM_BAR_COLORS` (evita clases Tailwind dinámicas)
-
----
-
-## Fase 2 — Diluir
-
-- Cada input de perspectiva tiene prefijo visual **CP** (¿Cómo podríamos...?)
-- Ayuda visible: "Inicia cada idea con: ¿Cómo podríamos...?"
-- **Enter** → foco automático al siguiente campo (refs + setTimeout)
-- El guardado de perspectivas no se ve afectado por el prefijo (el valor NO incluye "CP")
-
----
-
-## Fase 4 — Sublimar
-
-### Ataque
-- Se muestra la solución definitiva propia del equipo
-- Se muestra la solución del equipo rival (según `ATTACK_MAP`)
-- Máximo 10 ataques por equipo
-- Los ataques se pueden **editar** inline (botón lápiz → input → guardar)
-- Los ataques se pueden **borrar** (botón X)
-- `editAttack()` usa `updateDoc()` en Firestore
-
-### Defensa
-- Solo visible si: `attacksSent.length >= 10 && globalState.sublimarDefenseUnlocked === true`
-- Layout horizontal: ataque a la izquierda ↔ mitigación a la derecha (grid 2 cols)
-- Se muestra la solución definitiva propia como referencia
-- Si ataques completos pero defensa no desbloqueada → mensaje de espera
-
-### Reformulación
-- `reformulatedSolution` + `expectedResults`
-- Se guarda en `teams/{teamName}` con merge
-
----
-
-## Fase 5 — Fermentar
+### `games/{gameId}/attacks/{attackId}`
 
 Campos:
-- Audiencia
-- Fortalezas
-- **Debilidades** (campo añadido, card amarilla)
-- Prueba Piloto / Prototipo
-- Recursos Necesarios
 
----
+- `fromTeam`
+- `toTeam`
+- `content`
+- `timestamp`
+- `playerId`
+- `editedAt`
 
-## Fase 6 — Proyectar
+El jugador puede editar y borrar solo sus propios ataques. El admin tambien puede borrar.
 
-- Estructura del pitch: 4 cards (Inicio, Problema, Solución, Acción)
-- **Botón "Ver Resumen"**: abre `WorkshopClosure` como modal/portal
-- **Botón "Finalizar Workshop"**:
-  1. Guarda el pitch
-  2. Marca `isFinished: true` en Firestore
-  3. Muestra pantalla de felicitación: "¡Enhorabuena! Vamos a las votaciones."
-  4. NO llama `leaveGame()` — el jugador ve la pantalla de éxito
-  5. Admin ve progreso 100% en tiempo real
+### `games/{gameId}/solutions/{teamName}`
 
-### WorkshopClosure (Modal Resumen)
-- Reutilizable por jugadores y admin
-- NO llama `leaveGame()` internamente — solo `onClose()`
-- Muestra: Diluir, Conjugar, Sublimar, Fermentar (con debilidades), Proyectar
-- El padre decide qué hacer al cerrar
+Guarda la solucion definitiva de cada equipo para que otros equipos puedan verla en Sublimar.
 
----
+## Seguridad Firestore
 
-## Seguridad
+Reglas locales actualizadas:
 
-### AdminApp
-- Facilitador: **OPCIONAL** (no validación obligatoria)
-- Reto/Challenge: **OBLIGATORIO**
-- `KREATUM2026` **ELIMINADO** completamente
-- Reset usa confirmación **"BORRAR TODO"** (no código secreto)
-- Función renombrada a `purgeAllGames()` — no expuesta como acción normal
-- Modales propios en lugar de `alert()`/`confirm()` nativos
+- `games`: lectura para usuarios autenticados; creacion, actualizacion y borrado solo admin con email.
+- `teams`: creacion por jugador autenticado con `playerId == request.auth.uid`; actualizacion solo propietario del equipo o admin.
+- `attacks`: creacion/edicion/borrado restringido al propietario del ataque/equipo; admin puede borrar.
+- `defenses`: mismo patron de propietario/equipo.
+- `solutions`: escritura solo por propietario del equipo o admin.
 
-### Room Codes
-- Al crear partida: se valida unicidad del código
-- Código automático: reintenta hasta 10 veces si existe
-- Código personalizado: error claro si ya existe
+Importante: despues de cambiar `firestore.rules` en local hay que desplegarlas en Firebase para que produccion las aplique.
 
-### Firestore Rules
-- Games: read=auth, create=auth, update/delete=admin (email)
-- Teams: create=auth, update=owner OR admin
-- Attacks: create=owner, update=owner (editar), delete=owner OR admin
-- Defenses: create=owner, update=owner, delete=owner OR admin
-- Solutions: read=auth, write=auth
+## Codigos de sala
 
----
+Longitud permitida: 4 a 10 caracteres.
 
-## Colores de Equipo (Tailwind)
+Permitido: letras mayusculas y numeros.
 
-| Equipo | Color | Clase |
-|--------|-------|-------|
-| Fuego  | Rojo  | `kreatum-red` (#E73F1E) |
-| Agua   | Azul  | `kreatum-blue` (#4486C6) |
-| Tierra | Verde | `kreatum-green` (#59B7A9) |
-| Aire   | Turquesa | `kreatum-turquoise` (#17ABBD) |
+Constantes:
 
-⚠️ Las barras de progreso usan `TEAM_BAR_COLORS` (mapeo literal) para evitar clases Tailwind dinámicas que no se generan en producción.
+- `ROOM_CODE_MIN_LENGTH`
+- `ROOM_CODE_MAX_LENGTH`
 
----
+Ambas estan en `src/types.ts` y se usan en admin, jugador y contexto.
 
-## Assets
+## Assets publicos
 
-- **Logos de equipo**: `/public/assets/logos/{fuego,agua,tierra,aire}.png`
-- **Logos de fases**: Están en el archivo PPTX `Logo Kreatum/Logos de las fases.pptx` — pendiente de extraer a PNG individuales
-- **Logo principal**: `/public/logo.png`
-- **Video hero**: `/public/assets/hero-video.mp4`
+Vite usa `public-app` como `publicDir`.
 
----
+Eso evita que el build copie contenido antiguo de `public/Generador de Hablidiades`. La carpeta antigua puede seguir existiendo en disco, pero no entra en `dist` al construir con la configuracion actual.
 
-## Decisiones Técnicas
+Assets activos:
 
-1. **Hooks antes de returns condicionales** — Sublimar mueve todos los hooks antes del `if (!myTeam) return`
-2. **Refs para focus** — Diluir usa `useRef<HTMLInputElement[]>` para Enter→next
-3. **Portal para modales** — WorkshopClosure y Proyectar summary usan `createPortal` para evitar issues con `transform` de motion.div
-4. **Debounce implícito** — updateTeamSync es merge, no replace
-5. **Estado global vs local** — `sublimarDefenseUnlocked` en doc de game (global), `defenses[]` en doc de team (local)
-6. **Build**: Vite build pasa sin errores TS (los errores de ErrorBoundary son pre-existentes y no afectan la build)
+- `/logo.png`
+- `/assets/hero-video.mp4`
+- `/assets/logos/{agua,aire,fuego,tierra}.png`
+- `/assets/logos/fases/{calcinar,conjugar,diluir,fermentar,proyectar,sublimar}.png`
+
+## Validacion tecnica
+
+Scripts:
+
+- `npm run lint`: TypeScript sin emitir archivos.
+- `npm run build`: build de Vite con `--configLoader runner`.
+
+Se instalaron `@types/react` y `@types/react-dom` para que TypeScript valide correctamente React.
+
+## Pendientes recomendados
+
+- Desplegar reglas Firestore actualizadas.
+- Probar flujo completo en entorno real con 4 equipos.
+- Considerar code splitting porque el bundle principal supera 500 kB minificado.
+- Resolver warnings CSS menores del build si se quiere dejar el pipeline completamente limpio.

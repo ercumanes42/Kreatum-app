@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, initialState, Phase, Team, PHASES } from './types';
 import { Button } from './components/ui/Button';
-import { ChevronRight, ChevronLeft, Hexagon, Moon, Sun } from 'lucide-react';
+import { Hexagon, Moon, Sun } from 'lucide-react';
 import { cn } from './lib/utils';
 import { TeamSelection } from './components/phases/TeamSelection';
 import { Calcinar } from './components/phases/Calcinar';
@@ -11,21 +11,15 @@ import { Sublimar } from './components/phases/Sublimar';
 import { Fermentar } from './components/phases/Fermentar';
 import { Proyectar } from './components/phases/Proyectar';
 
-import { sounds } from './lib/sounds';
 import { AnimatePresence, motion } from 'motion/react';
-import { useAttacksSent, useTeamSync, useGameGlobal } from './hooks/useRealtime';
+import { useTeamSync, useGameGlobal } from './hooks/useRealtime';
 import { useGame } from './contexts/GameContext';
 import { HeroSplash } from './components/HeroSplash';
-
-
-
-const MIN_ATTACKS_PER_TEAM = 10;
 
 export default function PlayerApp() {
   const { gameId, team, isAlchemist, leaveGame, roomCode } = useGame();
   const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
   const [isDark, setIsDark] = useState(false);
-  const [workshopEnded, setWorkshopEnded] = useState(false);
   const [showSplash, setShowSplash] = useState(() => {
     if (localStorage.getItem('kreatum_splash_seen') === 'true') {
       return false;
@@ -34,13 +28,9 @@ export default function PlayerApp() {
   });
 
   const { teamState, updateTeamSync } = useTeamSync(gameId, team || state.team);
-  const { attacks: attacksSent } = useAttacksSent(gameId, team || state.team);
   const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
 
   const challenge = globalState?.challenge || '';
-  // Para compatibilidad hacia atrás: si no existe unlockedPhases, permitir progreso libre
-  const hasUnlockedPhases = globalState?.unlockedPhases && globalState.unlockedPhases.length > 0;
-  const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
 
   // Ref to hold the latest leaveGame function so the timeout always uses the current one
   // without causing the useEffect to re-run (leaveGame is not memoized in GameContext).
@@ -62,41 +52,25 @@ export default function PlayerApp() {
     }
     if (!team && !gameId && state.team) {
       setState({ ...initialState });
-      setWorkshopEnded(false);
     }
   }, [team, gameId]);
 
-  // Sync Global Phase and Status to local state for regular players
+  // The Alchemist owns the canonical phase. Players mirror it automatically.
   useEffect(() => {
     if (globalState?.currentPhase && !isAlchemist && globalState.currentPhase !== state.currentPhase) {
-      // Intercept transition from Sublimar to Fermentar if they haven't seen 'Defensa'
-      if (
-        state.currentPhase === 'Sublimar' && 
-        globalState.currentPhase === 'Fermentar' && 
-        state.sublimarView !== 'Defensa'
-      ) {
-        // Keep them in Sublimar but switch to Defensa
-        updateState({ currentPhase: 'Sublimar', sublimarView: 'Defensa' });
-        return;
-      }
-      
       updateState({ currentPhase: globalState.currentPhase as Phase });
-      // Scroll to top when the Alchemist changes the phase remotely
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [globalState?.currentPhase, isAlchemist]);
 
-  // Handle workshop completion by admin
+  // When the Alchemist closes the workshop, players return to the code screen.
   useEffect(() => {
-    if (globalState?.status === 'completed' && !isAlchemist && !workshopEnded) {
-      setWorkshopEnded(true);
-      // Brief message, then redirect via ref (avoids effect re-run cycle)
-      const timer = setTimeout(() => {
-        leaveGameRef.current();
-      }, 3000);
-      return () => clearTimeout(timer);
+    if (globalState?.status === 'completed' && !isAlchemist && gameId) {
+      setState({ ...initialState });
+      leaveGameRef.current();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [globalState?.status, isAlchemist, workshopEnded]);
+  }, [globalState?.status, isAlchemist, gameId]);
 
   // Sync Firestore team state to local state
   useEffect(() => {
@@ -114,59 +88,6 @@ export default function PlayerApp() {
   }, [isDark]);
 
   const currentIndex = PHASES.indexOf(state.currentPhase);
-
-  const nextPhase = () => {
-    if (currentIndex < PHASES.length - 1) {
-      if (currentIndex === PHASES.length - 2) sounds.playSuccess();
-      else sounds.playClick();
-      updateState({ currentPhase: PHASES[currentIndex + 1] });
-      window.scrollTo(0, 0);
-    }
-  };
-
-  const prevPhase = () => {
-    // Si estamos en Sublimar y en la vista de Defensa, volver a Ataque en lugar de cambiar de fase
-    if (state.currentPhase === 'Sublimar' && state.sublimarView === 'Defensa') {
-      updateState({ sublimarView: 'Ataque' });
-      return;
-    }
-
-    const currentIndex = PHASES.indexOf(state.currentPhase);
-    if (currentIndex > 0) {
-      sounds.playClick();
-      const prevPhaseName = PHASES[currentIndex - 1];
-      updateState({ currentPhase: prevPhaseName });
-      window.scrollTo(0, 0);
-    }
-  };
-
-  const isNextDisabled = () => {
-    if (currentIndex === PHASES.length - 1) return true;
-    if (state.currentPhase === 'Selección' && !state.team) return true;
-    
-    const nextPhaseName = PHASES[currentIndex + 1];
-    // Bloquear a partir de pasar de Diluir a Conjugar (índice 2 en adelante)
-    if (currentIndex >= 2) {
-      if (!unlockedPhases.includes(nextPhaseName)) return true;
-    }
-
-    if (state.currentPhase === 'Sublimar') {
-      if (!state.team) return true;
-      return attacksSent.length < MIN_ATTACKS_PER_TEAM;
-    }
-
-    return false;
-  };
-
-  const blockedByAlchemist = () => {
-    if (currentIndex === PHASES.length - 1) return false;
-    const nextPhaseName = PHASES[currentIndex + 1];
-    // Mostrar bloqueo a partir de Diluir a Conjugar
-    if (currentIndex >= 2) {
-      return nextPhaseName && !unlockedPhases.includes(nextPhaseName);
-    }
-    return false;
-  };
 
   const getTeamColor = (team: Team | null) => {
     switch (team) {
@@ -362,24 +283,6 @@ export default function PlayerApp() {
         </div>
       )}
 
-      {/* Workshop ended overlay */}
-      {workshopEnded && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center space-y-6 max-w-md px-8"
-          >
-            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-kreatum-purple to-kreatum-turquoise rounded-[32px] flex items-center justify-center shadow-[0_20px_50px_rgba(162,84,156,0.5)]">
-              <Hexagon className="w-12 h-12 text-white" />
-            </div>
-            <h1 className="text-5xl md:text-7xl h1-agency text-white font-serif">¡Enhorabuena!</h1>
-            <p className="text-xl text-white/70 font-mono tracking-widest uppercase">Has finalizado el workshop.<br/>Vamos a las votaciones.</p>
-            <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-white/50 to-transparent mx-auto" />
-          </motion.div>
-        </div>
-      )}
-
       {/* Main Content */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-12 relative z-10">
         <AnimatePresence mode="wait">
@@ -403,50 +306,19 @@ export default function PlayerApp() {
         </AnimatePresence>
       </main>
 
-      {/* Footer / Navigation */}
-      {state.team && !workshopEnded && !state.isFinished && (
+      {/* Footer / Status */}
+      {state.team && !state.isFinished && (
         <footer className="bg-white/40 dark:bg-black/40 backdrop-blur-2xl border-t border-black/5 dark:border-white/5 mt-auto relative z-20 transition-colors duration-300">
 
-          <div className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
-            <Button 
-              variant="ghost" 
-              onClick={prevPhase} 
-              disabled={currentIndex === 0}
-              className="flex gap-2 text-kreatum-gray dark:text-white/80"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Atrás
-            </Button>
-            
-            <Button 
-              onClick={() => {
-                if (currentIndex === PHASES.length - 1) {
-                  return; // Finalization handled inside Proyectar
-                } else {
-                  nextPhase();
-                }
-              }}
-              disabled={isNextDisabled()}
-              title={blockedByAlchemist() ? 'El Alquimista aún no ha desbloqueado esta fase' : ''}
-              className={cn(
-                "flex gap-2 btn-premium",
-                currentIndex === PHASES.length - 1
-                  ? "bg-kreatum-purple hover:bg-kreatum-purple-dark text-white shadow-premium"
-                  : blockedByAlchemist()
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-              )}
-            >
-              {currentIndex === PHASES.length - 1 ? '✦ Finalizar Workshop' : blockedByAlchemist() ? (
-                <span className="flex items-center gap-2">
-                  <Lock className="w-4 h-4" />
-                  Esperando al Alquimista
-                </span>
-              ) : 'Siguiente Fase'}
-              <ChevronRight className="w-4 h-4" />
-
-
-            </Button>
+          <div className="max-w-4xl mx-auto px-4 py-5 flex items-center justify-center">
+            <div className="px-5 py-2 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-center">
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-kreatum-purple font-black">
+                Fase controlada por el Alquimista
+              </p>
+              <p className="text-sm text-kreatum-gray/60 dark:text-white/50 mt-1">
+                Avanzareis automaticamente cuando el facilitador abra la siguiente fase.
+              </p>
+            </div>
           </div>
         </footer>
       )}

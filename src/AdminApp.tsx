@@ -8,6 +8,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged, User, signOut } from 'f
 import { useGame } from './contexts/GameContext';
 import { AlchemistPanel } from './components/admin/AlchemistPanel';
 import { GameHistory } from './components/admin/GameHistory';
+import { ROOM_CODE_MAX_LENGTH } from './types';
 
 export default function AdminApp() {
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +62,7 @@ export default function AdminApp() {
     setNewGameClient('');
     setNewGameFacilitator('');
     setCustomRoomCode('');
+    setCreateError('');
     setShowNewGameModal(false);
   };
 
@@ -173,6 +175,7 @@ export default function AdminApp() {
             onChallengeChange={setNewGameChallenge}
             customCode={customRoomCode}
             onCustomCodeChange={setCustomRoomCode}
+            error={createError}
             isCreating={isCreatingGame}
             onCreate={handleCreateGame}
             onClose={handleCloseModal}
@@ -336,6 +339,7 @@ function NewGameModal({
   facilitator, onFacilitatorChange,
   challenge, onChallengeChange,
   customCode, onCustomCodeChange,
+  error,
   isCreating, onCreate, onClose 
 }: {
   client: string;
@@ -346,6 +350,7 @@ function NewGameModal({
   onChallengeChange: (v: string) => void;
   customCode: string;
   onCustomCodeChange: (v: string) => void;
+  error: string;
   isCreating: boolean;
   onCreate: () => void;
   onClose: () => void;
@@ -366,6 +371,11 @@ function NewGameModal({
           </p>
 
           <div className="space-y-4 mb-8">
+            {error && (
+              <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-xl font-mono text-center">
+                {error}
+              </div>
+            )}
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-widest opacity-50 mb-2">
                 Reto del Workshop <span className="text-red-400">*</span>
@@ -406,7 +416,7 @@ function NewGameModal({
                 value={customCode}
                 onChange={(e) => onCustomCodeChange(e.target.value.toUpperCase())}
                 placeholder="Ej: PRUEBA"
-                maxLength={10}
+                maxLength={ROOM_CODE_MAX_LENGTH}
                 className="w-full px-4 py-3 bg-kreatum-purple/5 border-dashed border-2 border-kreatum-purple/20 focus:border-kreatum-purple rounded-2xl outline-none text-center font-bold tracking-widest text-kreatum-purple"
               />
             </div>

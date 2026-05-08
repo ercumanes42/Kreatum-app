@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Team } from '../types';
+import { ROOM_CODE_MAX_LENGTH, ROOM_CODE_MIN_LENGTH, Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
 import { doc, setDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -93,19 +93,35 @@ const generateRoomCode = () => {
   return code;
 };
 
+const normalizeRoomCode = (code: string) => code.trim().toUpperCase();
+
+const assertValidRoomCode = (code: string) => {
+  if (code.length < ROOM_CODE_MIN_LENGTH || code.length > ROOM_CODE_MAX_LENGTH) {
+    throw new Error(`El código debe tener entre ${ROOM_CODE_MIN_LENGTH} y ${ROOM_CODE_MAX_LENGTH} caracteres.`);
+  }
+  if (!/^[A-Z0-9]+$/.test(code)) {
+    throw new Error('El código solo puede contener letras y números.');
+  }
+};
+
 const validateRoomCode = async (code: string): Promise<boolean> => {
   const gamesRef = collection(db, 'games');
-  const q = query(gamesRef, where('roomCode', '==', code.trim().toUpperCase()));
+  const q = query(gamesRef, where('roomCode', '==', normalizeRoomCode(code)));
   const snapshot = await getDocs(q);
   return !snapshot.empty;
 };
 
   const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string; challenge?: string, customCode?: string }): Promise<string> => {
     if (!playerId) throw new Error('No se ha podido identificar al usuario. Reintenta en unos segundos.');
+    const currentUser = auth.currentUser;
+    if (!asAlchemist || !currentUser || currentUser.isAnonymous || !currentUser.email) {
+      throw new Error('Solo el Alquimista autenticado puede crear partidas.');
+    }
 
     // Validate room code uniqueness
-    let code = metadata?.customCode?.trim().toUpperCase() || '';
+    let code = normalizeRoomCode(metadata?.customCode || '');
     if (code) {
+      assertValidRoomCode(code);
       // Custom code: check uniqueness
       const exists = await validateRoomCode(code);
       if (exists) {
@@ -165,8 +181,9 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
   const joinGame = async (gameIdOrCode: string, joinAs: Team | 'Alchemist') => {
     if (!playerId) throw new Error('No player ID');
     
-    const inputCode = gameIdOrCode.trim().toUpperCase();
+    const inputCode = normalizeRoomCode(gameIdOrCode);
     if (!inputCode) throw new Error('Por favor, introduce un código de sala válido.');
+    assertValidRoomCode(inputCode);
 
     // Query the games collection to find the game by roomCode
     const gamesRef = collection(db, 'games');
@@ -216,6 +233,11 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       }
       // Si está en un equipo diferente, lanzar error
       throw new Error(`Ya estás registrado en el Equipo ${existingTeam} de esta partida. No puedes cambiar de equipo.`);
+    }
+
+    const selectedTeamDoc = teamsSnapshot.docs.find((doc) => doc.id === joinAs);
+    if (selectedTeamDoc?.data().playerId && selectedTeamDoc.data().playerId !== playerId) {
+      throw new Error(`El Equipo ${joinAs} ya está ocupado en esta partida. Elige otro equipo o consulta con el Alquimista.`);
     }
 
     const team = joinAs;

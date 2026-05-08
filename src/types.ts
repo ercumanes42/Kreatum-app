@@ -19,6 +19,9 @@ export const PHASES: Phase[] = [
   'Proyectar'
 ];
 
+export const ROOM_CODE_MIN_LENGTH = 4;
+export const ROOM_CODE_MAX_LENGTH = 10;
+
 export interface GameState {
   team: Team | null;
   currentPhase: Phase;

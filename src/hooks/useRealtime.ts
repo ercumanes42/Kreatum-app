@@ -75,6 +75,7 @@ export function useGameGlobal(gameId: string | null) {
 
   useEffect(() => {
     if (!gameId) {
+      setGlobalState({});
       setIsLoading(false);
       return;
     }
@@ -110,6 +111,7 @@ export function useAllTeams(gameId: string | null) {
 
   useEffect(() => {
     if (!gameId) {
+      setTeams({} as any);
       setIsLoading(false);
       return;
     }
@@ -136,6 +138,7 @@ export function useTeamSync(gameId: string | null, team: Team | null) {
 
   useEffect(() => {
     if (!gameId || !team) {
+      setTeamState({});
       setIsLoading(false);
       return;
     }
@@ -266,7 +269,10 @@ export function useAttacksCountByTeam(gameId: string | null) {
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (!gameId) return;
+    if (!gameId) {
+      setCounts({});
+      return;
+    }
 
     const unsubscribe = onSnapshot(
       collection(db, 'games', gameId, 'attacks'),
