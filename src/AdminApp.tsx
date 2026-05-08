@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Lock, Mail, LayoutDashboard, Plus, History, Clipboard, Check } from 'lucide-react';
+import { LayoutDashboard, Plus, History, Trash2 } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { cn } from './lib/utils';
 import { auth } from './lib/firebase';
@@ -13,7 +13,7 @@ import { ROOM_CODE_MAX_LENGTH } from './types';
 export default function AdminApp() {
   const [user, setUser] = useState<User | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const { gameId, createGame, leaveGame, setIsAlchemist, roomCode } = useGame();
+  const { gameId, createGame, leaveGame } = useGame();
 
   // State for New Game modal
   const [showNewGameModal, setShowNewGameModal] = useState(false);
@@ -89,6 +89,26 @@ export default function AdminApp() {
   if (!gameId) {
     return (
       <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef3f8_100%)] dark:bg-[linear-gradient(180deg,#0d0f15_0%,#090a0e_100%)] relative overflow-hidden font-sans">
+        <div className="absolute right-4 top-4 z-20 flex items-center gap-3 sm:right-6 sm:top-6">
+          <Button
+            variant="danger"
+            size="sm"
+            className="rounded-xl"
+            onClick={() => setShowResetModal(true)}
+          >
+            <Trash2 className="w-4 h-4" />
+            Resetear datos
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-xl text-kreatum-gray/55 hover:text-red-500"
+            onClick={handleLogout}
+          >
+            Cerrar sesión
+          </Button>
+        </div>
+
         <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -129,21 +149,6 @@ export default function AdminApp() {
               </Button>
             </div>
 
-            <div className="mt-8 flex flex-col items-center gap-4">
-              <button
-                onClick={() => setShowResetModal(true)}
-                className="text-xs font-semibold text-red-500/60 hover:text-red-500 transition-colors border border-red-500/20 px-4 py-2 rounded-lg"
-              >
-                Resetear Plataforma (Danger Zone)
-              </button>
-              
-              <button
-                onClick={handleLogout}
-                className="text-xs font-semibold text-kreatum-gray/45 hover:text-red-500 transition-colors"
-              >
-                Cerrar Sesión
-              </button>
-            </div>
           </motion.div>
 
           {showHistory && (
@@ -182,7 +187,16 @@ export default function AdminApp() {
   }
 
   // Authenticated with active game — show full AlchemistPanel
-  return <AlchemistPanel gameId={gameId} />;
+  return (
+    <>
+      <AlchemistPanel gameId={gameId} onResetPlatform={() => setShowResetModal(true)} />
+      {showResetModal && (
+        <ResetModal
+          onClose={() => setShowResetModal(false)}
+        />
+      )}
+    </>
+  );
 }
 
 // ─────────────────── RESET MODAL ───────────────────
@@ -191,6 +205,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
   const [confirmCode, setConfirmCode] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
   const CONFIRM_PHRASE = 'BORRAR TODO';
 
   const handleReset = async () => {
@@ -201,9 +216,15 @@ function ResetModal({ onClose }: { onClose: () => void }) {
 
     setIsResetting(true);
     setResetError('');
+    setResetSuccess('');
     try {
-      await purgeAllGames();
-      onClose();
+      const result = await purgeAllGames();
+      setConfirmCode('');
+      setResetSuccess(
+        result.gamesDeleted > 0
+          ? `Plataforma limpiada correctamente. Se eliminaron ${result.gamesDeleted} partidas y ${result.documentsDeleted} documentos.`
+          : 'La plataforma ya estaba limpia. No había partidas para eliminar.'
+      );
     } catch (e: any) {
       setResetError(e.message || 'Error al resetear la plataforma.');
     } finally {
@@ -229,6 +250,9 @@ function ResetModal({ onClose }: { onClose: () => void }) {
         {resetError && (
           <div className="p-3 text-sm font-medium text-red-500 bg-red-500/10 rounded-xl text-center mb-4">{resetError}</div>
         )}
+        {resetSuccess && (
+          <div className="p-3 text-sm font-medium text-kreatum-green bg-kreatum-green/10 rounded-xl text-center mb-4">{resetSuccess}</div>
+        )}
 
         <div className="mb-8">
           <label className="block text-xs font-bold opacity-60 mb-2">
@@ -237,18 +261,25 @@ function ResetModal({ onClose }: { onClose: () => void }) {
           <input
             type="text"
             value={confirmCode}
-            onChange={(e) => setConfirmCode(e.target.value.toUpperCase())}
+            onChange={(e) => {
+              setConfirmCode(e.target.value.toUpperCase());
+              setResetError('');
+              setResetSuccess('');
+            }}
             placeholder="BORRAR TODO"
+            disabled={isResetting || !!resetSuccess}
             className="w-full px-4 py-4 bg-white dark:bg-white/[0.04] border border-red-500/20 focus:border-red-500 rounded-xl outline-none transition-colors text-center font-mono font-bold tracking-[0.2em]"
           />
         </div>
 
         <div className="flex gap-3">
-          <Button variant="outline" className="flex-1 py-4" onClick={onClose}>Cancelar</Button>
+          <Button variant="outline" className="flex-1 py-4" onClick={onClose}>
+            {resetSuccess ? 'Cerrar' : 'Cancelar'}
+          </Button>
           <Button 
             className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white"
             onClick={handleReset}
-            disabled={isResetting || confirmCode !== CONFIRM_PHRASE}
+            disabled={isResetting || !!resetSuccess || confirmCode !== CONFIRM_PHRASE}
           >
             {isResetting ? 'Borrando...' : 'Purgar Todo'}
           </Button>

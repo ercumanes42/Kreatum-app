@@ -21,6 +21,7 @@ import {
   Shield,
   LockKeyhole,
   UnlockKeyhole,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { GameHistory } from './GameHistory';
@@ -44,9 +45,10 @@ const TEAM_CONFIG: Record<Team, { icon: string; color: string; bg: string }> = {
 
 interface Props {
   gameId: string;
+  onResetPlatform?: () => void;
 }
 
-export function AlchemistPanel({ gameId }: Props) {
+export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
   const { roomCode, leaveGame } = useGame();
   const { globalState, updateGlobalState } = useGameGlobal(gameId);
   const { teams } = useAllTeams(gameId);
@@ -191,6 +193,17 @@ export function AlchemistPanel({ gameId }: Props) {
               <Timer className="w-5 h-5 text-kreatum-purple" />
               <span className="font-mono text-base font-bold px-2 opacity-45">—:—:—</span>
             </div>
+            {onResetPlatform && (
+              <Button
+                size="sm"
+                variant="danger"
+                className="rounded-xl"
+                onClick={onResetPlatform}
+              >
+                <Trash2 className="w-4 h-4" />
+                Resetear datos
+              </Button>
+            )}
             <Button size="sm" variant="ghost" className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={leaveGame}>Salir</Button>
           </div>
         </header>

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ROOM_CODE_MAX_LENGTH, ROOM_CODE_MIN_LENGTH, Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
 import { doc, setDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
+import type { DocumentData, DocumentReference } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 
@@ -23,7 +24,7 @@ interface GameContextType {
   updateSolution: (reformulated: string, results: string) => Promise<void>;
   saveSolution: (team: Team, content: string) => Promise<void>;
   validateRoomCode: (code: string) => Promise<boolean>;
-  purgeAllGames: () => Promise<void>;
+  purgeAllGames: () => Promise<{ gamesDeleted: number; documentsDeleted: number }>;
   deleteAttack: (attackId: string) => Promise<void>;
 }
 
@@ -273,7 +274,10 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
   };
 
   const purgeAllGames = async () => {
-    if (!isAlchemist) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.isAnonymous || !currentUser.email) {
+      throw new Error('Solo el administrador autenticado puede resetear la plataforma.');
+    }
 
     const gamesRef = collection(db, 'games');
     const snapshot = await getDocs(gamesRef);
@@ -282,12 +286,23 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
 
     let batch = writeBatch(db);
     let opCount = 0;
+    let gamesDeleted = 0;
+    let documentsDeleted = 0;
 
-    const commitIfNeeded = async () => {
-      if (opCount >= MAX_BATCH_OPS) {
+    const commitBatch = async () => {
+      if (opCount > 0) {
         await batch.commit();
         batch = writeBatch(db);
         opCount = 0;
+      }
+    };
+
+    const queueDelete = async (ref: DocumentReference<DocumentData>) => {
+      batch.delete(ref);
+      opCount++;
+      documentsDeleted++;
+      if (opCount >= MAX_BATCH_OPS) {
+        await commitBatch();
       }
     };
 
@@ -296,19 +311,17 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       for (const sub of SUB_COLLECTIONS) {
         const subSnap = await getDocs(collection(db, 'games', gameDoc.id, sub));
         for (const subDoc of subSnap.docs) {
-          await commitIfNeeded();
-          batch.delete(subDoc.ref);
-          opCount++;
+          await queueDelete(subDoc.ref);
         }
       }
-      await commitIfNeeded();
-      batch.delete(gameDoc.ref);
-      opCount++;
+      await queueDelete(gameDoc.ref);
+      gamesDeleted++;
     }
 
-    if (opCount > 0) await batch.commit();
+    await commitBatch();
 
     leaveGame();
+    return { gamesDeleted, documentsDeleted };
   };
 
   const sendAttack = async (content: string, toTeam: Team, fromTeam: Team) => {
