@@ -338,10 +338,10 @@ export function GameHistory() {
                             { label: 'Debilidades', value: data.weaknesses },
                             { label: 'Prueba Piloto', value: data.pilot },
                             { label: 'Recursos', value: data.resources },
-                            { label: 'Pitch - Inicio', value: data.pitchStart },
-                            { label: 'Pitch - Problema', value: data.pitchProblem },
-                            { label: 'Pitch - Solución', value: data.pitchSolution },
-                            { label: 'Pitch - Acción', value: data.pitchAction },
+                            { label: 'Pitch - 1. Captación', value: data.pitchStart },
+                            { label: 'Pitch - 2. Acción', value: data.pitchProblem },
+                            { label: 'Pitch - 3. Testeo', value: data.pitchSolution },
+                            { label: 'Pitch - 4. Conclusiones', value: data.pitchAction },
                           ].filter(item => item.value).map(item => (
                             <div key={item.label} className="bg-black/[0.03] dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/5">
                               <p className="text-xs font-bold opacity-55 mb-1.5">{item.label}</p>

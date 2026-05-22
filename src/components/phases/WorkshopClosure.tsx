@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Sparkles, Trophy, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { sounds } from '../../lib/sounds';
-import { useAttacksReceived, useAttacksSent } from '../../hooks/useRealtime';
+import { useAttacksReceived, useAttacksSent, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
 export function WorkshopClosure({ state, isOpen, onClose }: Props) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const { gameId } = useGame();
+  const { globalState } = useGameGlobal(gameId);
 
   // Fetch real attack data from Firestore
   const { attacks: firestoreAttacksReceived } = useAttacksReceived(gameId, state.team);
@@ -42,13 +43,15 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
     'kreatum-green': { bg: 'bg-kreatum-green/20', text: 'text-kreatum-green' },
   };
 
+  const challenge = globalState?.challenge || state.challenge || '';
+
   const sections = [
     {
       key: 'diluir',
       title: 'Diluir — Perspectivas',
       color: 'kreatum-turquoise',
       items: [
-        { label: 'Reto', value: state.challenge },
+        { label: 'Reto', value: challenge },
         { label: 'Perspectiva Definitiva', value: state.selectedPerspective },
         { label: `Perspectivas generadas`, value: (state.perspectives ?? []).filter(p => p.trim()).length.toString() },
       ]
@@ -89,10 +92,10 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
       title: 'Proyectar — Pitch',
       color: 'kreatum-purple',
       items: [
-        { label: 'Inicio', value: state.pitchStart },
-        { label: 'Problema', value: state.pitchProblem },
-        { label: 'Solución', value: state.pitchSolution },
-        { label: 'Llamada a la acción', value: state.pitchAction },
+        { label: '1. Captación', value: state.pitchStart },
+        { label: '2. Acción', value: state.pitchProblem },
+        { label: '3. Testeo', value: state.pitchSolution },
+        { label: '4. Conclusiones', value: state.pitchAction },
       ]
     },
   ];

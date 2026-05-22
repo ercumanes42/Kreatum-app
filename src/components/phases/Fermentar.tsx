@@ -24,6 +24,21 @@ export function Fermentar({ state, updateState }: Props) {
         subtitle="Aterriza la solución. Dále forma para poder presentarla."
       />
 
+      <Card className="border-l-[6px] border-l-kreatum-turquoise glow-turquoise">
+        <CardHeader>
+          <CardTitle className="text-sm uppercase tracking-[0.3em] font-black opacity-50">Solución a Aterrizar</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-2xl md:text-3xl font-serif text-kreatum-dark dark:text-white leading-tight italic opacity-95 select-none">
+            {state.reformulatedSolution || state.selectedSolution ? (
+              `"${state.reformulatedSolution || state.selectedSolution}"`
+            ) : (
+              <span className="opacity-40">Aún no se ha definido la solución.</span>
+            )}
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Row 1: Audience, Strengths, Weaknesses */}
         <Card className="flex flex-col">
