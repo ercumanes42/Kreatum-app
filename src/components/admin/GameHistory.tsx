@@ -7,6 +7,13 @@ import { Team } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import {
+  buildGameCsvRows,
+  buildGamesCsvRows,
+  downloadCsv,
+  GameCsvRecord,
+  GameExportDocument,
+} from '../../lib/gameCsv';
+import {
   History,
   Search,
   Download,
@@ -20,16 +27,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 
-interface GameRecord {
-  id: string;
-  roomCode: string;
-  status: 'active' | 'completed';
-  createdAt: number;
-  completedAt?: number;
-  client?: string;
-  facilitator?: string;
-  globalState: any;
-  teams: Record<string, any>;
+interface GameRecord extends GameCsvRecord {
   attacksCount: number;
 }
 
@@ -61,13 +59,18 @@ export function GameHistory() {
       for (const gameDoc of gamesSnap.docs) {
         const data = gameDoc.data();
         
-        // Load teams
-        const teamsSnap = await getDocs(collection(db, 'games', gameDoc.id, 'teams'));
+        const [teamsSnap, attacksSnap, defensesSnap, solutionsSnap] = await Promise.all([
+          getDocs(collection(db, 'games', gameDoc.id, 'teams')),
+          getDocs(collection(db, 'games', gameDoc.id, 'attacks')),
+          getDocs(collection(db, 'games', gameDoc.id, 'defenses')),
+          getDocs(collection(db, 'games', gameDoc.id, 'solutions')),
+        ]);
+
         const teams: Record<string, any> = {};
         teamsSnap.forEach(t => { teams[t.id] = t.data(); });
 
-        // Load attacks
-        const attacksSnap = await getDocs(collection(db, 'games', gameDoc.id, 'attacks'));
+        const toDocuments = (snapshot: typeof attacksSnap): GameExportDocument[] =>
+          snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
         
         gamesList.push({
           id: gameDoc.id,
@@ -77,16 +80,11 @@ export function GameHistory() {
           completedAt: data.completedAt,
           client: data.client,
           facilitator: data.facilitator,
-          globalState: {
-            currentPhase: data.currentPhase,
-            challenge: data.challenge,
-            client: data.client,
-            facilitator: data.facilitator,
-            roomCode: data.roomCode,
-            status: data.status,
-            unlockedPhases: data.unlockedPhases,
-          },
+          globalState: { ...data },
           teams,
+          attacks: toDocuments(attacksSnap),
+          defenses: toDocuments(defensesSnap),
+          solutions: toDocuments(solutionsSnap),
           attacksCount: attacksSnap.size,
         });
       }
@@ -138,93 +136,17 @@ export function GameHistory() {
   };
 
   const exportToCSV = (game: GameRecord) => {
-    const rows: string[][] = [];
-    
-    // Header
-    rows.push([
-      'Equipo', 'Fase Actual', 'Reto', 'Perspectiva Definitiva',
-      'Solución Definitiva', 'Solución Reformulada', 'Resultados Esperados',
-      'Audiencia', 'Fortalezas', 'Debilidades', 'Prueba Piloto', 'Recursos',
-      'Pitch - Inicio', 'Pitch - Problema', 'Pitch - Solución', 'Pitch - Acción',
-    ]);
-
-    const teamNames: Team[] = ['Agua', 'Aire', 'Fuego', 'Tierra'];
-    for (const team of teamNames) {
-      const data = game.teams[team] || {};
-      rows.push([
-        team,
-        data.currentPhase || 'Selección',
-        data.challenge || '',
-        data.selectedPerspective || '',
-        data.selectedSolution || '',
-        data.reformulatedSolution || '',
-        data.expectedResults || '',
-        data.audience || '',
-        data.strengths || '',
-        data.weaknesses || '',
-        data.pilot || '',
-        data.resources || '',
-        data.pitchStart || '',
-        data.pitchProblem || '',
-        data.pitchSolution || '',
-        data.pitchAction || '',
-      ]);
-    }
-
-    // Escape CSV and generate file
-    const csvContent = rows
-      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Kreatum_${game.roomCode}_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(
+      buildGameCsvRows(game),
+      `Kreatum_${game.roomCode}_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
   };
 
   const exportAllToCSV = () => {
-    const rows: string[][] = [];
-    rows.push([
-      'ID Partida', 'Código Sala', 'Estado', 'Fecha Creación', 'Fecha Fin',
-      'Equipo', 'Fase', 'Reto', 'Perspectiva', 'Solución', 'Solución Reformulada',
-    ]);
-
-    for (const game of filteredGames) {
-      const teamNames: Team[] = ['Agua', 'Aire', 'Fuego', 'Tierra'];
-      for (const team of teamNames) {
-        const data = game.teams[team] || {};
-        rows.push([
-          game.id,
-          game.roomCode,
-          game.status,
-          formatDate(game.createdAt),
-          game.completedAt ? formatDate(game.completedAt) : '',
-          team,
-          data.currentPhase || 'Selección',
-          data.challenge || '',
-          data.selectedPerspective || '',
-          data.selectedSolution || '',
-          data.reformulatedSolution || '',
-        ]);
-      }
-    }
-
-    const csvContent = rows
-      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Kreatum_Historial_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(
+      buildGamesCsvRows(filteredGames),
+      `Kreatum_Historial_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
   };
 
   // ─────────────────── DETAIL VIEW ───────────────────
@@ -345,7 +267,7 @@ export function GameHistory() {
                           ].filter(item => item.value).map(item => (
                             <div key={item.label} className="bg-black/[0.03] dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/5">
                               <p className="text-xs font-bold opacity-55 mb-1.5">{item.label}</p>
-                              <p className="text-sm leading-relaxed">{item.value}</p>
+                              <p className="text-sm leading-relaxed">{String(item.value)}</p>
                             </div>
                           ))}
                         </div>

@@ -14,14 +14,14 @@ interface Props {
 type JoinStep = 'code' | 'team';
 
 export function TeamSelection({ state, updateState }: Props) {
-  const { gameId, joinGame, validateRoomCode } = useGame();
+  const { gameId, roomCode, joinGame, validateRoomCode } = useGame();
   
   // If already in a game, skip to team selection
   const [step, setStep] = useState<JoinStep>(gameId ? 'team' : 'code');
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [isValidating, setIsValidating] = useState(false);
-  const [pendingCode, setPendingCode] = useState('');
+  const [pendingCode, setPendingCode] = useState(roomCode || '');
   const [joiningTeam, setJoiningTeam] = useState<Team | null>(null);
   
   const teams: { id: Team; name: string; icon: string; color: string; bg: string }[] = [
@@ -65,7 +65,7 @@ export function TeamSelection({ state, updateState }: Props) {
     setJoiningTeam(team);
     setCodeError('');
     try {
-      await joinGame(pendingCode, team);
+      await joinGame(pendingCode || roomCode || '', team);
     } catch (e: any) {
       setCodeError(e.message || 'Error al unirse a la sala.');
       // Go back to code step if the code was invalid

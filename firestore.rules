@@ -14,11 +14,17 @@ service cloud.firestore {
       return teamName in ['Fuego', 'Agua', 'Aire', 'Tierra'];
     }
 
-    function isTeamOwner(gameId, teamName) {
+    function isTeamMember(gameId, teamName) {
       return signedIn()
         && isValidTeamName(teamName)
         && exists(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName))
-        && get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.playerId == request.auth.uid;
+        && (
+          get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.playerId == request.auth.uid
+          || (
+            get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.memberIds is list
+            && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.memberIds
+          )
+        );
     }
 
     function isGamePhase(gameId, phase) {
@@ -45,15 +51,49 @@ service cloud.firestore {
         allow create: if signedIn()
           && isValidTeamName(teamName)
           && request.resource.data.playerId == request.auth.uid
+          && request.resource.data.memberIds is list
+          && request.auth.uid in request.resource.data.memberIds
           && request.resource.data.team == teamName;
 
         allow update: if isAdmin()
           || (
             signedIn()
             && isValidTeamName(teamName)
-            && resource.data.playerId == request.auth.uid
+            && isTeamMember(gameId, teamName)
             && request.resource.data.playerId == resource.data.playerId
+            && request.resource.data.get('memberIds', []) == resource.data.get('memberIds', [])
             && request.resource.data.team == resource.data.team
+          )
+          || (
+            signedIn()
+            && isGamePhase(gameId, 'Selección')
+            && isValidTeamName(teamName)
+            && request.resource.data.team == resource.data.team
+            && request.resource.data.memberIds is list
+            && request.auth.uid in request.resource.data.memberIds
+            && request.resource.data.memberIds.hasAll(
+              resource.data.get(
+                'memberIds',
+                resource.data.get('playerId', null) is string
+                  ? [resource.data.get('playerId', null)]
+                  : []
+              )
+            )
+            && request.resource.data.memberIds.size() <= resource.data.get(
+              'memberIds',
+              resource.data.get('playerId', null) is string
+                ? [resource.data.get('playerId', null)]
+                : []
+            ).size() + 1
+            && (
+              request.resource.data.playerId == resource.data.get('playerId', null)
+              || (
+                resource.data.get('playerId', null) == null
+                && request.resource.data.playerId == request.auth.uid
+              )
+            )
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['playerId', 'memberIds', 'updatedAt'])
           );
 
         allow delete: if isAdmin();
@@ -68,14 +108,13 @@ service cloud.firestore {
           && request.resource.data.playerId == request.auth.uid
           && isValidTeamName(request.resource.data.fromTeam)
           && isValidTeamName(request.resource.data.toTeam)
-          && isTeamOwner(gameId, request.resource.data.fromTeam)
+          && isTeamMember(gameId, request.resource.data.fromTeam)
           && request.resource.data.content is string
           && request.resource.data.content.size() > 0;
 
         allow update: if signedIn()
           && isGamePhase(gameId, 'Sublimar')
-          && resource.data.playerId == request.auth.uid
-          && isTeamOwner(gameId, resource.data.fromTeam)
+          && isTeamMember(gameId, resource.data.fromTeam)
           && request.resource.data.playerId == resource.data.playerId
           && request.resource.data.fromTeam == resource.data.fromTeam
           && request.resource.data.toTeam == resource.data.toTeam
@@ -87,8 +126,7 @@ service cloud.firestore {
           || (
             signedIn()
             && isGamePhase(gameId, 'Sublimar')
-            && resource.data.playerId == request.auth.uid
-            && isTeamOwner(gameId, resource.data.fromTeam)
+            && isTeamMember(gameId, resource.data.fromTeam)
           );
       }
 
@@ -100,14 +138,13 @@ service cloud.firestore {
           && request.resource.data.keys().hasAll(['attackId', 'team', 'content', 'timestamp', 'playerId'])
           && request.resource.data.playerId == request.auth.uid
           && isValidTeamName(request.resource.data.team)
-          && isTeamOwner(gameId, request.resource.data.team)
+          && isTeamMember(gameId, request.resource.data.team)
           && request.resource.data.content is string
           && request.resource.data.content.size() > 0;
 
         allow update: if signedIn()
           && isGamePhase(gameId, 'Sublimar')
-          && resource.data.playerId == request.auth.uid
-          && isTeamOwner(gameId, resource.data.team)
+          && isTeamMember(gameId, resource.data.team)
           && request.resource.data.playerId == resource.data.playerId
           && request.resource.data.team == resource.data.team
           && request.resource.data.attackId == resource.data.attackId
@@ -118,8 +155,7 @@ service cloud.firestore {
           || (
             signedIn()
             && isGamePhase(gameId, 'Sublimar')
-            && resource.data.playerId == request.auth.uid
-            && isTeamOwner(gameId, resource.data.team)
+            && isTeamMember(gameId, resource.data.team)
           );
       }
 
@@ -130,7 +166,7 @@ service cloud.firestore {
           || (
             signedIn()
             && isValidTeamName(teamName)
-            && isTeamOwner(gameId, teamName)
+            && isTeamMember(gameId, teamName)
             && request.resource.data.team == teamName
             && request.resource.data.content is string
           );
@@ -139,7 +175,7 @@ service cloud.firestore {
           || (
             signedIn()
             && isValidTeamName(teamName)
-            && isTeamOwner(gameId, teamName)
+            && isTeamMember(gameId, teamName)
           );
       }
     }

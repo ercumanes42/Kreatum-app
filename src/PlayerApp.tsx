@@ -16,11 +16,11 @@ import { useTeamSync, useGameGlobal } from './hooks/useRealtime';
 import { useGame } from './contexts/GameContext';
 
 export default function PlayerApp() {
-  const { gameId, team, isAlchemist, leaveGame, roomCode } = useGame();
+  const { gameId, team, playerId, isAlchemist, leaveGame, clearTeamSelection, roomCode } = useGame();
   const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
   const [isDark, setIsDark] = useState(false);
 
-  const { teamState, updateTeamSync } = useTeamSync(gameId, team || state.team);
+  const { teamState, updateTeamSync, isLoading: isTeamLoading, exists: teamExists } = useTeamSync(gameId, team || state.team);
   const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
 
   const challenge = globalState?.challenge || '';
@@ -71,6 +71,19 @@ export default function PlayerApp() {
       setState(prev => ({ ...prev, ...teamState }));
     }
   }, [teamState]);
+
+  // An administrative reset removes every device from the team assignment.
+  useEffect(() => {
+    if (!team || !playerId || isTeamLoading) return;
+    const memberIds = Array.isArray(teamState.memberIds) ? teamState.memberIds : [];
+    const isStillAssigned = teamState.playerId === playerId || memberIds.includes(playerId);
+
+    if (teamExists === false || (teamExists === true && !isStillAssigned)) {
+      setState({ ...initialState });
+      clearTeamSelection();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [team, playerId, isTeamLoading, teamExists, teamState.playerId, teamState.memberIds, clearTeamSelection]);
 
   useEffect(() => {
     if (isDark) {

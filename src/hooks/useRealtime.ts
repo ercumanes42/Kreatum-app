@@ -135,18 +135,25 @@ export function useAllTeams(gameId: string | null) {
 export function useTeamSync(gameId: string | null, team: Team | null) {
   const [teamState, setTeamState] = useState<Partial<GameState>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [exists, setExists] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!gameId || !team) {
       setTeamState({});
+      setExists(null);
       setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
     const docRef = doc(db, 'games', gameId, 'teams', team);
     const unsubscribe = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {
         setTeamState(snapshot.data() as Partial<GameState>);
+        setExists(true);
+      } else {
+        setTeamState({});
+        setExists(false);
       }
       setIsLoading(false);
     });
@@ -160,7 +167,7 @@ export function useTeamSync(gameId: string | null, team: Team | null) {
     await setDoc(docRef, updates, { merge: true });
   };
 
-  return { teamState, updateTeamSync, isLoading };
+  return { teamState, updateTeamSync, isLoading, exists };
 }
 
 export function useDefensesReceived(gameId: string | null, myTeam: Team | null) {

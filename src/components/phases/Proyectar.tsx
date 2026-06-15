@@ -113,8 +113,7 @@ export function Proyectar({ state, updateState }: Props) {
         subtitle="Prepara tu presentación y speech (Pitch)."
       >
         <Button
-          variant="outline"
-          className="flex gap-2 items-center rounded-xl px-5 h-11 border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
+          className="flex gap-2 items-center rounded-xl px-6 h-12 border-0 bg-gradient-to-r from-kreatum-purple via-fuchsia-500 to-kreatum-blue text-white shadow-[0_14px_32px_-16px_rgba(162,84,156,0.95)] ring-2 ring-kreatum-purple/15 hover:brightness-105 hover:shadow-[0_18px_38px_-16px_rgba(162,84,156,1)]"
           onClick={() => setShowSummary(true)}
         >
           <Eye className="w-5 h-5" />

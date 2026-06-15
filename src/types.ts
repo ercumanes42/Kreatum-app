@@ -25,6 +25,13 @@ export const ROOM_CODE_MAX_LENGTH = 10;
 export interface GameState {
   team: Team | null;
   currentPhase: Phase;
+
+  // Team assignment metadata
+  playerId?: string | null;
+  memberIds?: string[];
+  createdAt?: number;
+  updatedAt?: number;
+  assignmentResetAt?: number;
   
   // Diluir
   challenge: string;

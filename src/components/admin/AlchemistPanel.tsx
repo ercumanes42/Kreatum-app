@@ -22,6 +22,7 @@ import {
   LockKeyhole,
   UnlockKeyhole,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { GameHistory } from './GameHistory';
@@ -49,13 +50,14 @@ interface Props {
 }
 
 export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
-  const { roomCode, leaveGame } = useGame();
+  const { roomCode, leaveGame, resetTeamSelection } = useGame();
   const { globalState, updateGlobalState } = useGameGlobal(gameId);
   const { teams } = useAllTeams(gameId);
   const attackCounts = useAttacksCountByTeam(gameId);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
   const [summaryTeam, setSummaryTeam] = useState<Team | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+  const [resettingTeam, setResettingTeam] = useState<Team | null>(null);
 
   const currentPhase = (globalState.currentPhase || 'Selección') as Phase;
   const hasUnlockedPhases = globalState.unlockedPhases && globalState.unlockedPhases.length > 0;
@@ -96,6 +98,32 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
     if (teamData.isFinished === true) return 100;
     const phaseIndex = PHASES.indexOf(teamData.currentPhase || 'Selección');
     return Math.round((phaseIndex / (PHASES.length - 1)) * 100);
+  };
+
+  const getTeamMemberCount = (teamData: any) => {
+    if (!teamData) return 0;
+    const memberIds = Array.isArray(teamData.memberIds) ? teamData.memberIds : [];
+    return new Set([
+      ...memberIds.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
+      ...(typeof teamData.playerId === 'string' && teamData.playerId.length > 0 ? [teamData.playerId] : []),
+    ]).size;
+  };
+
+  const handleResetTeamSelection = async (teamId: Team) => {
+    const confirmed = window.confirm(
+      `¿Reabrir la selección del Equipo ${teamId}? Todos sus dispositivos tendrán que elegir equipo de nuevo.`
+    );
+    if (!confirmed) return;
+
+    setResettingTeam(teamId);
+    try {
+      await resetTeamSelection(teamId);
+    } catch (error) {
+      console.error('Error al reabrir la selección del equipo:', error);
+      window.alert((error as Error).message || 'No se pudo reabrir la selección del equipo.');
+    } finally {
+      setResettingTeam(null);
+    }
   };
 
   const [isExporting, setIsExporting] = useState(false);
@@ -368,10 +396,12 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                 const data = teams[teamId];
                 const config = TEAM_CONFIG[teamId];
                 const barColor = TEAM_BAR_COLORS[teamId];
-                const progress = getTeamProgress(data);
-                
+                const memberCount = getTeamMemberCount(data);
+                const isAssigned = memberCount > 0;
+                const progress = isAssigned ? getTeamProgress(data) : 0;
+
                 return (
-                  <Card key={teamId} className={cn("overflow-hidden border-black/[0.06] dark:border-white/[0.08] transition-colors duration-200", data ? "opacity-100" : "opacity-45 grayscale")}>
+                  <Card key={teamId} className={cn("overflow-hidden border-black/[0.06] dark:border-white/[0.08] transition-colors duration-200", isAssigned ? "opacity-100" : "opacity-45 grayscale")}>
                     <div className={cn("h-2 w-full", barColor)} />
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
@@ -381,9 +411,24 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                           </div>
                           <CardTitle className="text-lg">Equipo {teamId}</CardTitle>
                         </div>
-                        <span className={cn("text-xs font-mono px-2 py-1 rounded-md", data ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500")}>
-                          {data ? 'ACTIVO' : 'ESPERANDO'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {isAssigned && currentPhase === 'Selección' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-3 text-xs border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                              onClick={() => handleResetTeamSelection(teamId)}
+                              disabled={resettingTeam === teamId}
+                              title={`Reabrir selección del Equipo ${teamId}`}
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              {resettingTeam === teamId ? 'Reabriendo...' : 'Corregir equipo'}
+                            </Button>
+                          )}
+                          <span className={cn("text-xs font-mono px-2 py-1 rounded-md", isAssigned ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500")}>
+                            {isAssigned ? 'ACTIVO' : 'ESPERANDO'}
+                          </span>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-4">
@@ -401,15 +446,19 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                          <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
                             <p className="text-xs font-bold opacity-55 mb-1">Fase Actual</p>
                             <p className="text-sm font-bold truncate">{data?.currentPhase || 'Selección'}</p>
                          </div>
-                         <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
+                          <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
+                            <p className="text-xs font-bold opacity-55 mb-1">Dispositivos</p>
+                            <p className="text-sm font-bold">{memberCount} conectados</p>
+                          </div>
+                          <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
                             <p className="text-xs font-bold opacity-55 mb-1">Ataques</p>
                             <p className="text-sm font-bold">{attackCounts[teamId] || 0} enviados</p>
-                         </div>
+                          </div>
                       </div>
 
                       <div className="bg-black/5 dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/5">

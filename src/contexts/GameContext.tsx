@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ROOM_CODE_MAX_LENGTH, ROOM_CODE_MIN_LENGTH, Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
-import { doc, setDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, updateDoc, getDocs, getDoc, query, where, writeBatch, deleteDoc, runTransaction } from 'firebase/firestore';
 import type { DocumentData, DocumentReference } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -18,6 +18,8 @@ interface GameContextType {
   createGame: (team: Team | null, asAlchemist?: boolean, metadata?: { client?: string; facilitator?: string; challenge?: string, customCode?: string }) => Promise<string>;
   joinGame: (gameIdOrCode: string, joinAs: Team | 'Alchemist') => Promise<void>;
   leaveGame: () => void;
+  clearTeamSelection: () => void;
+  resetTeamSelection: (team: Team) => Promise<void>;
   sendAttack: (content: string, toTeam: Team, fromTeam: Team) => Promise<void>;
   editAttack: (attackId: string, newContent: string) => Promise<void>;
   sendDefense: (attackId: string, content: string) => Promise<void>;
@@ -31,6 +33,7 @@ interface GameContextType {
 const GameContext = createContext<GameContextType | null>(null);
 
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 horas
+const TEAM_NAMES: Team[] = ['Agua', 'Aire', 'Fuego', 'Tierra'];
 
 const isSessionExpired = (): boolean => {
   const savedAt = localStorage.getItem('kreatum_session_at');
@@ -158,6 +161,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     if (!asAlchemist && team) {
       await setDoc(doc(db, 'games', gameId, 'teams', team), {
         playerId,
+        memberIds: [playerId],
         team,
         createdAt: Date.now(),
       });
@@ -210,43 +214,55 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       return;
     }
 
-    // Verificar si este playerId ya está en algún equipo de esta partida
-    const teamsRef = collection(db, 'games', targetGameId, 'teams');
-    const teamsSnapshot = await getDocs(teamsRef);
-    const alreadyInTeam = teamsSnapshot.docs.find(
-      (doc) => doc.data().playerId === playerId
-    );
+    const team = joinAs as Team;
+    await runTransaction(db, async (transaction) => {
+      const teamRefs = TEAM_NAMES.map((teamName) => doc(db, 'games', targetGameId, 'teams', teamName));
+      const teamSnapshots = await Promise.all(teamRefs.map((teamRef) => transaction.get(teamRef)));
 
-    if (alreadyInTeam) {
-      const existingTeam = alreadyInTeam.id;
-      // Si ya está en el mismo equipo que quiere unirse, simplemente reconectar
-      if (existingTeam === joinAs) {
-        setGameId(targetGameId);
-        setTeam(joinAs as Team);
-        setIsAlchemist(false);
-        setRoomCode(targetRoomCode);
-        localStorage.setItem('kreatum_game_id', targetGameId);
-        localStorage.setItem('kreatum_team', joinAs);
-        localStorage.setItem('kreatum_is_alchemist', 'false');
-        localStorage.setItem('kreatum_room_code', targetRoomCode);
-        localStorage.setItem('kreatum_session_at', Date.now().toString());
-        return;
+      const existingMembership = teamSnapshots.find((snapshot) => {
+        if (!snapshot.exists()) return false;
+        const data = snapshot.data();
+        const members = Array.isArray(data.memberIds) ? data.memberIds : [];
+        return data.playerId === playerId || members.includes(playerId);
+      });
+
+      if (existingMembership && existingMembership.id !== team) {
+        throw new Error(`Ya estás registrado en el Equipo ${existingMembership.id} de esta partida. El Alquimista debe reabrir tu selección para que puedas cambiar.`);
       }
-      // Si está en un equipo diferente, lanzar error
-      throw new Error(`Ya estás registrado en el Equipo ${existingTeam} de esta partida. No puedes cambiar de equipo.`);
-    }
 
-    const selectedTeamDoc = teamsSnapshot.docs.find((doc) => doc.id === joinAs);
-    if (selectedTeamDoc?.data().playerId && selectedTeamDoc.data().playerId !== playerId) {
-      throw new Error(`El Equipo ${joinAs} ya está ocupado en esta partida. Elige otro equipo o consulta con el Alquimista.`);
-    }
+      const selectedTeamRef = doc(db, 'games', targetGameId, 'teams', team);
+      const selectedTeamSnapshot = teamSnapshots.find((snapshot) => snapshot.id === team);
+      const now = Date.now();
 
-    const team = joinAs;
-    await setDoc(doc(db, 'games', targetGameId, 'teams', team), {
-      playerId,
-      team,
-      updatedAt: Date.now(),
-    }, { merge: true });
+      if (selectedTeamSnapshot?.exists()) {
+        const data = selectedTeamSnapshot.data();
+        const currentMembers = Array.isArray(data.memberIds)
+          ? data.memberIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+          : [];
+        const legacyOwner = typeof data.playerId === 'string' && data.playerId.length > 0
+          ? data.playerId
+          : null;
+        const memberIds = Array.from(new Set([
+          ...(legacyOwner ? [legacyOwner] : []),
+          ...currentMembers,
+          playerId,
+        ]));
+
+        transaction.update(selectedTeamRef, {
+          playerId: legacyOwner || playerId,
+          memberIds,
+          updatedAt: now,
+        });
+      } else {
+        transaction.set(selectedTeamRef, {
+          playerId,
+          memberIds: [playerId],
+          team,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    });
 
     setGameId(targetGameId);
     setTeam(team);
@@ -271,6 +287,38 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     localStorage.removeItem('kreatum_is_alchemist');
     localStorage.removeItem('kreatum_room_code');
     localStorage.removeItem('kreatum_session_at');
+  };
+
+  const clearTeamSelection = () => {
+    setTeam(null);
+    setIsAlchemist(false);
+    localStorage.removeItem('kreatum_team');
+    localStorage.setItem('kreatum_is_alchemist', 'false');
+    localStorage.setItem('kreatum_session_at', Date.now().toString());
+  };
+
+  const resetTeamSelection = async (teamToReset: Team) => {
+    if (!gameId) throw new Error('No hay una partida activa.');
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.isAnonymous || !currentUser.email) {
+      throw new Error('Solo el Alquimista autenticado puede reabrir la selección.');
+    }
+
+    const gameSnapshot = await getDoc(doc(db, 'games', gameId));
+    if (!gameSnapshot.exists() || gameSnapshot.data().currentPhase !== 'Selección') {
+      throw new Error('La selección de equipos solo se puede reabrir durante la fase inicial.');
+    }
+
+    const teamRef = doc(db, 'games', gameId, 'teams', teamToReset);
+    const teamSnapshot = await getDoc(teamRef);
+    if (!teamSnapshot.exists()) return;
+
+    await updateDoc(teamRef, {
+      playerId: null,
+      memberIds: [],
+      assignmentResetAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   };
 
   const purgeAllGames = async () => {
@@ -392,6 +440,8 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
         createGame,
         joinGame,
         leaveGame,
+        clearTeamSelection,
+        resetTeamSelection,
         sendAttack,
         editAttack,
         sendDefense,
