@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ROOM_CODE_MAX_LENGTH, ROOM_CODE_MIN_LENGTH, Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
-import { doc, setDoc, collection, addDoc, updateDoc, getDocs, getDoc, query, where, writeBatch, deleteDoc, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc, runTransaction } from 'firebase/firestore';
 import type { DocumentData, DocumentReference } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -19,7 +19,8 @@ interface GameContextType {
   joinGame: (gameIdOrCode: string, joinAs: Team | 'Alchemist') => Promise<void>;
   leaveGame: () => void;
   clearTeamSelection: () => void;
-  resetTeamSelection: (team: Team) => Promise<void>;
+  applyTeamReassignment: (team: Team) => void;
+  reassignTeamMember: (sourceTeam: Team, memberId: string, destinationTeam: Team) => Promise<void>;
   sendAttack: (content: string, toTeam: Team, fromTeam: Team) => Promise<void>;
   editAttack: (attackId: string, newContent: string) => Promise<void>;
   sendDefense: (attackId: string, content: string) => Promise<void>;
@@ -297,27 +298,90 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     localStorage.setItem('kreatum_session_at', Date.now().toString());
   };
 
-  const resetTeamSelection = async (teamToReset: Team) => {
+  const applyTeamReassignment = (reassignedTeam: Team) => {
+    setTeam(reassignedTeam);
+    setIsAlchemist(false);
+    localStorage.setItem('kreatum_team', reassignedTeam);
+    localStorage.setItem('kreatum_is_alchemist', 'false');
+    localStorage.setItem('kreatum_session_at', Date.now().toString());
+  };
+
+  const reassignTeamMember = async (sourceTeam: Team, memberId: string, destinationTeam: Team) => {
     if (!gameId) throw new Error('No hay una partida activa.');
+    if (sourceTeam === destinationTeam) throw new Error('Elige un equipo de destino diferente.');
     const currentUser = auth.currentUser;
     if (!currentUser || currentUser.isAnonymous || !currentUser.email) {
-      throw new Error('Solo el Alquimista autenticado puede reabrir la selección.');
+      throw new Error('Solo el Alquimista autenticado puede reasignar dispositivos.');
     }
 
-    const gameSnapshot = await getDoc(doc(db, 'games', gameId));
-    if (!gameSnapshot.exists() || gameSnapshot.data().currentPhase !== 'Selección') {
-      throw new Error('La selección de equipos solo se puede reabrir durante la fase inicial.');
-    }
+    const gameRef = doc(db, 'games', gameId);
+    const sourceRef = doc(db, 'games', gameId, 'teams', sourceTeam);
+    const destinationRef = doc(db, 'games', gameId, 'teams', destinationTeam);
 
-    const teamRef = doc(db, 'games', gameId, 'teams', teamToReset);
-    const teamSnapshot = await getDoc(teamRef);
-    if (!teamSnapshot.exists()) return;
+    await runTransaction(db, async (transaction) => {
+      const [gameSnapshot, sourceSnapshot, destinationSnapshot] = await Promise.all([
+        transaction.get(gameRef),
+        transaction.get(sourceRef),
+        transaction.get(destinationRef),
+      ]);
 
-    await updateDoc(teamRef, {
-      playerId: null,
-      memberIds: [],
-      assignmentResetAt: Date.now(),
-      updatedAt: Date.now(),
+      if (!gameSnapshot.exists() || gameSnapshot.data().status === 'completed') {
+        throw new Error('La partida ya no está activa.');
+      }
+      if (!sourceSnapshot.exists()) {
+        throw new Error(`El Equipo ${sourceTeam} no tiene dispositivos asignados.`);
+      }
+
+      const sourceData = sourceSnapshot.data();
+      const sourceMembers = Array.from(new Set([
+        ...(typeof sourceData.playerId === 'string' ? [sourceData.playerId] : []),
+        ...(Array.isArray(sourceData.memberIds) ? sourceData.memberIds : []),
+      ]));
+
+      if (!sourceMembers.includes(memberId)) {
+        throw new Error('Ese dispositivo ya no pertenece al equipo de origen.');
+      }
+
+      const remainingSourceMembers = sourceMembers.filter((id) => id !== memberId);
+      const destinationData = destinationSnapshot.exists() ? destinationSnapshot.data() : {};
+      const destinationMembers = Array.from(new Set([
+        ...(typeof destinationData.playerId === 'string' ? [destinationData.playerId] : []),
+        ...(Array.isArray(destinationData.memberIds) ? destinationData.memberIds : []),
+        memberId,
+      ]));
+      const reassignments = {
+        ...(sourceData.reassignments && typeof sourceData.reassignments === 'object'
+          ? sourceData.reassignments
+          : {}),
+        [memberId]: destinationTeam,
+      };
+      const destinationReassignments = {
+        ...(destinationData.reassignments && typeof destinationData.reassignments === 'object'
+          ? destinationData.reassignments
+          : {}),
+      };
+      delete destinationReassignments[memberId];
+      const now = Date.now();
+
+      transaction.update(sourceRef, {
+        playerId: sourceData.playerId === memberId
+          ? remainingSourceMembers[0] || null
+          : sourceData.playerId || remainingSourceMembers[0] || null,
+        memberIds: remainingSourceMembers,
+        reassignments,
+        updatedAt: now,
+      });
+
+      transaction.set(destinationRef, {
+        team: destinationTeam,
+        playerId: typeof destinationData.playerId === 'string' && destinationData.playerId
+          ? destinationData.playerId
+          : memberId,
+        memberIds: destinationMembers,
+        reassignments: destinationReassignments,
+        createdAt: destinationData.createdAt || now,
+        updatedAt: now,
+      }, { merge: true });
     });
   };
 
@@ -441,7 +505,8 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
         joinGame,
         leaveGame,
         clearTeamSelection,
-        resetTeamSelection,
+        applyTeamReassignment,
+        reassignTeamMember,
         sendAttack,
         editAttack,
         sendDefense,

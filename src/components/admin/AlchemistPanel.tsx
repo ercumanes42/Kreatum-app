@@ -22,9 +22,11 @@ import {
   LockKeyhole,
   UnlockKeyhole,
   Trash2,
-  RotateCcw,
+  ArrowRightLeft,
+  Monitor,
+  X,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getDeviceCode } from '../../lib/utils';
 import { GameHistory } from './GameHistory';
 import { WorkshopClosure } from '../phases/WorkshopClosure';
 import { Sparkles } from 'lucide-react';
@@ -44,20 +46,25 @@ const TEAM_CONFIG: Record<Team, { icon: string; color: string; bg: string }> = {
   Aire: { icon: '/assets/logos/aire.png', color: 'text-kreatum-turquoise', bg: 'bg-kreatum-turquoise/5' },
 };
 
+const TEAM_NAMES: Team[] = ['Agua', 'Aire', 'Fuego', 'Tierra'];
+
 interface Props {
   gameId: string;
   onResetPlatform?: () => void;
 }
 
 export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
-  const { roomCode, leaveGame, resetTeamSelection } = useGame();
+  const { roomCode, leaveGame, reassignTeamMember } = useGame();
   const { globalState, updateGlobalState } = useGameGlobal(gameId);
   const { teams } = useAllTeams(gameId);
   const attackCounts = useAttacksCountByTeam(gameId);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
   const [summaryTeam, setSummaryTeam] = useState<Team | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
-  const [resettingTeam, setResettingTeam] = useState<Team | null>(null);
+  const [reassignmentSource, setReassignmentSource] = useState<Team | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [reassignmentDestination, setReassignmentDestination] = useState<Team | null>(null);
+  const [isReassigning, setIsReassigning] = useState(false);
 
   const currentPhase = (globalState.currentPhase || 'Selección') as Phase;
   const hasUnlockedPhases = globalState.unlockedPhases && globalState.unlockedPhases.length > 0;
@@ -100,29 +107,43 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
     return Math.round((phaseIndex / (PHASES.length - 1)) * 100);
   };
 
-  const getTeamMemberCount = (teamData: any) => {
-    if (!teamData) return 0;
+  const getTeamMembers = (teamData: any): string[] => {
+    if (!teamData) return [];
     const memberIds = Array.isArray(teamData.memberIds) ? teamData.memberIds : [];
-    return new Set([
+    return Array.from(new Set([
       ...memberIds.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
       ...(typeof teamData.playerId === 'string' && teamData.playerId.length > 0 ? [teamData.playerId] : []),
-    ]).size;
+    ]));
   };
 
-  const handleResetTeamSelection = async (teamId: Team) => {
-    const confirmed = window.confirm(
-      `¿Reabrir la selección del Equipo ${teamId}? Todos sus dispositivos tendrán que elegir equipo de nuevo.`
-    );
-    if (!confirmed) return;
+  const openReassignment = (teamId: Team) => {
+    const members = getTeamMembers(teams[teamId]);
+    if (members.length === 0) return;
+    setReassignmentSource(teamId);
+    setSelectedMemberId(members[0]);
+    setReassignmentDestination(null);
+  };
 
-    setResettingTeam(teamId);
+  const closeReassignment = () => {
+    if (isReassigning) return;
+    setReassignmentSource(null);
+    setSelectedMemberId('');
+    setReassignmentDestination(null);
+  };
+
+  const handleReassignMember = async () => {
+    if (!reassignmentSource || !selectedMemberId || !reassignmentDestination) return;
+    setIsReassigning(true);
     try {
-      await resetTeamSelection(teamId);
+      await reassignTeamMember(reassignmentSource, selectedMemberId, reassignmentDestination);
+      setReassignmentSource(null);
+      setSelectedMemberId('');
+      setReassignmentDestination(null);
     } catch (error) {
-      console.error('Error al reabrir la selección del equipo:', error);
-      window.alert((error as Error).message || 'No se pudo reabrir la selección del equipo.');
+      console.error('Error al reasignar el dispositivo:', error);
+      window.alert((error as Error).message || 'No se pudo reasignar el dispositivo.');
     } finally {
-      setResettingTeam(null);
+      setIsReassigning(false);
     }
   };
 
@@ -392,11 +413,11 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-5">
-              {(['Agua', 'Aire', 'Fuego', 'Tierra'] as Team[]).map((teamId) => {
+              {TEAM_NAMES.map((teamId) => {
                 const data = teams[teamId];
                 const config = TEAM_CONFIG[teamId];
                 const barColor = TEAM_BAR_COLORS[teamId];
-                const memberCount = getTeamMemberCount(data);
+                const memberCount = getTeamMembers(data).length;
                 const isAssigned = memberCount > 0;
                 const progress = isAssigned ? getTeamProgress(data) : 0;
 
@@ -412,17 +433,16 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                           <CardTitle className="text-lg">Equipo {teamId}</CardTitle>
                         </div>
                         <div className="flex items-center gap-2">
-                          {isAssigned && currentPhase === 'Selección' && (
+                          {isAssigned && globalState.status !== 'completed' && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="h-8 px-3 text-xs border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
-                              onClick={() => handleResetTeamSelection(teamId)}
-                              disabled={resettingTeam === teamId}
-                              title={`Reabrir selección del Equipo ${teamId}`}
+                              onClick={() => openReassignment(teamId)}
+                              title={`Mover un dispositivo del Equipo ${teamId}`}
                             >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              {resettingTeam === teamId ? 'Reabriendo...' : 'Corregir equipo'}
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                              Reasignar
                             </Button>
                           )}
                           <span className={cn("text-xs font-mono px-2 py-1 rounded-md", isAssigned ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500")}>
@@ -492,6 +512,101 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
             onClose={() => setSummaryTeam(null)}
             isOpen={!!summaryTeam}
           />
+        )}
+
+        {reassignmentSource && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative bg-white dark:bg-kreatum-bg-dark p-7 rounded-2xl max-w-lg w-full shadow-[0_24px_60px_-34px_rgba(0,0,0,0.75)] border border-kreatum-purple/20"
+            >
+              <button
+                onClick={closeReassignment}
+                disabled={isReassigning}
+                className="absolute right-4 top-4 p-2 rounded-lg text-kreatum-gray/50 hover:bg-black/5 dark:hover:bg-white/5"
+                aria-label="Cerrar reasignación"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="mb-6 pr-10">
+                <h2 className="text-2xl font-extrabold text-kreatum-dark dark:text-white">
+                  Reasignar dispositivo
+                </h2>
+                <p className="text-sm text-kreatum-gray/60 dark:text-white/60 mt-2">
+                  Mueve un ordenador del Equipo {reassignmentSource} al equipo correcto sin reiniciar la partida.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-kreatum-gray/50 dark:text-white/45 mb-3">
+                    1. Elige el dispositivo
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {getTeamMembers(teams[reassignmentSource]).map((memberId, index) => (
+                      <button
+                        key={memberId}
+                        onClick={() => setSelectedMemberId(memberId)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl border p-3 text-left transition-colors",
+                          selectedMemberId === memberId
+                            ? "border-kreatum-purple bg-kreatum-purple/10 text-kreatum-purple"
+                            : "border-black/10 dark:border-white/10 hover:border-kreatum-purple/30"
+                        )}
+                      >
+                        <Monitor className="w-5 h-5 shrink-0" />
+                        <span>
+                          <span className="block text-xs font-semibold">Dispositivo {index + 1}</span>
+                          <span className="block font-mono text-sm font-bold">{getDeviceCode(memberId)}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-kreatum-gray/45 dark:text-white/35 mt-2">
+                    El mismo código aparece en la cabecera del ordenador del participante.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-kreatum-gray/50 dark:text-white/45 mb-3">
+                    2. Elige el equipo correcto
+                  </p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {TEAM_NAMES.filter((teamId) => teamId !== reassignmentSource).map((teamId) => (
+                      <button
+                        key={teamId}
+                        onClick={() => setReassignmentDestination(teamId)}
+                        className={cn(
+                          "rounded-xl border p-3 text-center font-bold transition-colors",
+                          reassignmentDestination === teamId
+                            ? "border-kreatum-purple bg-kreatum-purple text-white"
+                            : "border-black/10 dark:border-white/10 hover:border-kreatum-purple/30"
+                        )}
+                      >
+                        <img src={TEAM_CONFIG[teamId].icon} alt="" className="w-8 h-8 object-contain mx-auto mb-2" />
+                        {teamId}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full h-12 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white"
+                  disabled={!selectedMemberId || !reassignmentDestination || isReassigning}
+                  onClick={handleReassignMember}
+                >
+                  <ArrowRightLeft className="w-4 h-4" />
+                  {isReassigning
+                    ? 'Reasignando...'
+                    : reassignmentDestination
+                      ? `Mover al Equipo ${reassignmentDestination}`
+                      : 'Selecciona el equipo destino'}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
         )}
 
         {/* Finalize Modal */}

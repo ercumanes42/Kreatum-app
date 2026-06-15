@@ -32,6 +32,7 @@ export interface GameState {
   createdAt?: number;
   updatedAt?: number;
   assignmentResetAt?: number;
+  reassignments?: Record<string, Team>;
   
   // Diluir
   challenge: string;

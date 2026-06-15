@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GameState, initialState, Phase, Team, PHASES } from './types';
 import { Button } from './components/ui/Button';
 import { Hexagon, Moon, Sun } from 'lucide-react';
-import { cn } from './lib/utils';
+import { cn, getDeviceCode } from './lib/utils';
 import { TeamSelection } from './components/phases/TeamSelection';
 import { Calcinar } from './components/phases/Calcinar';
 import { Diluir } from './components/phases/Diluir';
@@ -16,7 +16,7 @@ import { useTeamSync, useGameGlobal } from './hooks/useRealtime';
 import { useGame } from './contexts/GameContext';
 
 export default function PlayerApp() {
-  const { gameId, team, playerId, isAlchemist, leaveGame, clearTeamSelection, roomCode } = useGame();
+  const { gameId, team, playerId, isAlchemist, leaveGame, clearTeamSelection, applyTeamReassignment, roomCode } = useGame();
   const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
   const [isDark, setIsDark] = useState(false);
 
@@ -72,9 +72,19 @@ export default function PlayerApp() {
     }
   }, [teamState]);
 
-  // An administrative reset removes every device from the team assignment.
+  // Follow an administrator-triggered reassignment without leaving the game.
   useEffect(() => {
     if (!team || !playerId || isTeamLoading) return;
+    const reassignedTeam = teamState.reassignments?.[playerId];
+    if (reassignedTeam) {
+      if (reassignedTeam !== team) {
+        setState(prev => ({ ...prev, team: reassignedTeam }));
+        applyTeamReassignment(reassignedTeam);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+
     const memberIds = Array.isArray(teamState.memberIds) ? teamState.memberIds : [];
     const isStillAssigned = teamState.playerId === playerId || memberIds.includes(playerId);
 
@@ -83,7 +93,7 @@ export default function PlayerApp() {
       clearTeamSelection();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [team, playerId, isTeamLoading, teamExists, teamState.playerId, teamState.memberIds, clearTeamSelection]);
+  }, [team, playerId, isTeamLoading, teamExists, teamState.playerId, teamState.memberIds, teamState.reassignments, clearTeamSelection, applyTeamReassignment]);
 
   useEffect(() => {
     if (isDark) {
@@ -151,6 +161,12 @@ export default function PlayerApp() {
               <div className="hidden md:flex h-9 items-center gap-2 rounded-xl border border-black/[0.06] bg-black/[0.03] px-3 dark:border-white/[0.08] dark:bg-white/[0.04]">
                 <span className="text-xs font-semibold text-kreatum-gray/55 dark:text-white/45">Sala</span>
                 <span className="font-mono font-bold text-kreatum-purple">{roomCode || '---'}</span>
+              </div>
+            )}
+            {gameId && playerId && !isAlchemist && (
+              <div className="hidden md:flex h-9 items-center gap-2 rounded-xl border border-kreatum-purple/15 bg-kreatum-purple/[0.05] px-3">
+                <span className="text-xs font-semibold text-kreatum-gray/55 dark:text-white/45">Dispositivo</span>
+                <span className="font-mono text-xs font-bold text-kreatum-purple">{getDeviceCode(playerId)}</span>
               </div>
             )}
             
