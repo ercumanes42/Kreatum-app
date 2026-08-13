@@ -1,6 +1,8 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 import {
+  MEMBER_STATUSES,
   PLATFORM_ORGANIZATION_STATUSES,
+  type MemberStatus,
   type PlatformOrganizationStatus,
   type PlatformWorkshopAllowance,
 } from '../../../shared/contracts.js';
@@ -25,6 +27,29 @@ export const timestampMillis = (value: unknown): number | null => {
 
 export const hasPlatformAdminClaim = (token: UnknownRecord | undefined) =>
   token?.platformAdmin === true;
+
+export const validatePlatformFacilitatorMembership = (
+  member: UnknownRecord,
+  membershipIndex: UnknownRecord,
+  organizationId: string,
+): MemberStatus => {
+  if (member.role !== 'facilitator'
+    || !MEMBER_STATUSES.includes(member.status as MemberStatus)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'La cuenta no es un facilitador gestionable.',
+    );
+  }
+  if (membershipIndex.organizationId !== organizationId
+    || membershipIndex.role !== 'facilitator'
+    || membershipIndex.status !== member.status) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Los indices de acceso del facilitador requieren revision.',
+    );
+  }
+  return member.status as MemberStatus;
+};
 
 export const maskPlatformEmail = (value: string) => {
   const [local = '', domain = ''] = value.trim().toLowerCase().split('@');

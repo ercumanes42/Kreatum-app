@@ -7,6 +7,7 @@ export {
   updatePlatformOrganization,
   suspendPlatformOrganization,
   reactivatePlatformOrganization,
+  changePlatformFacilitatorStatus,
   adjustWorkshopAllowance,
   activatePendingOrganizationForAcceptedInvitation,
 } from './platformOrganizationCommands.js';

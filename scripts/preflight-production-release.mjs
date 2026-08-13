@@ -26,6 +26,7 @@ const EXPECTED_ENDPOINTS = [
   'cancelWorkshopTransition',
   'changeMemberRole',
   'changeMemberStatus',
+  'changePlatformFacilitatorStatus',
   'commitWorkshopTransition',
   'completeWorkshop',
   'countWorkshopAttackCreated',

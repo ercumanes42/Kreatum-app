@@ -41,6 +41,7 @@ const requiredEndpoints = [
   'verifyInvitationCode',
   'acceptInvitation',
   'changeMemberStatus',
+  'changePlatformFacilitatorStatus',
   'listOrganizationAudit',
   'indexWorkshopAuditEvent',
   'reconnectParticipantSession',

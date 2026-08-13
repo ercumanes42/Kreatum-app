@@ -8,12 +8,39 @@ import {
   maskPlatformEmail,
   readPlatformAllowance,
   resolvePlatformOrganizationStatus,
+  validatePlatformFacilitatorMembership,
 } from './platformSecurity.js';
 
 test('platform claim requires the exact boolean true value', () => {
   assert.equal(hasPlatformAdminClaim({ platformAdmin: true }), true);
   assert.equal(hasPlatformAdminClaim({ platformAdmin: 'true' }), false);
   assert.equal(hasPlatformAdminClaim({}), false);
+});
+
+test('platform facilitator status validates the authoritative tenant indexes', () => {
+  assert.equal(validatePlatformFacilitatorMembership(
+    { role: 'facilitator', status: 'active' },
+    { organizationId: 'organization-a', role: 'facilitator', status: 'active' },
+    'organization-a',
+  ), 'active');
+  assert.throws(
+    () => validatePlatformFacilitatorMembership(
+      { role: 'owner', status: 'active' },
+      { organizationId: 'organization-a', role: 'owner', status: 'active' },
+      'organization-a',
+    ),
+    (error: unknown) => error instanceof HttpsError
+      && error.code === 'failed-precondition',
+  );
+  assert.throws(
+    () => validatePlatformFacilitatorMembership(
+      { role: 'facilitator', status: 'disabled' },
+      { organizationId: 'organization-b', role: 'facilitator', status: 'active' },
+      'organization-a',
+    ),
+    (error: unknown) => error instanceof HttpsError
+      && error.code === 'failed-precondition',
+  );
 });
 
 test('commercial allowance has priority and keeps consumed workshops', () => {

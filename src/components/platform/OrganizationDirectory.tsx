@@ -493,11 +493,61 @@ function OrganizationDetailPanel({
 
         <div>
           <h3 className="font-extrabold text-kreatum-dark">Facilitadores</h3>
-          {facilitators.length === 0 ? <p className="mt-2 text-sm text-kreatum-gray/75">Todavía no hay facilitadores activos.</p> : (
+          <p className="mt-1 text-xs leading-5 text-kreatum-gray/75">
+            La desactivación se aplica solo a esta empresa y queda registrada en auditoría.
+          </p>
+          {facilitators.length === 0 ? <p className="mt-2 text-sm text-kreatum-gray/75">Todavía no hay facilitadores.</p> : (
             <ul className="mt-3 divide-y divide-black/[0.06] rounded-2xl border border-black/[0.06]">
-              {facilitators.map((facilitator) => <li key={facilitator.uid} className="flex items-center justify-between gap-3 p-3"><span className="min-w-0"><span className="block truncate font-semibold text-kreatum-dark">{facilitator.displayName || facilitator.maskedEmail || 'Facilitador'}</span>{facilitator.displayName && facilitator.maskedEmail && (
-                <span className="mt-1 block truncate text-xs text-kreatum-gray/75">{facilitator.maskedEmail}</span>
-              )}</span><PlatformStatusBadge status={facilitator.status} /></li>)}
+              {facilitators.map((facilitator) => {
+                const isDisabled = facilitator.status === 'disabled';
+                const busyKey = `facilitator-${facilitator.uid}`;
+                const targetStatus = isDisabled ? 'active' : 'disabled';
+                return (
+                  <li key={facilitator.uid} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-kreatum-dark">{facilitator.displayName || facilitator.maskedEmail || 'Facilitador'}</span>
+                      {facilitator.displayName && facilitator.maskedEmail && (
+                        <span className="mt-1 block truncate text-xs text-kreatum-gray/75">{facilitator.maskedEmail}</span>
+                      )}
+                      <span className="mt-1 block text-xs text-kreatum-gray/75">
+                        {facilitator.assignedWorkshops === 1
+                          ? '1 partida asignada'
+                          : `${facilitator.assignedWorkshops} partidas asignadas`}
+                      </span>
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2 sm:justify-end">
+                      {isDisabled ? (
+                        <span className="inline-flex rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-700">
+                          Desactivado
+                        </span>
+                      ) : <PlatformStatusBadge status={facilitator.status} />}
+                      <Button
+                        size="sm"
+                        variant={isDisabled ? 'outline' : 'danger'}
+                        disabled={busy !== '' || !reasonValid}
+                        aria-label={`${isDisabled ? 'Reactivar' : 'Desactivar'} a ${facilitator.displayName || facilitator.maskedEmail || 'facilitador'} en ${organization.name}`}
+                        onClick={() => void run(
+                          busyKey,
+                          () => platformApi.changeFacilitatorStatus({
+                            organizationId: organization.id,
+                            memberId: facilitator.uid,
+                            status: targetStatus,
+                            reason: reason.trim(),
+                            idempotencyKey: createIdempotencyKey('changePlatformFacilitatorStatus'),
+                          }),
+                          isDisabled
+                            ? 'Facilitador reactivado en esta empresa.'
+                            : 'Facilitador desactivado en esta empresa.',
+                        )}
+                      >
+                        {busy === busyKey
+                          ? (isDisabled ? 'Reactivando…' : 'Desactivando…')
+                          : (isDisabled ? 'Reactivar' : 'Desactivar')}
+                      </Button>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

@@ -3,6 +3,9 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import {
   type AdjustWorkshopAllowanceInput,
   type AdjustWorkshopAllowanceOutput,
+  type ChangePlatformFacilitatorStatusInput,
+  type ChangePlatformFacilitatorStatusOutput,
+  MEMBER_STATUSES,
   type PlatformOrganizationCommandInput,
   type PlatformOrganizationCommandOutput,
   type UpdatePlatformOrganizationInput,
@@ -29,6 +32,7 @@ import {
   readPlatformAllowance,
   resolvePlatformOrganizationStatus,
   timestampMillis,
+  validatePlatformFacilitatorMembership,
 } from './platformSecurity.js';
 
 export const updatePlatformOrganization = callable<
@@ -236,6 +240,117 @@ export const reactivatePlatformOrganization = callable<
     'reactivatePlatformOrganization',
     'active',
   );
+});
+
+export const changePlatformFacilitatorStatus = callable<
+  ChangePlatformFacilitatorStatusInput,
+  ChangePlatformFacilitatorStatusOutput
+>('changePlatformFacilitatorStatus', async (request) => {
+  const auth = await authorizePlatformAdmin(
+    request as CallableRequest<unknown>,
+    'changePlatformFacilitatorStatus',
+    true,
+  );
+  const organizationId = identifier(request.data?.organizationId, 'organizationId');
+  const memberId = identifier(request.data?.memberId, 'memberId');
+  if (!MEMBER_STATUSES.includes(request.data?.status)) {
+    throw new HttpsError('invalid-argument', 'El estado no es valido.');
+  }
+  const requestedStatus = request.data.status;
+  const auditReason = requireReason(request.data?.reason);
+  const key = idempotencyKey(request.data?.idempotencyKey);
+  const commandRef = firestore().doc(
+    'platformCommandKeys/' + commandDocumentId(
+      auth.uid,
+      'changePlatformFacilitatorStatus:' + organizationId + ':' + memberId,
+      key,
+    ),
+  );
+  const updatedAt = Date.now();
+
+  return firestore().runTransaction(async (transaction) => {
+    const organizationRef = firestore().doc('organizations/' + organizationId);
+    const memberRef = organizationRef.collection('members').doc(memberId);
+    const membershipIndexRef = firestore().doc(
+      'users/' + memberId + '/organizationMemberships/' + organizationId,
+    );
+    const [
+      commandSnapshot,
+      organizationSnapshot,
+      memberSnapshot,
+      membershipIndexSnapshot,
+    ] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(organizationRef),
+      transaction.get(memberRef),
+      transaction.get(membershipIndexRef),
+    ]);
+    if (commandSnapshot.exists) {
+      return commandSnapshot.data()?.result as ChangePlatformFacilitatorStatusOutput;
+    }
+    if (!organizationSnapshot.exists || !memberSnapshot.exists) {
+      throw new HttpsError('not-found', 'El facilitador no esta disponible.');
+    }
+    if (!membershipIndexSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Los indices de acceso del facilitador requieren revision.',
+      );
+    }
+    const previousStatus = validatePlatformFacilitatorMembership(
+      memberSnapshot.data() ?? {},
+      membershipIndexSnapshot.data() ?? {},
+      organizationId,
+    );
+    const output: ChangePlatformFacilitatorStatusOutput = {
+      memberId,
+      role: 'facilitator',
+      status: requestedStatus,
+      updatedAt,
+    };
+
+    if (previousStatus !== requestedStatus) {
+      transaction.update(memberRef, {
+        status: requestedStatus,
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(requestedStatus === 'disabled'
+          ? {
+            disabledAt: FieldValue.serverTimestamp(),
+            disabledBy: auth.uid,
+          }
+          : {
+            activatedAt: FieldValue.serverTimestamp(),
+            disabledAt: FieldValue.delete(),
+            disabledBy: FieldValue.delete(),
+          }),
+      });
+      transaction.update(membershipIndexRef, {
+        organizationId,
+        role: 'facilitator',
+        status: requestedStatus,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      writePlatformAudit(
+        transaction,
+        organizationId,
+        auth.uid,
+        requestedStatus === 'disabled' ? 'member.disabled' : 'member.activated',
+        'member',
+        memberId,
+        null,
+        auditReason,
+        { previousStatus, status: requestedStatus },
+      );
+    }
+    transaction.create(commandRef, {
+      operation: 'changePlatformFacilitatorStatus',
+      organizationId,
+      memberHash: hashIdentifier(memberId),
+      result: output,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return output;
+  });
 });
 
 export const adjustWorkshopAllowance = callable<

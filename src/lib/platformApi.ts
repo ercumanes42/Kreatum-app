@@ -3,6 +3,7 @@ import type { Phase } from '../types';
 import { functionsClient } from './firebase';
 
 export type PlatformOrganizationStatus = 'pending' | 'active' | 'suspended' | 'expired';
+export type PlatformMemberStatus = 'active' | 'disabled';
 export type PlatformTimestamp = number | string | { seconds?: number; _seconds?: number } | null | undefined;
 
 export interface PlatformWorkshopAllowance {
@@ -41,7 +42,8 @@ export interface PlatformFacilitator {
   uid: string;
   displayName?: string;
   maskedEmail?: string;
-  status: string;
+  status: PlatformMemberStatus;
+  assignedWorkshops: number;
 }
 
 export interface PlatformActivityItem {
@@ -212,6 +214,18 @@ export const platformApi = {
     reason: string;
     idempotencyKey: string;
   }) => callable<typeof input, { organizationId: string; workshopId: string; facilitatorUid: string }>('assignWorkshopFacilitator')(input),
+  changeFacilitatorStatus: (input: {
+    organizationId: string;
+    memberId: string;
+    status: PlatformMemberStatus;
+    reason: string;
+    idempotencyKey: string;
+  }) => callable<typeof input, {
+    memberId: string;
+    role: 'facilitator';
+    status: PlatformMemberStatus;
+    updatedAt: number;
+  }>('changePlatformFacilitatorStatus')(input),
   listWorkshops: (input: {
     organizationId?: string;
     search?: string;

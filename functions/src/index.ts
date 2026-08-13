@@ -129,6 +129,7 @@ export {
   updatePlatformOrganization,
   suspendPlatformOrganization,
   reactivatePlatformOrganization,
+  changePlatformFacilitatorStatus,
   resendPlatformFacilitatorInvitation,
   cancelPlatformFacilitatorInvitation,
   adjustWorkshopAllowance,

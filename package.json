@@ -14,7 +14,7 @@
                     "typecheck:functions":  "npm --prefix functions run typecheck",
                     "lint":  "eslint . --max-warnings=0",
                     "test":  "npm run test:unit \u0026\u0026 npm run test:rules",
-                    "test:unit":  "tsx --test shared/*.test.ts src/lib/*.test.ts",
+                    "test:unit":  "tsx --test shared/*.test.ts src/lib/*.test.ts \u0026\u0026 node --test scripts/production-smoke-safety.test.mjs",
                     "test:unit:functions":  "npm --prefix functions test",
                     "test:contracts":  "tsx --test shared/contracts.test.ts",
                     "test:rules":  "firebase emulators:exec --only firestore,storage --project demo-kreatum \"tsx --test tests/firestore.rules.test.ts tests/storage.rules.test.ts\"",

@@ -582,6 +582,21 @@ export interface MemberCommandOutput {
   updatedAt: number;
 }
 
+export interface ChangePlatformFacilitatorStatusInput {
+  organizationId: string;
+  memberId: string;
+  status: MemberStatus;
+  reason: string;
+  idempotencyKey: string;
+}
+
+export interface ChangePlatformFacilitatorStatusOutput {
+  memberId: string;
+  role: 'facilitator';
+  status: MemberStatus;
+  updatedAt: number;
+}
+
 export interface GetInvitationActivationInput {
   organizationId: string;
   invitationId: string;
