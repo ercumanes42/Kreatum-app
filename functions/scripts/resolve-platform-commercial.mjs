@@ -7,6 +7,7 @@ import { assertMigrationProjectAllowed } from './migration-safety.mjs';
 const IDENTIFIER = /^[A-Za-z0-9_-]{3,128}$/;
 const MIGRATION_VERSION = 1;
 const MAX_WORKSHOPS = 1_000_000;
+const AUDIT_EVENT_ID = 'migration-platform-commercial-resolution-v1';
 
 const hash = (value) => createHash('sha256').update(String(value)).digest('hex');
 const shortHash = (value) => hash(value).slice(0, 16);
@@ -77,22 +78,35 @@ const normalizedReason = (value, required) => {
   return result;
 };
 
+const auditResolutionHash = (organizationId, options, reason, analysisHash) => hash(JSON.stringify({
+  migrationVersion: MIGRATION_VERSION,
+  organizationId,
+  contracted: options.contracted,
+  used: options.used,
+  available: options.contracted - options.used,
+  reason,
+  analysisHash,
+}));
+
 const stateFrom = async (reader, db, organizationId) => {
   const organizationRef = db.doc(`organizations/${organizationId}`);
   const workshopsQuery = db.collection('workshops').where('organizationId', '==', organizationId);
+  const auditRef = organizationRef.collection('auditEvents').doc(AUDIT_EVENT_ID);
   const organization = reader === db
     ? await organizationRef.get()
     : await reader.get(organizationRef);
   const workshops = reader === db
     ? await workshopsQuery.get()
     : await reader.get(workshopsQuery);
-  return { organization, workshops };
+  const audit = reader === db ? await auditRef.get() : await reader.get(auditRef);
+  return { organization, workshops, audit };
 };
 
 const analyze = (state, options) => {
   const errors = [];
   if (!state.organization.exists) errors.push('organization-not-found');
   const organization = state.organization.data() ?? {};
+  if (organization.status !== 'active') errors.push('organization-status-not-active');
   const current = isRecord(organization.commercial) ? organization.commercial : {};
   const explicitValidFrom = options.validFrom === null ? null : timestampMillis(options.validFrom);
   if (options.validFrom !== null && explicitValidFrom === null) errors.push('invalid-requested-valid-from');
@@ -116,7 +130,7 @@ const analyze = (state, options) => {
     additionalWorkshops: 0,
     consumedWorkshops: options.used,
   };
-  const ready = expectedCommercial !== null
+  const commercialReady = expectedCommercial !== null
     && organization.status === 'active'
     && Number(organization.schemaVersion) >= 3
     && organization.commercialMigrationVersion === MIGRATION_VERSION
@@ -127,6 +141,61 @@ const analyze = (state, options) => {
     && current.includedWorkshops === options.contracted
     && current.additionalWorkshops === 0
     && current.consumedWorkshops === options.used;
+
+  const audit = state.audit.data() ?? {};
+  const auditState = isRecord(audit.newState) ? audit.newState : {};
+  let auditReason = null;
+  if (typeof audit.reason === 'string') {
+    try {
+      auditReason = normalizedReason(audit.reason, true);
+    } catch {
+      auditReason = null;
+    }
+  }
+  const auditAnalysisHash = typeof audit.analysisHash === 'string'
+    && /^[a-f0-9]{64}$/.test(audit.analysisHash)
+    ? audit.analysisHash
+    : null;
+  const auditFingerprint = {
+    exists: state.audit.exists,
+    action: audit.action ?? null,
+    organizationId: audit.organizationId ?? null,
+    actorHash: audit.actorHash ?? null,
+    targetType: audit.targetType ?? null,
+    targetId: audit.targetId ?? null,
+    newState: isRecord(audit.newState) ? {
+      contracted: auditState.contracted ?? null,
+      used: auditState.used ?? null,
+      available: auditState.available ?? null,
+    } : null,
+    reason: audit.reason ?? null,
+    analysisHash: audit.analysisHash ?? null,
+    resolutionHash: audit.resolutionHash ?? null,
+    createdAt: timestampMillis(audit.createdAt),
+    schemaVersion: audit.schemaVersion ?? null,
+    platformAccess: audit.platformAccess ?? null,
+  };
+  const auditReady = state.audit.exists
+    && audit.action === 'organization.platformCommercialResolved'
+    && audit.organizationId === options.organizationId
+    && audit.workshopId === null
+    && audit.actorId === 'system'
+    && audit.actorHash === 'migration-script'
+    && audit.actorEmail === ''
+    && audit.actorName === 'Migration script'
+    && audit.targetType === 'organization'
+    && audit.targetId === options.organizationId
+    && audit.previousState === null
+    && auditState.contracted === options.contracted
+    && auditState.used === options.used
+    && auditState.available === options.contracted - options.used
+    && auditReason !== null
+    && audit.reason === auditReason
+    && auditAnalysisHash !== null
+    && audit.resolutionHash === auditResolutionHash(options.organizationId, options, auditReason, auditAnalysisHash)
+    && timestampMillis(audit.createdAt) !== null
+    && audit.schemaVersion === 3
+    && audit.platformAccess === true;
 
   const fingerprint = {
     organizationId: options.organizationId,
@@ -149,12 +218,15 @@ const analyze = (state, options) => {
       } : null,
     },
     workshopIds: state.workshops.docs.map((item) => item.id).sort(),
+    audit: auditFingerprint,
   };
   return {
     analysisHash: hash(JSON.stringify(fingerprint)),
     errors,
     expectedCommercial,
-    ready,
+    commercialReady,
+    auditReady,
+    ready: commercialReady && auditReady,
     workshopTotal: state.workshops.size,
   };
 };
@@ -170,11 +242,13 @@ const safeReport = (mode, projectId, options, analysis) => ({
     available: options.contracted - options.used,
   },
   workshopsScanned: analysis.workshopTotal,
-  organizationToUpdate: !analysis.ready,
+  organizationToUpdate: !analysis.commercialReady,
+  auditEventToUpdate: !analysis.auditReady,
+  auditEventVerified: analysis.auditReady,
   errors: analysis.errors,
 });
 
-const auditEvent = (organizationId, options, reason) => ({
+const auditEvent = (organizationId, options, reason, analysisHash) => ({
   organizationId,
   workshopId: null,
   action: 'organization.platformCommercialResolved',
@@ -191,6 +265,8 @@ const auditEvent = (organizationId, options, reason) => ({
     available: options.contracted - options.used,
   },
   reason,
+  analysisHash,
+  resolutionHash: auditResolutionHash(organizationId, options, reason, analysisHash),
   createdAt: FieldValue.serverTimestamp(),
   schemaVersion: 3,
   platformAccess: true,
@@ -205,21 +281,22 @@ const applyResolution = (db, options, confirmedHash, reason) => db.runTransactio
   if (analysis.analysisHash !== confirmedHash) {
     throw new Error('El estado cambio desde el dry-run; repite el dry-run y revisa el hash.');
   }
-  if (analysis.ready) return { organizationUpdated: false };
+  if (analysis.ready) return { organizationUpdated: false, auditEventUpdated: false };
   const organizationRef = state.organization.ref;
-  transaction.set(organizationRef, {
-    status: 'active',
-    commercial: analysis.expectedCommercial,
-    commercialMigrationVersion: MIGRATION_VERSION,
-    schemaVersion: Math.max(3, Number(state.organization.data()?.schemaVersion) || 0),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  if (!analysis.commercialReady) {
+    transaction.set(organizationRef, {
+      commercial: analysis.expectedCommercial,
+      commercialMigrationVersion: MIGRATION_VERSION,
+      schemaVersion: Math.max(3, Number(state.organization.data()?.schemaVersion) || 0),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
   transaction.set(
-    organizationRef.collection('auditEvents').doc('migration-platform-commercial-resolution-v1'),
-    auditEvent(options.organizationId, options, reason),
+    organizationRef.collection('auditEvents').doc(AUDIT_EVENT_ID),
+    auditEvent(options.organizationId, options, reason, confirmedHash),
     { merge: true },
   );
-  return { organizationUpdated: true };
+  return { organizationUpdated: !analysis.commercialReady, auditEventUpdated: true };
 });
 
 const main = async () => {

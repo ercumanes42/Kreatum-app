@@ -16,6 +16,12 @@ import { reportClientError } from './lib/clientLogger';
 import { useDialogFocus } from './hooks/useDialogFocus';
 import { configuredDefaultOrganizationId, getSelectedOrganizationId, setSelectedOrganizationId } from './lib/dataModel';
 import { workshopApi } from './lib/workshopApi';
+import {
+  ORGANIZATION_STATUS_LABELS,
+  organizationAccessMessage,
+  selectOrganizationForAdmin,
+  withAdminAccessDeadline,
+} from './lib/organizationAccess';
 
 type AdminSection = 'home' | 'history' | 'team' | 'activity';
 
@@ -52,6 +58,7 @@ export default function AdminApp() {
   const [activeOrganization, setActiveOrganization] = useState<OrganizationSummary | null>(null);
   const [isCheckingMembership, setIsCheckingMembership] = useState(false);
   const [membershipError, setMembershipError] = useState('');
+  const [membershipLoadAttempt, setMembershipLoadAttempt] = useState(0);
   const [showResetModal, setShowResetModal] = useState(false);
   const [customRoomCode, setCustomRoomCode] = useState('');
 
@@ -101,18 +108,21 @@ export default function AdminApp() {
     }
     let active = true;
     setIsCheckingMembership(true);
+    setMembershipError('');
     const loadMembership = async () => {
       try {
-        const result = await workshopApi.listMyOrganizations({
-          fallbackOrganizationId: configuredDefaultOrganizationId || undefined,
-        });
+        const result = await withAdminAccessDeadline(
+          workshopApi.listMyOrganizations({
+            fallbackOrganizationId: configuredDefaultOrganizationId || undefined,
+          }),
+        );
         if (result.organizations.length === 0) {
           throw new Error('Tu cuenta no tiene acceso administrativo activo.');
         }
         const requestedOrganizationId = new URLSearchParams(window.location.search).get('organization');
         const preferredOrganizationId = requestedOrganizationId || getSelectedOrganizationId();
-        const selected = result.organizations.find((organization) => organization.id === preferredOrganizationId)
-          ?? result.organizations[0];
+        const selected = selectOrganizationForAdmin(result.organizations, preferredOrganizationId);
+        if (!selected) throw new Error('Tu cuenta no tiene acceso administrativo activo.');
         if (active) {
           setSelectedOrganizationId(selected.id);
           setOrganizations(result.organizations);
@@ -133,7 +143,7 @@ export default function AdminApp() {
     };
     void loadMembership();
     return () => { active = false; };
-  }, [user]);
+  }, [membershipLoadAttempt, user]);
 
   useEffect(() => {
     if (membershipRole !== 'facilitator' || !['team', 'activity'].includes(activeSection)) return;
@@ -183,6 +193,11 @@ export default function AdminApp() {
     setUser(null);
   };
 
+  const handleRetryMembership = () => {
+    setMembershipError('');
+    setMembershipLoadAttempt((attempt) => attempt + 1);
+  };
+
   const handleOrganizationChange = (organizationId: string) => {
     const selected = organizations.find((organization) => organization.id === organizationId);
     if (!selected || selected.id === activeOrganization?.id) return;
@@ -202,7 +217,10 @@ export default function AdminApp() {
   if (isCheckingAuth || (!!user && !user.isAnonymous && isCheckingMembership)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-kreatum-bg-light dark:bg-kreatum-bg-dark">
-        <div className="w-8 h-8 border-2 border-kreatum-purple/30 border-t-kreatum-purple rounded-full animate-spin" />
+        <div className="text-center" role="status" aria-live="polite">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-kreatum-purple/30 border-t-kreatum-purple" aria-hidden="true" />
+          <p className="mt-4 text-sm font-semibold text-kreatum-gray/70 dark:text-white/70">Validando acceso...</p>
+        </div>
       </div>
     );
   }
@@ -218,9 +236,22 @@ export default function AdminApp() {
         <div className="max-w-md rounded-2xl border border-red-500/15 bg-white p-8 shadow-xl dark:bg-white/[0.04]">
           <h1 className="text-2xl font-extrabold text-kreatum-dark dark:text-white">Acceso no disponible</h1>
           <p className="mt-3 text-sm text-red-600" role="alert">{membershipError || 'No se pudo validar tu membresía.'}</p>
+          <Button className="mr-3 mt-6" variant="outline" onClick={handleRetryMembership}>Reintentar</Button>
           <Button className="mt-6" onClick={handleLogout}>Cerrar sesión</Button>
         </div>
       </main>
+    );
+  }
+
+  if (activeOrganization.operationalStatus !== 'active') {
+    return (
+      <OrganizationAccessUnavailable
+        organization={activeOrganization}
+        organizations={organizations}
+        onOrganizationChange={handleOrganizationChange}
+        onRetry={handleRetryMembership}
+        onLogout={handleLogout}
+      />
     );
   }
 
@@ -368,6 +399,51 @@ export default function AdminApp() {
         />
       )}
     </div>
+  );
+}
+
+function OrganizationAccessUnavailable({ organization, organizations, onOrganizationChange, onRetry, onLogout }: {
+  organization: OrganizationSummary;
+  organizations: OrganizationSummary[];
+  onOrganizationChange: (organizationId: string) => void;
+  onRetry: () => void;
+  onLogout: () => Promise<void>;
+}) {
+  return (
+    <main className="min-h-screen grid place-items-center bg-kreatum-bg-light px-6 py-12 text-center dark:bg-kreatum-bg-dark">
+      <section className="w-full max-w-lg rounded-3xl border border-amber-500/20 bg-white p-8 shadow-xl dark:bg-white/[0.04]" aria-labelledby="organization-access-title">
+        <span className="inline-flex rounded-full bg-amber-500/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">
+          {ORGANIZATION_STATUS_LABELS[organization.operationalStatus]}
+        </span>
+        <h1 id="organization-access-title" className="mt-5 text-2xl font-extrabold text-kreatum-dark dark:text-white">
+          Acceso temporalmente no disponible
+        </h1>
+        <p className="mt-2 font-bold text-kreatum-dark/80 dark:text-white/80">{organization.name}</p>
+        <p className="mt-4 text-sm leading-relaxed text-kreatum-gray/75 dark:text-white/70" role="alert">
+          {organizationAccessMessage(organization.operationalStatus)}
+        </p>
+        {organizations.length > 1 && (
+          <label className="mt-6 block text-left text-xs font-bold text-kreatum-gray/70 dark:text-white/70">
+            Cambiar de empresa
+            <select
+              value={organization.id}
+              onChange={(event) => onOrganizationChange(event.target.value)}
+              className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-kreatum-dark outline-none focus:border-kreatum-purple dark:border-white/10 dark:bg-kreatum-bg-dark dark:text-white"
+            >
+              {organizations.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} - {ORGANIZATION_STATUS_LABELS[item.operationalStatus]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+          <Button variant="outline" onClick={onRetry}>Comprobar de nuevo</Button>
+          <Button onClick={() => void onLogout()}>Cerrar sesi&oacute;n</Button>
+        </div>
+      </section>
+    </main>
   );
 }
 

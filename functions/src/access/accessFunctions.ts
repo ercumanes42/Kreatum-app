@@ -88,6 +88,7 @@ import {
   activatePendingOrganizationForAcceptedInvitation,
 } from '../platform/platformOrganizationCommands.js';
 import { assertLegalAcceptance, readLegalConfiguration } from './legalConfiguration.js';
+import { RUNTIME_SERVICE_ACCOUNT } from '../runtimeOptions.js';
 
 const REGION = process.env.KREATUM_FUNCTIONS_REGION?.trim() || 'europe-west1';
 const ENFORCE_APP_CHECK = process.env.KREATUM_ENFORCE_APP_CHECK === 'true';
@@ -320,6 +321,7 @@ const callable = <Input, Output>(
   secrets: string[] = [],
 ) => onCall<Input>({
   region: REGION,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
   enforceAppCheck: ENFORCE_APP_CHECK,
   maxInstances: 30,
   memory: '256MiB',

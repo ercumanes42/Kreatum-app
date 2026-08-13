@@ -7,6 +7,7 @@ import {
   type Transaction,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
+import { resolvePlatformOrganizationStatus } from '../platform/platformSecurity.js';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import {
   DEFAULT_RETENTION_MONTHS,
@@ -26,6 +27,7 @@ import {
   type UpdateOrganizationCommercialInput,
   type UpdateOrganizationCommercialOutput,
 } from '../../../shared/contracts.js';
+import { RUNTIME_SERVICE_ACCOUNT } from '../runtimeOptions.js';
 
 const REGION = process.env.KREATUM_FUNCTIONS_REGION?.trim() || 'europe-west1';
 const ENFORCE_APP_CHECK = process.env.KREATUM_ENFORCE_APP_CHECK === 'true';
@@ -50,13 +52,18 @@ type OrganizationDocument = {
   allowedEmailDomains?: unknown;
   retentionMonths?: unknown;
   branding?: unknown;
+  [field: string]: unknown;
   commercial?: unknown;
 };
 
 const callable = <Input, Output>(
   name: string,
   handler: (request: CallableRequest<Input>) => Promise<Output>,
-) => onCall<Input>({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+) => onCall<Input>({
+  region: REGION,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
+  enforceAppCheck: ENFORCE_APP_CHECK,
+}, async (request) => {
   const correlationId = randomUUID();
   try {
     return await handler(request);
@@ -260,6 +267,7 @@ const summaryFromDocuments = (
     id: organizationId,
     name,
     role,
+    operationalStatus: resolvePlatformOrganizationStatus(organization),
     branding: branding(organization.branding, name),
     allowedEmailDomains,
     retentionMonths: Number.isInteger(configuredRetention) ? configuredRetention : DEFAULT_RETENTION_MONTHS,

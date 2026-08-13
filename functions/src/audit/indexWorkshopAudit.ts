@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { RUNTIME_SERVICE_ACCOUNT } from '../runtimeOptions.js';
 
 const REGION = process.env.KREATUM_FUNCTIONS_REGION?.trim() || 'europe-west1';
 const INDEXED_ACTIONS = new Set([
@@ -67,6 +68,7 @@ const stateForAction = (
 
 export const indexWorkshopAuditEvent = onDocumentCreated({
   region: REGION,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
   document: 'workshops/{workshopId}/auditEvents/{eventId}',
   maxInstances: 20,
   memory: '256MiB',

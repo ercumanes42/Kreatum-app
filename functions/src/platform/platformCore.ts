@@ -31,6 +31,7 @@ import {
   resolvePlatformOrganizationStatus,
   timestampMillis,
 } from './platformSecurity.js';
+import { RUNTIME_SERVICE_ACCOUNT } from '../runtimeOptions.js';
 
 export const REGION = process.env.KREATUM_FUNCTIONS_REGION?.trim() || 'europe-west1';
 export const ENFORCE_APP_CHECK = process.env.KREATUM_ENFORCE_APP_CHECK === 'true';
@@ -140,6 +141,7 @@ export const callable = <Input, Output>(
   secrets: string[] = [],
 ) => onCall<Input>({
   region: REGION,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
   enforceAppCheck: ENFORCE_APP_CHECK,
   maxInstances: 30,
   memory: '256MiB',

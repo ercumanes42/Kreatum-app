@@ -60,7 +60,7 @@ if (!existsSync(firebaseCli)) {
   throw new Error(`Firebase CLI was not found at ${firebaseCli}.`);
 }
 const integrationScopes = {
-  all: 'tests/platform.integration.test.ts tests/functions.integration.test.ts tests/access.integration.test.ts tests/resilience.integration.test.ts',
+  all: 'tests/platform.integration.test.ts tests/functions.integration.test.ts tests/access.integration.test.ts tests/resilience.integration.test.ts functions/src/security/workshopAdminAuthorization.test.ts functions/src/security/organizationOwnerAuthorization.test.ts',
   lifecycle: 'tests/functions.integration.test.ts',
   access: 'tests/access.integration.test.ts',
   platform: 'tests/platform.integration.test.ts',

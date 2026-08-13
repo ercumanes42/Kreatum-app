@@ -5,7 +5,7 @@ import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Shield, Zap, Lock, ChevronRight, X, Pencil, Check } from 'lucide-react';
-import { useAttacksReceived, useOpponentSolutions, useAttacksSent, Attack, useGameGlobal } from '../../hooks/useRealtime';
+import { useAttacksReceived, useOpponentSolutions, useAttacksSent, useDefensesReceived, Attack, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 import { cn } from '../../lib/utils';
 import { PhaseHeader } from './PhaseHeader';
@@ -27,15 +27,18 @@ const ATTACK_MAP: Record<Team, Team> = {
 };
 
 export function Sublimar({ state, updateState }: Props) {
-  const { sendAttack, deleteAttack, editAttack, gameId } = useGame();
+  const { sendAttack, sendDefense, deleteAttack, editAttack, gameId } = useGame();
   const myTeam = state.team;
   const targetTeam = myTeam ? ATTACK_MAP[myTeam] : null;
 
   // ALL hooks BEFORE conditional return (Rules of Hooks)
   const { attacks: attacksReceived, isLoading: loadingAttacks } = useAttacksReceived(gameId, myTeam);
   const { attacks: attacksSent } = useAttacksSent(gameId, myTeam);
+  const { defenses: savedDefenses, isLoading: loadingDefenses } = useDefensesReceived(gameId, myTeam);
   const { solutions: opponentSolutions } = useOpponentSolutions(gameId, myTeam);
   const [attackInput, setAttackInput] = useState('');
+  const [defenseDrafts, setDefenseDrafts] = useState<Record<string, string>>({});
+  const [savingDefenseId, setSavingDefenseId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
@@ -44,6 +47,15 @@ export function Sublimar({ state, updateState }: Props) {
   const attackInputRef = useRef<HTMLInputElement>(null);
 
   const subView = state.sublimarView || 'Ataque';
+  const savedDefenseByAttackId = React.useMemo(() => {
+    const defensesByAttackId = new Map<string, string>();
+    savedDefenses.forEach((defense) => {
+      if (defense.attackId && !defensesByAttackId.has(defense.attackId)) {
+        defensesByAttackId.set(defense.attackId, defense.content);
+      }
+    });
+    return defensesByAttackId;
+  }, [savedDefenses]);
   const totalAttacksSent = attacksSent.length;
   const isAttackPhaseComplete = totalAttacksSent >= MIN_ATTACKS_PER_TEAM;
   const isDefenseUnlocked = globalState?.sublimarDefenseUnlocked === true;
@@ -127,6 +139,26 @@ export function Sublimar({ state, updateState }: Props) {
     }
   };
 
+  const handleSaveDefense = async (attackId: string) => {
+    const savedContent = savedDefenseByAttackId.get(attackId) || '';
+    const content = (defenseDrafts[attackId] ?? savedContent).trim();
+    if (!content || savingDefenseId || isLocked) return;
+
+    setSavingDefenseId(attackId);
+    setActionError('');
+    try {
+      await sendDefense(attackId, content);
+      setDefenseDrafts((current) => ({ ...current, [attackId]: content }));
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(
+        error,
+        'No se pudo guardar la mitigaci\u00f3n. Int\u00e9ntalo de nuevo.',
+      ));
+    } finally {
+      setSavingDefenseId(null);
+    }
+  };
+
   const canShowDefenseTab = isAttackPhaseComplete;
 
   return (
@@ -136,8 +168,11 @@ export function Sublimar({ state, updateState }: Props) {
         subtitle={subView === 'Ataque' ? 'Focalización en debilidades rivales' : 'Mitigación y ajuste de nuestra solución'}
       >
         {canShowDefenseTab && (
-          <div className="flex gap-2 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+          <div className="flex gap-2 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5" role="tablist" aria-label="Vista de la fase Sublimar">
             <button
+              type="button"
+              role="tab"
+              aria-selected={subView === 'Ataque'}
               onClick={() => setSubView('Ataque')}
               className={cn(
                 "px-6 py-2 rounded-xl text-xs font-bold transition-all",
@@ -147,6 +182,10 @@ export function Sublimar({ state, updateState }: Props) {
               Ataque
             </button>
             <button
+              type="button"
+              role="tab"
+              aria-selected={subView === 'Defensa'}
+              disabled={!isDefenseUnlocked}
               onClick={() => { if (isDefenseUnlocked) setSubView('Defensa'); }}
               className={cn(
                 "px-6 py-2 rounded-xl text-xs font-bold transition-all",
@@ -311,9 +350,10 @@ export function Sublimar({ state, updateState }: Props) {
                           <>
                             <span className="text-xs text-kreatum-dark dark:text-white/80 line-clamp-2 pr-14 flex-1">{attack.content}</span>
                             {!isLocked && (
-                              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100 group-focus-within:opacity-100">
                                 <button
                                   onClick={() => handleStartEdit(attack)}
+                                  type="button"
                                   className="p-1.5 text-kreatum-blue/40 hover:text-kreatum-blue cursor-pointer"
                                   title="Editar ataque"
                                   aria-label="Editar ataque"
@@ -322,6 +362,7 @@ export function Sublimar({ state, updateState }: Props) {
                                 </button>
                                 <button
                                   onClick={() => void handleDeleteAttack(attack.id)}
+                                  type="button"
                                   className="p-1.5 text-kreatum-red/40 hover:text-red-500 cursor-pointer"
                                   title="Eliminar ataque"
                                   aria-label="Eliminar ataque"
@@ -401,7 +442,7 @@ export function Sublimar({ state, updateState }: Props) {
                   <p className="text-xs text-kreatum-gray/60 dark:text-white/40 font-semibold mt-1">Cada ataque tiene su campo de respuesta alineado a la derecha</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {loadingAttacks ? (
+                  {loadingAttacks || loadingDefenses ? (
                     <div className="text-center py-8 text-kreatum-gray dark:text-white/60">Cargando...</div>
                   ) : attacksReceived.length === 0 ? (
                     <div className="text-center py-8 text-kreatum-gray dark:text-white/60 italic text-sm">
@@ -409,40 +450,56 @@ export function Sublimar({ state, updateState }: Props) {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {attacksReceived.map((attack, idx) => (
-                        <div key={attack.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 bg-white dark:bg-white/5 rounded-2xl border border-kreatum-blue/10">
-                          {/* Left: Attack received */}
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-bold text-kreatum-red uppercase tracking-wider flex items-center gap-2">
-                              <span className="w-6 h-6 flex items-center justify-center bg-kreatum-red/10 text-kreatum-red rounded-full text-[10px] font-bold">{idx + 1}</span>
-                              Ataque de {attack.fromTeam}
-                            </p>
-                            <p className="text-sm text-kreatum-dark dark:text-white/90 font-medium leading-tight bg-kreatum-red/5 p-3 rounded-xl border border-kreatum-red/10">{attack.content}</p>
-                          </div>
-                          {/* Right: Mitigation */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <p className="text-[10px] font-bold text-kreatum-blue uppercase tracking-wider">Mitigación #{idx + 1}</p>
-                              {state.defenses[idx] && state.defenses[idx].trim() && (
-                                <span className="text-[10px] text-kreatum-green font-bold">✓ Guardado</span>
-                              )}
+                      {attacksReceived.map((attack, idx) => {
+                        const savedDefense = savedDefenseByAttackId.get(attack.id) || '';
+                        const currentDefense = defenseDrafts[attack.id] ?? savedDefense;
+                        const isSaved = Boolean(savedDefense && currentDefense.trim() === savedDefense);
+                        const inputId = `defense-${attack.id}`;
+                        return (
+                          <div key={attack.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 bg-white dark:bg-white/5 rounded-2xl border border-kreatum-blue/10">
+                            {/* Left: Attack received */}
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-kreatum-red uppercase tracking-wider flex items-center gap-2">
+                                <span className="w-6 h-6 flex items-center justify-center bg-kreatum-red/10 text-kreatum-red rounded-full text-[10px] font-bold">{idx + 1}</span>
+                                Ataque de {attack.fromTeam}
+                              </p>
+                              <p className="text-sm text-kreatum-dark dark:text-white/90 font-medium leading-tight bg-kreatum-red/5 p-3 rounded-xl border border-kreatum-red/10">{attack.content}</p>
                             </div>
-                            <Input
-                              value={state.defenses[idx] || ''}
-                              onChange={(e) => {
-                                const newDefenses = [...state.defenses];
-                                while (newDefenses.length <= idx) {
-                                  newDefenses.push('');
-                                }
-                                newDefenses[idx] = e.target.value;
-                                updateState({ defenses: newDefenses });
-                              }}
-                              placeholder="Escribe tu mitigación aquí..."
-                              className="w-full bg-white dark:bg-black/20 border-kreatum-blue/20 shadow-inner"
-                            />
+                            {/* Right: Mitigation */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <label htmlFor={inputId} className="text-[10px] font-bold text-kreatum-blue uppercase tracking-wider">
+                                  Mitigación #{idx + 1}
+                                </label>
+                                {isSaved && (
+                                  <span className="text-[10px] text-kreatum-green font-bold" role="status">✓ Guardado</span>
+                                )}
+                              </div>
+                              <Input
+                                id={inputId}
+                                value={currentDefense}
+                                onChange={(event) => setDefenseDrafts((current) => ({
+                                  ...current,
+                                  [attack.id]: event.target.value,
+                                }))}
+                                placeholder="Escribe tu mitigación aquí..."
+                                disabled={isLocked || savingDefenseId === attack.id}
+                                autoComplete="off"
+                                className="w-full min-h-11 bg-white dark:bg-black/20 border-kreatum-blue/20 shadow-inner"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveDefense(attack.id)}
+                                disabled={!currentDefense.trim() || isSaved || isLocked || savingDefenseId !== null}
+                                className="inline-flex min-h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-kreatum-blue px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-kreatum-blue/90 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <Check className="h-4 w-4" aria-hidden="true" />
+                                {savingDefenseId === attack.id ? 'Guardando...' : isSaved ? 'Mitigación guardada' : 'Guardar mitigación'}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>

@@ -103,6 +103,9 @@ import {
   renderReportPptx,
 } from './reporting/renderReportArtifacts.js';
 import { assertOrganizationOperational } from './security/organizationAccess.js';
+import { revalidateWorkshopAdminInTransaction } from './security/workshopAdminAuthorization.js';
+import { revalidateOrganizationOwnerInTransaction } from './security/organizationOwnerAuthorization.js';
+import { RUNTIME_SERVICE_ACCOUNT } from './runtimeOptions.js';
 export {
   acceptInvitation,
   cancelInvitation,
@@ -152,6 +155,8 @@ const REGION = process.env.KREATUM_FUNCTIONS_REGION?.trim() || 'europe-west1';
 const SCHEDULE_REGION = process.env.KREATUM_SCHEDULE_FUNCTIONS_REGION?.trim() || 'europe-west1';
 const JOIN_ATTEMPT_LIMIT = 10;
 const JOIN_WINDOW_MS = 60_000;
+const JOIN_GLOBAL_UID_ATTEMPT_LIMIT = 10;
+const JOIN_GLOBAL_IP_ATTEMPT_LIMIT = 120;
 const PENDING_DELETION_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
 const WORKSHOP_TRANSITION_TTL_MS = 2 * 60 * 1000;
 const PARTICIPANT_HEARTBEAT_TTL_MS = PARTICIPANT_SESSION_TTL_MS;
@@ -169,6 +174,7 @@ const safeOperationalErrorCode = (error: unknown): string => {
 
 setGlobalOptions({
   region: REGION,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
   maxInstances: 50,
   memory: '256MiB',
   timeoutSeconds: 60,
@@ -227,6 +233,18 @@ const requireAdminAuth = (request: CallableRequest<unknown>): AuthContext => {
     throw new HttpsError(
       'permission-denied',
       'Las operaciones del Alquimista requieren una cuenta autenticada.',
+    );
+  }
+  return auth;
+};
+
+const requireParticipantAuth = (request: CallableRequest<unknown>): AuthContext => {
+  const auth = requireAuth(request);
+  const firebaseToken = auth.token.firebase as { sign_in_provider?: unknown } | undefined;
+  if (firebaseToken?.sign_in_provider !== 'anonymous') {
+    throw new HttpsError(
+      'permission-denied',
+      'La entrada a una sala requiere una identidad participante an\u00f3nima.',
     );
   }
   return auth;
@@ -302,14 +320,24 @@ const loadWorkshopForAdmin = async (
   workshopId: string,
   allowedRoles: readonly OrganizationRole[] = ADMIN_ROLES,
 ) => {
+  const unavailable = () =>
+    new HttpsError('not-found', 'La partida no est\u00e1 disponible.');
   const workshopRef = db.doc('workshops/' + workshopId);
   const snapshot = await workshopRef.get();
-  if (!snapshot.exists) throw new HttpsError('not-found', 'La partida no existe.');
+  if (!snapshot.exists) throw unavailable();
   const workshop = snapshot.data() as WorkshopRecord;
   const organizationId = validateIdentifier(workshop.organizationId, 'organizationId');
-  const role = await assertMembership(uid, organizationId, allowedRoles);
+  let role: OrganizationRole;
+  try {
+    role = await assertMembership(uid, organizationId, allowedRoles);
+  } catch (error) {
+    if (error instanceof HttpsError && error.code === 'permission-denied') {
+      throw unavailable();
+    }
+    throw error;
+  }
   if (role === 'facilitator' && workshop.facilitatorUid !== uid) {
-    throw new HttpsError('permission-denied', 'Solo puedes acceder a las partidas que tienes asignadas.');
+    throw unavailable();
   }
   return { workshopRef, workshop, organizationId, role };
 };
@@ -683,6 +711,8 @@ const enforceJoinRateLimitBucket = async (bucketId: string, limit: number) => {
 
 const enforceJoinRateLimit = async (uid: string, networkId: string, roomCode: string) => {
   await Promise.all([
+    enforceJoinRateLimitBucket(`uid:${uid}`, JOIN_GLOBAL_UID_ATTEMPT_LIMIT),
+    enforceJoinRateLimitBucket(`ip:${networkId}`, JOIN_GLOBAL_IP_ATTEMPT_LIMIT),
     enforceJoinRateLimitBucket(`uid:${uid}:${roomCode}`, JOIN_ATTEMPT_LIMIT),
     enforceJoinRateLimitBucket(`ip:${networkId}:${roomCode}`, 40),
   ]);
@@ -690,7 +720,7 @@ const enforceJoinRateLimit = async (uid: string, networkId: string, roomCode: st
 export const joinWorkshopByCode = callable<JoinWorkshopInput, JoinWorkshopOutput>(
   'joinWorkshopByCode',
   async (request) => {
-    const auth = requireAuth(request as CallableRequest<unknown>);
+    const auth = requireParticipantAuth(request as CallableRequest<unknown>);
     const roomCode = normalizeRoomCode(
       validateText(request.data?.roomCode, 'roomCode', { required: true }),
     );
@@ -737,7 +767,7 @@ export const joinWorkshopByCode = callable<JoinWorkshopInput, JoinWorkshopOutput
         throw new HttpsError('not-found', 'La partida no está disponible.');
       }
       if (workshop.organizationId !== organizationId) {
-        throw new HttpsError('not-found', 'La partida no est? disponible.');
+        throw new HttpsError('not-found', 'La partida no est\u00e1 disponible.');
       }
       assertOrganizationOperational(organizationSnapshot);
 
@@ -1015,6 +1045,9 @@ export const requestWorkshopTransition = callable<
       transaction.get(commandRef),
       transaction.get(workshopRef.collection('participantSessions').where('status', '==', 'active')),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as RequestWorkshopTransitionOutput;
     }
@@ -1262,6 +1295,9 @@ export const commitWorkshopTransition = callable<
       transaction.get(workshopRef),
       transaction.get(commandRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as CommitWorkshopTransitionOutput;
     }
@@ -1376,6 +1412,9 @@ export const cancelWorkshopTransition = callable<
       transaction.get(workshopRef),
       transaction.get(commandRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as CancelWorkshopTransitionOutput;
     }
@@ -1455,6 +1494,9 @@ export const updateWorkshopControl = callable<
       transaction.get(workshopRef),
       transaction.get(commandRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as WorkshopCommandOutput;
     }
@@ -1505,6 +1547,9 @@ export const reassignParticipant = callable<  ReassignParticipantInput,
       transaction.get(sessionRef),
       transaction.get(commandRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as WorkshopCommandOutput;
     }
@@ -1607,6 +1652,9 @@ export const releaseParticipantSession = callable<
       transaction.get(sessionRef),
       transaction.get(commandRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as WorkshopCommandOutput;
     }
@@ -1941,84 +1989,228 @@ export const archiveOrganizationWorkshops = callable<
   );
   const reason = validateCriticalReason(request.data?.reason);
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
-  await assertMembership(auth.uid, organizationId, ['owner']);
-
   const commandRef = db.doc(
     'organizations/' + organizationId + '/commandKeys/'
       + commandDocumentId(auth.uid, idempotencyKey),
   );
-  const existingCommand = await commandRef.get();
-  if (existingCommand.exists) {
-    return existingCommand.data()?.result as ArchiveOrganizationWorkshopsOutput;
-  }
+  const requestedAt = Date.now();
+  const archiveChunkSize = 100;
+  type ArchiveReservation = {
+    completed: true;
+    result: ArchiveOrganizationWorkshopsOutput;
+  } | {
+    completed: false;
+    workshopIds: string[];
+    requestedAt: number;
+  };
 
-  const snapshot = await db.collection('workshops')
-    .where('organizationId', '==', organizationId)
-    .limit(501)
-    .get();
-  if (snapshot.size > 500) {
-    throw new HttpsError(
-      'resource-exhausted',
-      'Hay más de 500 partidas. Ejecuta el archivado operativo por lotes.',
+  const existing = await db.runTransaction<ArchiveReservation | null>(async (transaction) => {
+    await revalidateOrganizationOwnerInTransaction(
+      transaction,
+      db,
+      auth.uid,
+      organizationId,
     );
-  }
-  const workshops = snapshot.docs.filter((item) =>
-    ['active', 'completed'].includes(String(item.data().status)),
-  );
-
-  let batch = db.batch();
-  let operations = 0;
-  const commits: Array<Promise<FirebaseFirestore.WriteResult[]>> = [];
-  const commitBatch = () => {
-    if (operations === 0) return;
-    commits.push(batch.commit());
-    batch = db.batch();
-    operations = 0;
-  };
-
-  for (const workshop of workshops) {
-    if (operations + 3 > 450) commitBatch();
-    batch.update(workshop.ref, {
-      status: 'archived',
-      archivedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      archiveReason: reason,
-    });
-    operations += 1;
-    const roomCode = workshop.data().roomCode;
-    if (typeof roomCode === 'string') {
-      batch.delete(db.doc('activeRoomCodes/' + roomCode));
-      operations += 1;
+    const commandSnapshot = await transaction.get(commandRef);
+    if (!commandSnapshot.exists) return null;
+    const command = commandSnapshot.data() ?? {};
+    if (command.operation !== 'archiveOrganizationWorkshops') {
+      throw new HttpsError('failed-precondition', 'La clave de idempotencia ya est\u00e1 en uso.');
     }
-    batch.create(workshop.ref.collection('auditEvents').doc(), {
-      action: 'workshop.archived',
-      actorId: auth.uid,
-      actorHash: hashIdentifier(auth.uid),
-      metadata: { bulk: true, previousStatus: String(workshop.data().status), reason },
-      createdAt: FieldValue.serverTimestamp(),
-      schemaVersion: SCHEMA_VERSION,
-    });
-    operations += 1;
-  }
-  commitBatch();
-  await Promise.all(commits);
-
-  const result: ArchiveOrganizationWorkshopsOutput = {
-    organizationId,
-    archivedCount: workshops.length,
-    updatedAt: Date.now(),
-  };
-  await commandRef.create({
-    operation: 'archiveOrganizationWorkshops',
-    result,
-    createdAt: FieldValue.serverTimestamp(),
-  }).catch(async (error: unknown) => {
-    const concurrent = await commandRef.get();
-    if (!concurrent.exists) throw error;
+    if (command.status !== 'processing') {
+      return {
+        completed: true,
+        result: command.result as ArchiveOrganizationWorkshopsOutput,
+      };
+    }
+    const workshopIds = Array.isArray(command.workshopIds)
+      ? command.workshopIds.filter((value): value is string => typeof value === 'string')
+      : [];
+    if (workshopIds.length !== command.workshopIds?.length) {
+      throw new HttpsError('data-loss', 'El comando de archivado no es v\u00e1lido.');
+    }
+    return {
+      completed: false,
+      workshopIds,
+      requestedAt: typeof command.requestedAt === 'number' ? command.requestedAt : requestedAt,
+    };
   });
-  return result;
-});
+  if (existing?.completed) return existing.result;
 
+  let reservation: ArchiveReservation | null = existing;
+  if (!reservation) {
+    const snapshot = await db.collection('workshops')
+      .where('organizationId', '==', organizationId)
+      .limit(501)
+      .get();
+    const requestedWorkshopIds = snapshot.docs
+      .filter((item) => ['active', 'completed'].includes(String(item.data().status)))
+      .map((item) => item.id)
+      .sort();
+    reservation = await db.runTransaction<ArchiveReservation>(async (transaction) => {
+      await revalidateOrganizationOwnerInTransaction(
+        transaction,
+        db,
+        auth.uid,
+        organizationId,
+      );
+      const commandSnapshot = await transaction.get(commandRef);
+      if (commandSnapshot.exists) {
+        const command = commandSnapshot.data() ?? {};
+        if (command.operation !== 'archiveOrganizationWorkshops') {
+          throw new HttpsError('failed-precondition', 'La clave de idempotencia ya est\u00e1 en uso.');
+        }
+        if (command.status !== 'processing') {
+          return {
+            completed: true,
+            result: command.result as ArchiveOrganizationWorkshopsOutput,
+          };
+        }
+        const workshopIds = Array.isArray(command.workshopIds)
+          ? command.workshopIds.filter((value): value is string => typeof value === 'string')
+          : [];
+        if (workshopIds.length !== command.workshopIds?.length) {
+          throw new HttpsError('data-loss', 'El comando de archivado no es v\u00e1lido.');
+        }
+        return {
+          completed: false,
+          workshopIds,
+          requestedAt: typeof command.requestedAt === 'number' ? command.requestedAt : requestedAt,
+        };
+      }
+      if (snapshot.size > 500) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Hay m\u00e1s de 500 partidas. Ejecuta el archivado operativo por lotes.',
+        );
+      }
+      transaction.create(commandRef, {
+        operation: 'archiveOrganizationWorkshops',
+        status: 'processing',
+        reason,
+        workshopIds: requestedWorkshopIds,
+        nextChunkIndex: 0,
+        archivedCount: 0,
+        requestedAt,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      return {
+        completed: false,
+        workshopIds: requestedWorkshopIds,
+        requestedAt,
+      };
+    });
+    if (reservation.completed) return reservation.result;
+    if (!reservation) throw new HttpsError('internal', 'No se pudo reservar el archivado.');
+  }
+
+  while (true) {
+    const state = await db.runTransaction<
+      { completed: true; result: ArchiveOrganizationWorkshopsOutput }
+      | { completed: false; result: null }
+    >(async (transaction) => {
+      await revalidateOrganizationOwnerInTransaction(
+        transaction,
+        db,
+        auth.uid,
+        organizationId,
+      );
+      const commandSnapshot = await transaction.get(commandRef);
+      if (!commandSnapshot.exists) {
+        throw new HttpsError('data-loss', 'No existe el comando de archivado autorizado.');
+      }
+      const command = commandSnapshot.data() ?? {};
+      if (command.operation !== 'archiveOrganizationWorkshops') {
+        throw new HttpsError('data-loss', 'El comando de archivado no es v\u00e1lido.');
+      }
+      if (command.status !== 'processing') {
+        return {
+          completed: true,
+          result: command.result as ArchiveOrganizationWorkshopsOutput,
+        };
+      }
+      const workshopIds = Array.isArray(command.workshopIds)
+        ? command.workshopIds.filter((value): value is string => typeof value === 'string')
+        : [];
+      if (workshopIds.length !== command.workshopIds?.length) {
+        throw new HttpsError('data-loss', 'El comando de archivado no es v\u00e1lido.');
+      }
+      const nextChunkIndex = Number.isInteger(command.nextChunkIndex)
+        ? Number(command.nextChunkIndex)
+        : 0;
+      const chunkIds = workshopIds.slice(
+        nextChunkIndex * archiveChunkSize,
+        (nextChunkIndex + 1) * archiveChunkSize,
+      );
+      const workshopSnapshots = await Promise.all(
+        chunkIds.map((workshopId) => transaction.get(db.doc(`workshops/${workshopId}`))),
+      );
+      if (workshopSnapshots.some((item) => (
+        !item.exists || item.data()?.organizationId !== organizationId
+      ))) {
+        throw new HttpsError('not-found', 'Una partida ya no pertenece a esta empresa.');
+      }
+
+      let archivedInChunk = 0;
+      for (const workshop of workshopSnapshots) {
+        const workshopData = workshop.data() ?? {};
+        if (!['active', 'completed'].includes(String(workshopData.status))) continue;
+        transaction.update(workshop.ref, {
+          status: 'archived',
+          archivedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          archiveReason: command.reason,
+          archiveCommandId: commandRef.id,
+        });
+        if (typeof workshopData.roomCode === 'string') {
+          transaction.delete(db.doc('activeRoomCodes/' + workshopData.roomCode));
+        }
+        transaction.set(
+          workshop.ref.collection('auditEvents').doc('bulk-' + commandRef.id),
+          {
+            action: 'workshop.archived',
+            actorId: auth.uid,
+            actorHash: hashIdentifier(auth.uid),
+            metadata: {
+              bulk: true,
+              previousStatus: String(workshopData.status),
+              reason: command.reason,
+            },
+            createdAt: FieldValue.serverTimestamp(),
+            schemaVersion: SCHEMA_VERSION,
+          },
+        );
+        archivedInChunk += 1;
+      }
+
+      const archivedCount = (Number(command.archivedCount) || 0) + archivedInChunk;
+      const followingChunkIndex = nextChunkIndex + 1;
+      const completed = followingChunkIndex * archiveChunkSize >= workshopIds.length;
+      if (completed) {
+        const result: ArchiveOrganizationWorkshopsOutput = {
+          organizationId,
+          archivedCount,
+          updatedAt: typeof command.requestedAt === 'number' ? command.requestedAt : requestedAt,
+        };
+        transaction.update(commandRef, {
+          status: 'completed',
+          nextChunkIndex: followingChunkIndex,
+          archivedCount,
+          result,
+          completedAt: FieldValue.serverTimestamp(),
+        });
+        return { completed: true, result };
+      }
+      transaction.update(commandRef, {
+        nextChunkIndex: followingChunkIndex,
+        archivedCount,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { completed: false, result: null };
+    });
+    if (state.completed) return state.result;
+  }
+});
 export const generateReportSnapshot = callable<
   GenerateReportSnapshotInput,
   GenerateReportSnapshotOutput
@@ -2042,10 +2234,14 @@ export const generateReportSnapshot = callable<
   const now = Date.now();
 
   const existingResult = await db.runTransaction(async (transaction) => {
-    const [commandSnapshot, reportSnapshot] = await Promise.all([
+    const [workshopSnapshot, commandSnapshot, reportSnapshot] = await Promise.all([
+      transaction.get(workshopRef),
       transaction.get(commandRef),
       transaction.get(reportRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as GenerateReportSnapshotOutput;
     }
@@ -2110,7 +2306,13 @@ export const generateReportSnapshot = callable<
       generatedAt,
     };
     return await db.runTransaction(async (transaction) => {
-      const commandSnapshot = await transaction.get(commandRef);
+      const [workshopSnapshot, commandSnapshot] = await Promise.all([
+        transaction.get(workshopRef),
+        transaction.get(commandRef),
+      ]);
+      await revalidateWorkshopAdminInTransaction(
+        transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+      );
       if (commandSnapshot.exists) {
         return commandSnapshot.data()?.result as GenerateReportSnapshotOutput;
       }
@@ -2253,10 +2455,16 @@ const generateReportArtifactsForAdmin = async (
   const leaseNow = Date.now();
 
   const existingResult = await db.runTransaction(async (transaction) => {
-    const [commandSnapshot, reportSnapshot] = await Promise.all([
+    const [workshopSnapshot, commandSnapshot, reportSnapshot] = await Promise.all([
+      options.platformOrganizationId ? Promise.resolve(null) : transaction.get(workshopRef),
       transaction.get(commandRef),
       transaction.get(reportRef),
     ]);
+    if (workshopSnapshot) {
+      await revalidateWorkshopAdminInTransaction(
+        transaction, db, authUid, workshopSnapshot, ADMIN_ROLES,
+      );
+    }
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as GenerateReportArtifactsOutput;
     }
@@ -2419,10 +2627,16 @@ const generateReportArtifactsForAdmin = async (
       generatedAt,
     };
     return await db.runTransaction(async (transaction) => {
-      const [commandSnapshot, latestReportSnapshot] = await Promise.all([
+      const [workshopSnapshot, commandSnapshot, latestReportSnapshot] = await Promise.all([
+        options.platformOrganizationId ? Promise.resolve(null) : transaction.get(workshopRef),
         transaction.get(commandRef),
         transaction.get(reportRef),
       ]);
+      if (workshopSnapshot) {
+        await revalidateWorkshopAdminInTransaction(
+          transaction, db, authUid, workshopSnapshot, ADMIN_ROLES,
+        );
+      }
       if (commandSnapshot.exists) {
         return commandSnapshot.data()?.result as GenerateReportArtifactsOutput;
       }
@@ -2516,8 +2730,14 @@ export const queueReportGeneration = callable<
       transaction.get(jobRef),
       transaction.get(commandRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, latestWorkshop, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as QueueReportGenerationOutput;
+    }
+    if (latestWorkshop.data()?.status !== 'completed') {
+      throw new HttpsError('failed-precondition', 'La partida debe estar finalizada.');
     }
     if (!reportSnapshot.exists || reportSnapshot.data()?.workshopId !== workshopId) {
       throw new HttpsError('not-found', 'El informe no existe.');
@@ -2807,10 +3027,14 @@ export const updateReportEditorial = callable<
   );
 
   return db.runTransaction(async (transaction) => {
-    const [commandSnapshot, reportSnapshot] = await Promise.all([
+    const [workshopSnapshot, commandSnapshot, reportSnapshot] = await Promise.all([
+      transaction.get(workshopRef),
       transaction.get(commandRef),
       transaction.get(reportRef),
     ]);
+    await revalidateWorkshopAdminInTransaction(
+      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+    );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as UpdateReportEditorialOutput;
     }
@@ -2942,10 +3166,14 @@ export const publishReport = callable<PublishReportInput, PublishReportOutput>(
     const publishedAt = Date.now();
     try {
       return await db.runTransaction(async (transaction) => {
-        const [commandSnapshot, latestReportSnapshot] = await Promise.all([
+        const [workshopSnapshot, commandSnapshot, latestReportSnapshot] = await Promise.all([
+          transaction.get(workshopRef),
           transaction.get(commandRef),
           transaction.get(reportRef),
         ]);
+        await revalidateWorkshopAdminInTransaction(
+          transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+        );
         if (commandSnapshot.exists) {
           return commandSnapshot.data()?.result as PublishReportOutput;
         }
@@ -3004,15 +3232,39 @@ export const resetWorkshop = callable<ResetWorkshopInput, WorkshopCommandOutput>
     const commandRef = workshopRef.collection('commandKeys').doc(
       commandDocumentId(auth.uid, idempotencyKey),
     );
-    const existingCommand = await commandRef.get();
-    if (existingCommand.exists) {
-      return existingCommand.data()?.result as WorkshopCommandOutput;
-    }
-
-    const workshopSnapshot = await workshopRef.get();
-    if (workshopSnapshot.data()?.status !== 'active') {
-      throw new HttpsError('failed-precondition', 'Solo se puede reiniciar una partida activa.');
-    }
+    const commandState = await db.runTransaction(async (transaction) => {
+      const [workshopSnapshot, commandSnapshot] = await Promise.all([
+        transaction.get(workshopRef),
+        transaction.get(commandRef),
+      ]);
+      await revalidateWorkshopAdminInTransaction(
+        transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+      );
+      if (commandSnapshot.exists) {
+        const command = commandSnapshot.data() ?? {};
+        if (command.operation !== 'resetWorkshop') {
+          throw new HttpsError('failed-precondition', 'La clave de idempotencia ya est\u00e1 en uso.');
+        }
+        return {
+          completed: command.status !== 'processing',
+          reason: typeof command.reason === 'string' ? command.reason : reason,
+          result: command.result as WorkshopCommandOutput,
+        };
+      }
+      if (workshopSnapshot.data()?.status !== 'active') {
+        throw new HttpsError('failed-precondition', 'Solo se puede reiniciar una partida activa.');
+      }
+      const result: WorkshopCommandOutput = { workshopId, updatedAt: Date.now() };
+      transaction.create(commandRef, {
+        operation: 'resetWorkshop',
+        status: 'processing',
+        reason,
+        result,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      return { completed: false, reason, result };
+    });
+    if (commandState.completed) return commandState.result;
 
     const [sessions, teams] = await Promise.all([
       workshopRef.collection('participantSessions').get(),
@@ -3055,22 +3307,22 @@ export const resetWorkshop = callable<ResetWorkshopInput, WorkshopCommandOutput>
     batches.push(batch);
     await Promise.all(batches.map((item) => item.commit()));
 
-    const result: WorkshopCommandOutput = { workshopId, updatedAt: Date.now() };
-    return db.runTransaction(async (transaction) => {
+    await db.runTransaction(async (transaction) => {
       const commandSnapshot = await transaction.get(commandRef);
-      if (commandSnapshot.exists) {
-        return commandSnapshot.data()?.result as WorkshopCommandOutput;
+      const command = commandSnapshot.data();
+      if (!commandSnapshot.exists || command?.operation !== 'resetWorkshop') {
+        throw new HttpsError('data-loss', 'No se pudo completar el reinicio autorizado.');
       }
-      transaction.create(commandRef, {
-        operation: 'resetWorkshop',
-        result,
-        createdAt: FieldValue.serverTimestamp(),
+      if (command.status === 'completed') return;
+      transaction.update(commandRef, {
+        status: 'completed',
+        completedAt: FieldValue.serverTimestamp(),
       });
       createAuditEvent(transaction, workshopRef, auth.uid, 'workshop.selectionReset', {
-        reason,
+        reason: commandState.reason,
       });
-      return result;
     });
+    return commandState.result;
   },
 );
 
@@ -3092,6 +3344,9 @@ export const deleteWorkshop = callable<DeleteWorkshopInput, WorkshopCommandOutpu
         transaction.get(workshopRef),
         transaction.get(commandRef),
       ]);
+      await revalidateWorkshopAdminInTransaction(
+        transaction, db, auth.uid, snapshot, ['owner'],
+      );
       if (commandSnapshot.exists) {
         return commandSnapshot.data()?.result as WorkshopCommandOutput;
       }
@@ -3144,6 +3399,9 @@ export const restoreWorkshop = callable<RestoreWorkshopInput, WorkshopCommandOut
         transaction.get(workshopRef),
         transaction.get(commandRef),
       ]);
+      await revalidateWorkshopAdminInTransaction(
+        transaction, db, auth.uid, snapshot, ['owner'],
+      );
       if (commandSnapshot.exists) {
         return commandSnapshot.data()?.result as WorkshopCommandOutput;
       }

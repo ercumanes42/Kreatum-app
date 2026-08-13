@@ -107,6 +107,100 @@ test('metrics and attack/defense relationships come only from recorded values', 
   assert.equal(contrast?.attack, '¿Qué ocurre si no hay adopción?');
   assert.equal(contrast?.defense, 'Validación gradual con métricas.');
 });
+test('deleted attacks never shift an orphan defense onto the remaining attack', () => {
+  const attacks = [
+    {
+      id: 'attack-a1',
+      fromTeam: 'Agua',
+      toTeam: 'Aire',
+      content: 'Attack A1',
+      timestamp: 1_750_002_000_000,
+    },
+    {
+      id: 'attack-a2',
+      fromTeam: 'Agua',
+      toTeam: 'Aire',
+      content: 'Attack A2',
+      timestamp: 1_750_002_000_100,
+    },
+  ];
+  const defenses = [
+    {
+      id: 'attack-a1',
+      attackId: 'attack-a1',
+      team: 'Aire',
+      content: 'Defense D1 for A1',
+      timestamp: 1_750_002_100_000,
+    },
+    {
+      id: 'attack-a2',
+      attackId: 'attack-a2',
+      team: 'Aire',
+      content: 'Defense D2 for A2',
+      timestamp: 1_750_002_100_100,
+    },
+  ];
+  const sourceAfterDeletingA1: GameCsvRecord = {
+    ...fixture,
+    teams: {
+      ...fixture.teams,
+      Aire: {
+        ...fixture.teams.Aire,
+        defenses: ['Legacy D1 by position', 'Legacy D2 by position'],
+      },
+    },
+    attacks: attacks.filter((attack) => attack.id !== 'attack-a1'),
+    defenses,
+  };
+
+  const dataset = buildReportDataset(sourceAfterDeletingA1);
+  assert.deepEqual(dataset.attacks.map((attack) => attack.id), ['attack-a2']);
+  assert.deepEqual(dataset.defenses.map((defense) => defense.attackId), ['attack-a2']);
+  assert.equal(dataset.defenses[0]?.content, 'Defense D2 for A2');
+
+  const contrasts = dataset.teams.flatMap((team) => team.contrasts)
+    .filter((contrast) => contrast.attackId === 'attack-a2');
+  assert.ok(contrasts.length > 0);
+  assert.equal(contrasts.every((contrast) => contrast.defense === 'Defense D2 for A2'), true);
+
+  const serialized = JSON.stringify(dataset);
+  assert.equal(serialized.includes('Defense D1 for A1'), false);
+  assert.equal(serialized.includes('Legacy D1 by position'), false);
+  assert.equal(serialized.includes('Legacy D2 by position'), false);
+  assert.equal(dataset.rows.some((row) => (
+    row.relatedId === 'attack-a2' && row.value === 'Defense D2 for A2'
+  )), true);
+});
+
+
+test('the latest linked defense wins without requiring legacy document IDs to match attack IDs', () => {
+  const source: GameCsvRecord = {
+    ...fixture,
+    defenses: [
+      {
+        id: 'legacy-defense-old',
+        attackId: 'attack-1',
+        team: 'Aire',
+        content: 'Original mitigation',
+        timestamp: 1_750_002_100_000,
+      },
+      {
+        id: 'legacy-defense-new',
+        attackId: 'attack-1',
+        team: 'Aire',
+        content: 'Revised mitigation',
+        timestamp: 1_750_002_200_000,
+      },
+    ],
+  };
+
+  const dataset = buildReportDataset(source);
+  assert.equal(dataset.metrics.defenses, 1);
+  assert.equal(dataset.defenses[0]?.id, 'legacy-defense-new');
+  assert.equal(dataset.defenses[0]?.content, 'Revised mitigation');
+  assert.equal(dataset.teams.flatMap((team) => team.contrasts)[0]?.defense, 'Revised mitigation');
+  assert.equal(JSON.stringify(dataset).includes('Original mitigation'), false);
+});
 
 test('ReportDeck paginates long Unicode content and keeps the editorial appendix separate', () => {
   const longText = Array.from({ length: 180 }, (_, index) => `Bloque ${index + 1} con información útil áéíóú`).join(' ');
@@ -225,7 +319,7 @@ test('ReportDeck compacts repeated records without dropping stored content', () 
     timestamp: 1_750_002_000_000 + index,
   }));
   const defenses = attacks.map((attack, index) => ({
-    id: `compact-defense-${index + 1}`,
+    id: attack.id,
     attackId: attack.id,
     team: 'Aire',
     content: `Defense recorded ${index + 1}`,

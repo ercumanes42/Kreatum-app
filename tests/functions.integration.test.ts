@@ -579,6 +579,173 @@ test('runs the protected workshop lifecycle without changing the game contract',
     (error: { code?: string }) => error.code === 'functions/not-found',
   );
 });
+
+test('enforces anonymous joins, tenant isolation and rotating-code rate limits', {
+  timeout: 90_000,
+}, async () => {
+  if (!rulesEnvironment) rulesEnvironment = await initializeTestEnvironment({ projectId });
+
+  const nonce = Date.now();
+  const organizationAId = `org-security-a-${nonce}`;
+  const organizationBId = `org-security-b-${nonce}`;
+  const workshopBId = `workshop-security-b-${nonce}`;
+  const roomCodeB = 'BSEC42';
+  const ownerClient = createClient('security-owner-' + nonce);
+  const facilitatorClient = createClient('security-facilitator-' + nonce);
+  const ownerCredential = await createUserWithEmailAndPassword(
+    ownerClient.auth,
+    `security-owner-${nonce}@kreatum.test`,
+    'Kreatum-Test-123!',
+  );
+  const facilitatorCredential = await createUserWithEmailAndPassword(
+    facilitatorClient.auth,
+    `security-facilitator-${nonce}@kreatum.test`,
+    'Kreatum-Test-123!',
+  );
+
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    const commercial = {
+      plan: 'pilot',
+      status: 'active',
+      validFrom: Timestamp.fromMillis(Date.now() - 60_000),
+      validUntil: null,
+      includedWorkshops: 10,
+      additionalWorkshops: 0,
+      consumedWorkshops: 0,
+    };
+    await Promise.all([
+      setDoc(doc(firestore, 'organizations', organizationAId), {
+        name: 'Security tenant A',
+        status: 'active',
+        commercial,
+        schemaVersion: 3,
+      }),
+      setDoc(doc(firestore, 'organizations', organizationBId), {
+        name: 'Security tenant B',
+        status: 'active',
+        commercial,
+        schemaVersion: 3,
+      }),
+      setDoc(
+        doc(firestore, 'organizations', organizationAId, 'members', ownerCredential.user.uid),
+        { role: 'owner', status: 'active' },
+      ),
+      setDoc(
+        doc(firestore, 'organizations', organizationAId, 'members', facilitatorCredential.user.uid),
+        { role: 'facilitator', status: 'active' },
+      ),
+      setDoc(doc(firestore, 'workshops', workshopBId), {
+        organizationId: organizationBId,
+        facilitatorUid: 'unrelated-facilitator-b',
+        roomCode: roomCodeB,
+        status: 'active',
+        currentPhase: 'Selecci\u00f3n',
+        unlockedPhases: ['Selecci\u00f3n'],
+        schemaVersion: 2,
+      }),
+      setDoc(doc(firestore, 'activeRoomCodes', roomCodeB), {
+        workshopId: workshopBId,
+        organizationId: organizationBId,
+      }),
+    ]);
+  });
+
+  for (const [client, idempotencyKey] of [
+    [ownerClient, 'registered-owner-join-001'],
+    [facilitatorClient, 'registered-facilitator-join-001'],
+  ] as const) {
+    await assert.rejects(
+      call(client.functions, 'joinWorkshopByCode', {
+        roomCode: roomCodeB,
+        idempotencyKey,
+      }),
+      (error: { code?: string }) => error.code === 'functions/permission-denied',
+    );
+  }
+
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    assert.equal(
+      (await getDoc(doc(
+        firestore,
+        'workshops',
+        workshopBId,
+        'participantSessions',
+        ownerCredential.user.uid,
+      ))).exists(),
+      false,
+    );
+    assert.equal(
+      (await getDoc(doc(
+        firestore,
+        'workshops',
+        workshopBId,
+        'participantSessions',
+        facilitatorCredential.user.uid,
+      ))).exists(),
+      false,
+    );
+  });
+
+  for (const [workshopId, idempotencyKey] of [
+    [workshopBId, 'tenant-oracle-existing-001'],
+    [`missing-security-workshop-${nonce}`, 'tenant-oracle-missing-001'],
+  ]) {
+    await assert.rejects(
+      call(ownerClient.functions, 'requestWorkshopTransition', {
+        workshopId,
+        targetPhase: 'Calcinar',
+        idempotencyKey,
+      }),
+      (error: { code?: string }) => error.code === 'functions/not-found',
+    );
+  }
+
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await Promise.all(Array.from({ length: 501 }, (_, index) => setDoc(
+      doc(firestore, 'workshops', `tenant-b-bulk-${nonce}-${index}`),
+      {
+        organizationId: organizationBId,
+        status: 'active',
+        schemaVersion: 2,
+      },
+    )));
+  });
+  await assert.rejects(
+    call(ownerClient.functions, 'archiveOrganizationWorkshops', {
+      organizationId: organizationBId,
+      reason: 'Prueba de aislamiento de archivado masivo',
+      idempotencyKey: `tenant-bulk-oracle-${nonce}`,
+    }),
+    (error: { code?: string }) => error.code === 'functions/not-found',
+  );
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    const untouched = await getDoc(doc(firestore, 'workshops', `tenant-b-bulk-${nonce}-0`));
+    assert.equal(untouched.data()?.status, 'active');
+  });
+  const participantClient = createClient('security-participant-' + nonce);
+  await signInAnonymously(participantClient.auth);
+  for (let index = 0; index < 10; index += 1) {
+    await assert.rejects(
+      call(participantClient.functions, 'joinWorkshopByCode', {
+        roomCode: `R${String(index).padStart(5, '0')}`,
+        idempotencyKey: `rotate-code-${String(index).padStart(2, '0')}-${nonce}`,
+      }),
+      (error: { code?: string }) => error.code === 'functions/not-found',
+    );
+  }
+  await assert.rejects(
+    call(participantClient.functions, 'joinWorkshopByCode', {
+      roomCode: 'R00010',
+      idempotencyKey: `rotate-code-10-${nonce}`,
+    }),
+    (error: { code?: string }) => error.code === 'functions/resource-exhausted',
+  );
+});
+
 test('marks and hard-deletes workshops after the retention grace period', {
   timeout: 60_000,
 }, async () => {

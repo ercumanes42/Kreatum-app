@@ -45,6 +45,7 @@ export interface OrganizationSummary {
   id: string;
   name: string;
   role: OrganizationRole;
+  operationalStatus: PlatformOrganizationStatus;
   branding: OrganizationBranding;
   allowedEmailDomains: string[];
   retentionMonths: number;

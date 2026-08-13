@@ -110,6 +110,7 @@ const TECHNICAL_TEAM_FIELDS = new Set([
   'createdAt',
   'updatedAt',
   'assignmentResetAt',
+  'defenses',
   'reassignments',
   'schemaVersion',
 ]);
@@ -494,26 +495,6 @@ const buildRows = (
       const config = REPORT_FIELD_DEFINITIONS[field] || {
         phase: 'General', category: 'Otros datos del equipo', label: field,
       };
-      if (field === 'defenses' && Array.isArray(value)) {
-        const received = attacks
-          .filter((attack) => reportValueToString(attack.toTeam) === team)
-          .sort((left, right) => (reportTimestampToMillis(left.timestamp) || 0) - (reportTimestampToMillis(right.timestamp) || 0));
-        value.forEach((defense, index) => {
-          const related = received[index];
-          pushRows(rows, base, defense, {
-            team,
-            phase: config.phase,
-            category: config.category,
-            field: config.label,
-            fromTeam: reportValueToString(related?.fromTeam),
-            toTeam: team,
-            recordedAt: formatReportTimestamp(related?.timestamp),
-            relatedId: reportValueToString(related?.id),
-            index: String(index + 1),
-          });
-        });
-        return;
-      }
       pushRows(rows, base, value, {
         team, phase: config.phase, category: config.category, field: config.label,
       });
@@ -594,37 +575,36 @@ export const buildReportDataset = (
     content: reportValueToString(attack.content),
     recordedAt: formatReportTimestamp(attack.timestamp),
   })).filter((attack) => attack.content);
-  const documentDefenses: ReportDefense[] = normalized.defenses.map((defense) => ({
+  const attackById = new Map(attacks.map((attack) => [attack.id, attack]));
+  const canonicalDefenseByAttackId = new Map<string, ReportSourceDocument>();
+  normalized.defenses.forEach((defense) => {
+    const id = reportValueToString(defense.id);
+    const attackId = reportValueToString(defense.attackId);
+    const team = reportValueToString(defense.team);
+    const attack = attackById.get(attackId);
+    if (!id || !attack || team !== attack.toTeam || !isMeaningfulReportValue(defense.content)) return;
+
+    const current = canonicalDefenseByAttackId.get(attackId);
+    const candidateTimestamp = reportTimestampToMillis(defense.editedAt ?? defense.timestamp) || 0;
+    const currentTimestamp = current
+      ? reportTimestampToMillis(current.editedAt ?? current.timestamp) || 0
+      : -1;
+    const currentId = current ? reportValueToString(current.id) : '';
+    if (!current
+      || candidateTimestamp > currentTimestamp
+      || (candidateTimestamp === currentTimestamp && id.localeCompare(currentId) > 0)) {
+      canonicalDefenseByAttackId.set(attackId, defense);
+    }
+  });
+  const canonicalDefenseDocuments = [...canonicalDefenseByAttackId.values()];
+  const defenses: ReportDefense[] = canonicalDefenseDocuments.map((defense) => ({
     id: reportValueToString(defense.id),
     attackId: reportValueToString(defense.attackId),
     team: reportValueToString(defense.team),
     content: reportValueToString(defense.content),
     recordedAt: formatReportTimestamp(defense.timestamp),
   })).filter((defense) => defense.content);
-  const embeddedDefenses: ReportDefense[] = REPORT_TEAM_ORDER.flatMap((team) => {
-    const teamDefenses = toTextArray(normalized.teams[team]?.defenses);
-    const receivedAttacks = normalized.attacks
-      .filter((attack) => reportValueToString(attack.toTeam) === team)
-      .sort((left, right) => (reportTimestampToMillis(left.timestamp) || 0)
-        - (reportTimestampToMillis(right.timestamp) || 0));
-    return teamDefenses.map((content, index) => ({
-      id: '',
-      attackId: reportValueToString(receivedAttacks[index]?.id),
-      team,
-      content,
-      recordedAt: formatReportTimestamp(receivedAttacks[index]?.timestamp),
-    }));
-  });
-  const defenses = [...documentDefenses];
-  embeddedDefenses.forEach((defense) => {
-    const alreadyRecorded = defenses.some((candidate) => (
-      (defense.attackId && candidate.attackId === defense.attackId)
-      || (candidate.team === defense.team && candidate.content === defense.content)
-    ));
-    if (!alreadyRecorded) defenses.push(defense);
-  });
-  const defenseByAttack = new Map(defenses.filter((defense) => defense.attackId)
-    .map((defense) => [defense.attackId, defense]));
+  const defenseByAttack = new Map(defenses.map((defense) => [defense.attackId, defense]));
 
   const teams = REPORT_TEAM_ORDER.map((name): ReportTeamDataset | null => {
     const data = normalized.teams[name];
@@ -641,8 +621,7 @@ export const buildReportDataset = (
       .map(([field, value]) => ({ field, label: field, value: reportValueToString(value) }));
     const contrasts = attacks.filter((attack) => attack.fromTeam === name || attack.toTeam === name)
       .map((attack) => {
-        const defense = defenseByAttack.get(attack.id)
-          || defenses.find((candidate) => candidate.team === attack.toTeam && !candidate.attackId);
+        const defense = defenseByAttack.get(attack.id);
         return {
           attackId: attack.id,
           fromTeam: attack.fromTeam,
@@ -693,7 +672,13 @@ export const buildReportDataset = (
       && !REPORT_PRIVATE_FIELDS.has(field)
       && isMeaningfulReportValue(value))
     .map(([field, value]) => ({ field, value: reportValueToString(value) }));
-  const rows = buildRows(workshop, normalized.teams, normalized.attacks, normalized.defenses, normalized.solutions);
+  const rows = buildRows(
+    workshop,
+    normalized.teams,
+    normalized.attacks,
+    canonicalDefenseDocuments,
+    normalized.solutions,
+  );
   return {
     version: '1.0.0',
     workshop: {

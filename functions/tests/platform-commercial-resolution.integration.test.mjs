@@ -60,6 +60,8 @@ test('commercial resolution is hashed, atomic, idempotent and never writes works
   assert.equal(dryRunReport.allowance.available, 0);
   assert.equal(dryRunReport.workshopsScanned, 5);
   assert.equal(dryRunReport.organizationToUpdate, true);
+  assert.equal(dryRunReport.auditEventToUpdate, true);
+  assert.equal(dryRunReport.auditEventVerified, false);
   assert.match(dryRunReport.analysisHash, /^[a-f0-9]{64}$/);
 
   run(['--apply', '--confirm-project', projectId, '--confirm-analysis-hash', '0'.repeat(64), '--reason', 'Alta productiva GFS'], 1);
@@ -78,7 +80,18 @@ test('commercial resolution is hashed, atomic, idempotent and never writes works
   assert.equal(organization.commercial.consumedWorkshops, 5);
   assert.equal(organization.commercial.validUntil, null);
   assert.equal(organization.commercialMigrationVersion, 1);
-  assert.ok((await db.doc(`organizations/${organizationId}/auditEvents/migration-platform-commercial-resolution-v1`).get()).exists);
+  const auditRef = db.doc(
+    `organizations/${organizationId}/auditEvents/migration-platform-commercial-resolution-v1`,
+  );
+  const audit = await auditRef.get();
+  assert.ok(audit.exists);
+  assert.equal(audit.data().action, 'organization.platformCommercialResolved');
+  assert.equal(audit.data().organizationId, organizationId);
+  assert.equal(audit.data().targetId, organizationId);
+  assert.equal(audit.data().reason, 'Alta productiva GFS');
+  assert.deepEqual(audit.data().newState, { contracted: 5, used: 5, available: 0 });
+  assert.equal(audit.data().analysisHash, dryRunReport.analysisHash);
+  assert.match(audit.data().resolutionHash, /^[a-f0-9]{64}$/);
 
   const after = await db.collection('workshops').where('organizationId', '==', organizationId).get();
   assert.equal(after.size, before.size);
@@ -88,7 +101,42 @@ test('commercial resolution is hashed, atomic, idempotent and never writes works
   const repeatedReport = JSON.parse(repeatedDryRun.stdout);
   assert.equal(repeatedReport.organizationToUpdate, false);
   const verify = run(['--verify']);
-  assert.equal(JSON.parse(verify.stdout).verified, true);
+  const verifyReport = JSON.parse(verify.stdout);
+  assert.equal(verifyReport.verified, true);
+  assert.equal(verifyReport.auditEventVerified, true);
+
+  await auditRef.update({ resolutionHash: 'tampered', reason: 'x' });
+  const driftedAudit = run(['--verify'], 2);
+  const driftedAuditReport = JSON.parse(driftedAudit.stdout);
+  assert.equal(driftedAuditReport.verified, false);
+  assert.equal(driftedAuditReport.organizationToUpdate, false);
+  assert.equal(driftedAuditReport.auditEventVerified, false);
+
+  await auditRef.delete();
+  const missingAudit = run(['--verify'], 2);
+  assert.equal(JSON.parse(missingAudit.stdout).auditEventVerified, false);
+
+  const auditRepairDryRun = run();
+  const auditRepairReport = JSON.parse(auditRepairDryRun.stdout);
+  assert.equal(auditRepairReport.organizationToUpdate, false);
+  assert.equal(auditRepairReport.auditEventToUpdate, true);
+  run([
+    '--apply', '--confirm-project', projectId,
+    '--confirm-analysis-hash', auditRepairReport.analysisHash,
+    '--reason', 'Reparacion de auditoria comercial',
+  ]);
+  assert.equal(JSON.parse(run(['--verify']).stdout).verified, true);
+
+  await db.doc(`organizations/${organizationId}`).update({ status: 'suspended' });
+  const suspendedDryRun = run([], 2);
+  const suspendedReport = JSON.parse(suspendedDryRun.stdout);
+  assert.ok(suspendedReport.errors.includes('organization-status-not-active'));
+  run([
+    '--apply', '--confirm-project', projectId,
+    '--confirm-analysis-hash', suspendedReport.analysisHash,
+    '--reason', 'No reactivar empresa suspendida',
+  ], 2);
+  assert.equal((await db.doc(`organizations/${organizationId}`).get()).data().status, 'suspended');
 });
 
 test('commercial resolution refuses a usage count different from current workshops', async () => {

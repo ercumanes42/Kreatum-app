@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase-admin/app';
+import { deleteApp, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
@@ -140,3 +140,4 @@ const organizations = warmupPayload?.result?.data?.organizations
 if (!organizations.some((organization) => organization?.id === organizationId)) {
   throw new Error('listMyOrganizations warmup did not return the seeded organization.');
 }
+await deleteApp(app);

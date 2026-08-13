@@ -660,13 +660,13 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       return;
     }
 
-    await addDoc(collection(db, workshopCollectionName, gameId, 'defenses'), {
+    await setDoc(doc(db, workshopCollectionName, gameId, 'defenses', attackId), {
       attackId,
       team,
       content,
       timestamp: Date.now(),
       playerId,
-    });
+    }, { merge: true });
   };
   const updateSolution = async (reformulated: string, results: string) => {
     if (!gameId || !team) return;
