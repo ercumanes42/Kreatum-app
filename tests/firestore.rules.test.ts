@@ -517,14 +517,24 @@ test('allows explicitly migrated legacy workshops only to tenant owners', async 
       currentPhase: 'Proyectar',
       schemaVersion: 2,
     });
+    await setDoc(doc(firestore, 'workshops', 'unassigned-new-workshop', 'teams', 'Agua'), {
+      team: 'Agua',
+    });
+    await setDoc(doc(firestore, 'workshops', 'unassigned-new-workshop', 'reports', 'legacy-report'), {
+      status: 'published',
+    });
   });
   const owner = environment.authenticatedContext(ownerId).firestore();
   const facilitator = environment.authenticatedContext(facilitatorId).firestore();
 
   await assertSucceeds(getDoc(doc(owner, 'workshops', 'legacy-workshop')));
   await assertFails(getDoc(doc(facilitator, 'workshops', 'legacy-workshop')));
-  await assertFails(getDoc(doc(owner, 'workshops', 'unassigned-new-workshop')));
+  await assertSucceeds(getDoc(doc(owner, 'workshops', 'unassigned-new-workshop')));
+  await assertSucceeds(getDoc(doc(owner, 'workshops', 'unassigned-new-workshop', 'teams', 'Agua')));
+  await assertSucceeds(getDoc(doc(owner, 'workshops', 'unassigned-new-workshop', 'reports', 'legacy-report')));
   await assertFails(getDoc(doc(facilitator, 'workshops', 'unassigned-new-workshop')));
+  await assertFails(getDoc(doc(facilitator, 'workshops', 'unassigned-new-workshop', 'teams', 'Agua')));
+  await assertFails(getDoc(doc(facilitator, 'workshops', 'unassigned-new-workshop', 'reports', 'legacy-report')));
 });
 
 test('allows owner access management and denies facilitator, historical analyst and outsiders', async () => {
