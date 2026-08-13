@@ -192,15 +192,16 @@ export function Diluir({ state, updateState }: Props) {
                   <div className="flex-1 truncate text-sm font-mono text-kreatum-gray/90 dark:text-white/80">
                     {state.top3Perspectives[idx] || <span className="text-kreatum-gray/50 dark:text-white/60 truncate">Línea {idx + 1} vacía</span>}
                   </div>
-                  <div className="w-24">
+                  <div className="w-28 shrink-0">
                     <Input 
                       type="number" 
+                      inputMode="numeric"
                       min="0"
                       value={state.perspectiveVotes[idx] || ''}
                       onChange={(e) => handleVoteChange(idx, e.target.value)}
                       placeholder="Votos"
                       disabled={isLocked}
-                      className="text-center font-bold text-kreatum-purple text-lg placeholder:text-kreatum-gray/30 dark:placeholder:text-white/20"
+                      className="px-3 text-center font-bold text-kreatum-purple text-lg placeholder:text-kreatum-gray dark:placeholder:text-white/70"
                     />
                   </div>
                 </div>

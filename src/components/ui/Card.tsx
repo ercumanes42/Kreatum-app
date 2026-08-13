@@ -5,8 +5,8 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
   return (
     <div
       className={cn(
-        "glass-card group relative flex h-full flex-col overflow-hidden rounded-2xl transition-colors duration-200",
-        "hover:border-kreatum-purple/25",
+        "glass-card group relative flex h-full flex-col overflow-hidden rounded-2xl transition-[border-color,box-shadow,transform] duration-200",
+        "hover:border-kreatum-purple/20 hover:shadow-[0_26px_62px_-42px_rgba(16,47,64,0.55)]",
         className
       )}
       {...props}

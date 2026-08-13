@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { sounds } from '../../lib/sounds';
 import { useAttacksReceived, useAttacksSent, useGameGlobal } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 
 interface Props {
   state: GameState;
@@ -17,6 +18,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const { gameId } = useGame();
   const { globalState } = useGameGlobal(gameId);
+  const dialogRef = useDialogFocus<HTMLDivElement>(isOpen, onClose);
 
   // Fetch real attack data from Firestore
   const { attacks: firestoreAttacksReceived } = useAttacksReceived(gameId, state.team);
@@ -27,10 +29,6 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
   // Use Firestore data (real-time) with fallback to local state
   const attacksSentCount = firestoreAttacksSent.length || (state.attacksOnOthers ?? []).filter(a => a.trim()).length;
   const attacksReceivedCount = firestoreAttacksReceived.length;
-  const attacksSentList = firestoreAttacksSent.length > 0
-    ? firestoreAttacksSent.map(a => a.content)
-    : (state.attacksOnOthers ?? []).filter(a => a.trim());
-  const attacksReceivedList = firestoreAttacksReceived.map(a => a.content);
 
   const toggleSection = (key: string) => {
     setExpandedSection(prev => prev === key ? null : key);
@@ -103,6 +101,11 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
   return (
     <AnimatePresence>
       <motion.div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="workshop-closure-title"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -148,6 +151,7 @@ export function WorkshopClosure({ state, isOpen, onClose }: Props) {
               </motion.div>
 
               <motion.h1
+                id="workshop-closure-title"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}

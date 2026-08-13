@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import { motion } from 'motion/react';
 import { useGame } from '../../contexts/GameContext';
 import { Button } from '../ui/Button';
+import { getUserFacingError } from '../../lib/errors';
 
 interface Props {
   state: GameState;
@@ -13,7 +14,7 @@ interface Props {
 
 type JoinStep = 'code' | 'team';
 
-export function TeamSelection({ state, updateState }: Props) {
+export function TeamSelection({ state }: Props) {
   const { gameId, roomCode, joinGame, validateRoomCode } = useGame();
   
   // If already in a game, skip to team selection
@@ -52,8 +53,8 @@ export function TeamSelection({ state, updateState }: Props) {
       }
       setPendingCode(code);
       setStep('team');
-    } catch (e: any) {
-      setCodeError(e.message || 'Error al verificar el código. Comprueba tu conexión.');
+    } catch (error: unknown) {
+      setCodeError(getUserFacingError(error, 'No se pudo verificar el código. Comprueba tu conexión.'));
     } finally {
       setIsValidating(false);
     }
@@ -66,8 +67,8 @@ export function TeamSelection({ state, updateState }: Props) {
     setCodeError('');
     try {
       await joinGame(pendingCode || roomCode || '', team);
-    } catch (e: any) {
-      setCodeError(e.message || 'Error al unirse a la sala.');
+    } catch (error: unknown) {
+      setCodeError(getUserFacingError(error, 'No se pudo entrar en la sala.'));
       // Go back to code step if the code was invalid
       setStep('code');
     } finally {
@@ -91,7 +92,7 @@ export function TeamSelection({ state, updateState }: Props) {
             </span>
           </div>
         )}
-        <h1 className="text-4xl font-extrabold tracking-normal text-kreatum-dark dark:text-white mb-3">
+        <h1 className="mb-3 text-3xl font-extrabold tracking-normal text-kreatum-dark dark:text-white sm:text-4xl">
           Elige tu equipo
         </h1>
         <p className="text-base font-medium text-kreatum-gray/65 dark:text-white/60 mb-10">
@@ -99,12 +100,12 @@ export function TeamSelection({ state, updateState }: Props) {
         </p>
 
         {codeError && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm font-medium text-center">
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm font-medium text-center" role="alert">
             {codeError}
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4">
           {teams.map((t) => {
             const isSelected = state.team === t.id;
             const isOtherSelected = state.team && state.team !== t.id;
@@ -117,9 +118,9 @@ export function TeamSelection({ state, updateState }: Props) {
                 disabled={isAnyJoining || !!state.team}
                 onClick={() => handleJoinWithTeam(t.id)}
                 className={cn(
-                  "group relative p-7 rounded-2xl border transition-colors duration-200 text-center bg-white dark:bg-white/[0.04] shadow-[0_18px_38px_-34px_rgba(16,47,64,0.6)]",
+                  "group relative rounded-2xl border bg-white p-4 text-center shadow-[0_18px_38px_-34px_rgba(16,47,64,0.6)] transition-[color,background-color,border-color,box-shadow,transform] duration-200 dark:bg-white/[0.04] sm:p-7",
                   t.bg,
-                  "focus:outline-none",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-kreatum-purple focus-visible:ring-offset-2",
                   isSelected ? "ring-2 ring-offset-2 ring-kreatum-purple dark:ring-offset-kreatum-bg-dark bg-white dark:bg-white/[0.07]" : "",
                   (isOtherSelected || (isAnyJoining && !isCurrentlyJoining)) && "opacity-30 grayscale cursor-not-allowed",
                   (isAnyJoining || !!state.team) && "cursor-default"
@@ -130,7 +131,7 @@ export function TeamSelection({ state, updateState }: Props) {
                     <div className="w-8 h-8 border-4 border-kreatum-purple border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : (
-                  <div className="relative w-20 h-20 mx-auto mb-5">
+                  <div className="relative mx-auto mb-3 h-14 w-14 sm:mb-5 sm:h-20 sm:w-20">
                     <img 
                       src={t.icon} 
                       alt={t.name}
@@ -150,7 +151,7 @@ export function TeamSelection({ state, updateState }: Props) {
                     )}
                   </div>
                 )}
-                <h3 className={cn("text-lg font-bold tracking-normal", t.color)}>
+                <h3 className={cn("text-sm font-bold tracking-normal sm:text-lg", t.color)}>
                   {isSelected ? `¡Eres ${t.name}!` : t.name}
                 </h3>
               </button>
@@ -161,7 +162,7 @@ export function TeamSelection({ state, updateState }: Props) {
         {pendingCode && (
           <button
             onClick={() => { setStep('code'); setCodeError(''); }}
-            className="flex items-center gap-2 mx-auto text-sm font-semibold text-kreatum-gray/60 dark:text-white/45 hover:text-kreatum-purple transition-colors"
+            className="flex min-h-11 items-center gap-2 mx-auto rounded-lg px-3 text-sm font-semibold text-kreatum-gray/60 dark:text-white/45 hover:text-kreatum-purple transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kreatum-purple"
           >
             <ArrowLeft className="w-4 h-4" />
             Cambiar código
@@ -179,9 +180,10 @@ export function TeamSelection({ state, updateState }: Props) {
       transition={{ duration: 0.25 }}
       className="max-w-lg mx-auto"
     >
-      <div className="glass-card rounded-2xl p-7 sm:p-8">
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-extrabold tracking-normal text-kreatum-dark dark:text-white mb-3">
+      <div className="glass-card rounded-3xl p-6 sm:p-8">
+        <div className="mb-7 text-center sm:mb-8">
+          <p className="mb-3 text-[0.68rem] font-extrabold uppercase tracking-[0.2em] text-kreatum-purple/85">Experiencia colaborativa</p>
+          <h1 className="mb-3 text-3xl font-extrabold tracking-normal text-kreatum-dark dark:text-white sm:text-4xl">
             Bienvenido a Kreatum
           </h1>
           <p className="text-base font-medium leading-relaxed text-kreatum-gray/65 dark:text-white/60">
@@ -191,13 +193,16 @@ export function TeamSelection({ state, updateState }: Props) {
 
         <div className="space-y-4">
         {codeError && (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm font-medium text-center">
+          <div id="room-code-error" className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm font-medium text-center" role="alert">
             {codeError}
           </div>
         )}
         <div className="flex flex-col gap-3 sm:flex-row">
-          <input 
+          <label htmlFor="room-code-input" className="sr-only">Código de sala</label>
+          <input
             id="room-code-input"
+            aria-describedby={codeError ? 'room-code-error' : undefined}
+            aria-invalid={!!codeError}
             type="text" 
             value={roomCodeInput}
             onChange={(e) => {
@@ -210,15 +215,16 @@ export function TeamSelection({ state, updateState }: Props) {
             maxLength={ROOM_CODE_MAX_LENGTH}
             autoFocus
           />
-          <Button 
-            className="h-14 rounded-xl px-6 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white"
+          <Button
+            aria-label="Entrar a la sala"
+            className="h-14 rounded-xl px-6 text-white sm:min-w-32"
             disabled={isValidating || !roomCodeInput.trim()}
             onClick={handleCodeSubmit}
           >
             {isValidating ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              <LogIn className="w-5 h-5" />
+              <><LogIn className="h-5 w-5" /><span>Entrar</span></>
             )}
           </Button>
         </div>

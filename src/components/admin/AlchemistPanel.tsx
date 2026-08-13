@@ -1,26 +1,25 @@
-import { useState } from 'react';
-import { useGameGlobal, useAllTeams, useAttacksCountByTeam } from '../../hooks/useRealtime';
+import { useEffect, useRef, useState } from 'react';
+import { useGameGlobal, useAllTeams, useAttacksCountByTeam, useParticipantSessions } from '../../hooks/useRealtime';
 import { useGame } from '../../contexts/GameContext';
 import { Phase, Team, PHASES } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
-import { db } from '../../lib/firebase';
-import { doc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { isV2DataModel } from '../../lib/dataModel';
+import { getUserFacingError } from '../../lib/errors';
 import { Button } from '../ui/Button';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { 
   Users, 
   Settings, 
   ChevronRight, 
   ShieldAlert, 
-  Clock, 
+
   CheckCircle2, 
   LayoutDashboard,
   Timer,
   History,
-  FileSpreadsheet,
+
   Shield,
   LockKeyhole,
-  UnlockKeyhole,
   Trash2,
   ArrowRightLeft,
   Monitor,
@@ -30,7 +29,9 @@ import { cn, getDeviceCode } from '../../lib/utils';
 import { GameHistory } from './GameHistory';
 import { WorkshopClosure } from '../phases/WorkshopClosure';
 import { Sparkles } from 'lucide-react';
-
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { isPhaseChangeAllowed } from '../../../shared/contracts';
+import { createIdempotencyKey, workshopApi } from '../../lib/workshopApi';
 // Fixed color mapping to avoid dynamic Tailwind class issues
 const TEAM_BAR_COLORS: Record<Team, string> = {
   Fuego: 'bg-kreatum-red',
@@ -55,9 +56,10 @@ interface Props {
 
 export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
   const { roomCode, leaveGame, reassignTeamMember } = useGame();
-  const { globalState, updateGlobalState } = useGameGlobal(gameId);
+  const { globalState, updateGlobalState, isLoading: isGlobalLoading, error: globalError } = useGameGlobal(gameId);
   const { teams } = useAllTeams(gameId);
-  const attackCounts = useAttacksCountByTeam(gameId);
+  const { counts: attackCounts } = useAttacksCountByTeam(gameId);
+  const { sessions: participantSessions } = useParticipantSessions(gameId);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
   const [summaryTeam, setSummaryTeam] = useState<Team | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
@@ -65,49 +67,194 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [reassignmentDestination, setReassignmentDestination] = useState<Team | null>(null);
   const [isReassigning, setIsReassigning] = useState(false);
+  const [releaseSession, setReleaseSession] = useState<{ team: Team; participantId: string } | null>(null);
+  const [releaseReason, setReleaseReason] = useState('');
+  const [isReleasing, setIsReleasing] = useState(false);
+  const [pendingPhase, setPendingPhase] = useState<Phase | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [currentTimestamp, setCurrentTimestamp] = useState(0);
+  const [transitionAction, setTransitionAction] = useState(false);
+  const [showOverride, setShowOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const commitInFlightRef = useRef<string | null>(null);
+  const actionInFlightRef = useRef(false);
+
+  useEffect(() => {
+    const startedAt = typeof globalState.createdAt === 'number' ? globalState.createdAt : 0;
+    if (!startedAt) {
+      setElapsedMs(0);
+      return undefined;
+    }
+
+    const updateElapsed = () => {
+      const now = Date.now();
+      setCurrentTimestamp(now);
+      setElapsedMs(Math.max(0, now - startedAt));
+    };
+    updateElapsed();
+    const intervalId = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [globalState.createdAt]);
+
+  const formatElapsed = (durationMs: number) => {
+    const totalSeconds = Math.floor(durationMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds]
+      .map((value) => String(value).padStart(2, '0'))
+      .join(':');
+  };
 
   const currentPhase = (globalState.currentPhase || 'Selección') as Phase;
   const hasUnlockedPhases = globalState.unlockedPhases && globalState.unlockedPhases.length > 0;
-  const unlockedPhases = hasUnlockedPhases ? (globalState.unlockedPhases as string[]) : PHASES;
-  const phasesThrough = (phase: Phase) => {
-    const phaseIndex = PHASES.indexOf(phase);
-    return phaseIndex >= 0 ? PHASES.slice(0, phaseIndex + 1) : ['Selección'];
+  const unlockedPhases: Phase[] = hasUnlockedPhases
+    ? (globalState.unlockedPhases as Phase[])
+    : isV2DataModel ? [PHASES[0]] : [...PHASES];
+
+  const requestTransition = async (options: { targetPhase?: Phase; complete?: boolean }) => {
+    if (actionInFlightRef.current || globalState.transition?.state === 'requested') return;
+    actionInFlightRef.current = true;
+    setTransitionAction(true);
+    setActionError('');
+    try {
+      await workshopApi.requestWorkshopTransition({
+        workshopId: gameId,
+        ...options,
+        idempotencyKey: createIdempotencyKey('requestWorkshopTransition'),
+      });
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo iniciar el cambio seguro.'));
+      throw error;
+    } finally {
+      actionInFlightRef.current = false;
+      setTransitionAction(false);
+    }
   };
 
   const setGlobalPhase = async (phase: Phase) => {
-    const newUnlocked = Array.from(new Set([...unlockedPhases, ...phasesThrough(phase)]));
+    if (
+      phase === currentPhase
+      || pendingPhase !== null
+      || globalState.transition?.state === 'requested'
+      || !isPhaseChangeAllowed(currentPhase, phase, unlockedPhases)
+    ) return;
+
+    setPendingPhase(phase);
     try {
-      await updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
-    } catch (e: any) {
-      console.error('Error al actualizar fase:', e);
+      await requestTransition({ targetPhase: phase });
+    } finally {
+      setPendingPhase(null);
     }
   };
 
-  const unlockPhase = async (phase: Phase) => {
-    const newUnlocked = Array.from(new Set([...unlockedPhases, ...phasesThrough(phase)]));
+  const commitTransition = async (overrideReason?: string) => {
+    const transitionId = globalState.transition?.id;
+    if (!transitionId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setTransitionAction(true);
+    setActionError('');
     try {
-      await updateGlobalState({ currentPhase: phase, unlockedPhases: newUnlocked });
-    } catch (e: any) {
-      console.error('Error al avanzar fase:', e);
+      await workshopApi.commitWorkshopTransition({
+        workshopId: gameId,
+        transitionId,
+        overrideReason: overrideReason?.trim() || undefined,
+        idempotencyKey: createIdempotencyKey('commitWorkshopTransition'),
+      });
+      setOverrideReason('');
+      setShowOverride(false);
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'Aún faltan equipos por confirmar el guardado.'));
+    } finally {
+      actionInFlightRef.current = false;
+      setTransitionAction(false);
     }
   };
 
+  const cancelTransition = async () => {
+    const transitionId = globalState.transition?.id;
+    if (!transitionId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setTransitionAction(true);
+    setActionError('');
+    try {
+      await workshopApi.cancelWorkshopTransition({
+        workshopId: gameId,
+        transitionId,
+        reason: 'Cancelado por el Alquimista',
+        idempotencyKey: createIdempotencyKey('cancelWorkshopTransition'),
+      });
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo cancelar el cambio.'));
+    } finally {
+      actionInFlightRef.current = false;
+      setTransitionAction(false);
+    }
+  };
+  const activeTransition = globalState.transition?.state === 'requested'
+    ? globalState.transition
+    : null;
+  const requiredAckCount = activeTransition
+    ? typeof activeTransition.requiredAcks === 'number'
+      ? activeTransition.requiredAcks
+      : activeTransition.requiredAcks.length
+    : 0;
+  const receivedAckCount = activeTransition
+    ? typeof activeTransition.receivedAcks === 'number'
+      ? activeTransition.receivedAcks
+      : activeTransition.receivedAcks.length
+    : 0;
+  const pendingAckCount = Math.max(0, requiredAckCount - receivedAckCount);
+
+  useEffect(() => {
+    if (!activeTransition?.id || receivedAckCount < requiredAckCount) return;
+    if (commitInFlightRef.current === activeTransition.id) return;
+
+    commitInFlightRef.current = activeTransition.id;
+    actionInFlightRef.current = true;
+    setTransitionAction(true);
+    workshopApi.commitWorkshopTransition({
+      workshopId: gameId,
+      transitionId: activeTransition.id,
+      idempotencyKey: createIdempotencyKey('commitWorkshopTransition'),
+    }).catch((error: unknown) => {
+      commitInFlightRef.current = null;
+      setActionError(getUserFacingError(error, 'No se pudo aplicar el cambio confirmado.'));
+    }).finally(() => {
+      actionInFlightRef.current = false;
+      setTransitionAction(false);
+    });
+  }, [activeTransition?.id, gameId, receivedAckCount, requiredAckCount]);
+
+  useEffect(() => {
+    if (globalState.status === 'completed') leaveGame();
+  }, [globalState.status, leaveGame]);
   const unlockDefense = async () => {
     try {
       await updateGlobalState({ sublimarDefenseUnlocked: true, sublimarDefenseUnlockedAt: Date.now() });
-    } catch (e: any) {
-      console.error('Error al desbloquear defensa:', e);
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo abrir la defensa.'));
     }
   };
 
   const getTeamProgress = (teamData: any) => {
     if (!teamData) return 0;
     if (teamData.isFinished === true) return 100;
-    const phaseIndex = PHASES.indexOf(teamData.currentPhase || 'Selección');
+    const phaseIndex = PHASES.indexOf(currentPhase);
     return Math.round((phaseIndex / (PHASES.length - 1)) * 100);
   };
 
-  const getTeamMembers = (teamData: any): string[] => {
+  const getTeamMembers = (teamId: Team, teamData: any): string[] => {
+    if (isV2DataModel) {
+      return participantSessions
+        .filter((session) =>
+          session.team === teamId
+          && session.status === 'active'
+          && (!currentTimestamp || session.expiresAt > currentTimestamp),
+        )
+        .map((session) => session.id);
+    }
     if (!teamData) return [];
     const memberIds = Array.isArray(teamData.memberIds) ? teamData.memberIds : [];
     return Array.from(new Set([
@@ -117,7 +264,7 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
   };
 
   const openReassignment = (teamId: Team) => {
-    const members = getTeamMembers(teams[teamId]);
+    const members = getTeamMembers(teamId, teams[teamId]);
     if (members.length === 0) return;
     setReassignmentSource(teamId);
     setSelectedMemberId(members[0]);
@@ -130,73 +277,91 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
     setSelectedMemberId('');
     setReassignmentDestination(null);
   };
+  const closeRelease = () => {
+    if (isReleasing) return;
+    setReleaseSession(null);
+    setReleaseReason('');
+  };
+  const reassignmentDialogRef = useDialogFocus<HTMLDivElement>(
+    Boolean(reassignmentSource),
+    closeReassignment,
+  );
+  const releaseDialogRef = useDialogFocus<HTMLDivElement>(
+    Boolean(releaseSession),
+    closeRelease,
+  );
+  const finalizeDialogRef = useDialogFocus<HTMLDivElement>(
+    showFinalizeModal,
+    () => setShowFinalizeModal(false),
+  );
 
+
+  const handleReleaseSession = async () => {
+    if (!releaseSession || releaseReason.trim().length < 5 || isReleasing) return;
+    setIsReleasing(true);
+    setActionError('');
+    try {
+      await workshopApi.releaseParticipantSession({
+        workshopId: gameId,
+        participantId: releaseSession.participantId,
+        reason: releaseReason.trim(),
+        idempotencyKey: createIdempotencyKey('releaseParticipantSession'),
+      });
+      setReleaseSession(null);
+      setReleaseReason('');
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo liberar el dispositivo.'));
+    } finally {
+      setIsReleasing(false);
+    }
+  };
   const handleReassignMember = async () => {
     if (!reassignmentSource || !selectedMemberId || !reassignmentDestination) return;
     setIsReassigning(true);
+    setActionError('');
     try {
       await reassignTeamMember(reassignmentSource, selectedMemberId, reassignmentDestination);
       setReassignmentSource(null);
       setSelectedMemberId('');
       setReassignmentDestination(null);
-    } catch (error) {
-      console.error('Error al reasignar el dispositivo:', error);
-      window.alert((error as Error).message || 'No se pudo reasignar el dispositivo.');
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo reasignar el dispositivo.'));
     } finally {
       setIsReassigning(false);
     }
   };
 
-  const [isExporting, setIsExporting] = useState(false);
-
-  const handleExportJSON = async () => {
-    setIsExporting(true);
-    try {
-      const attacksSnap = await getDocs(collection(db, 'games', gameId, 'attacks'));
-      const attacks = attacksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const defensesSnap = await getDocs(collection(db, 'games', gameId, 'defenses'));
-      const defenses = defensesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const exportData = {
-        gameId,
-        roomCode,
-        exportedAt: new Date().toISOString(),
-        globalState,
-        teams,
-        attacks,
-        defenses,
-      };
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Kreatum_${roomCode || gameId}_${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export error:', err);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const handleFinalize = async () => {
-    setShowFinalizeModal(false);
     try {
-      await updateDoc(doc(db, 'games', gameId), { status: 'completed', completedAt: Date.now() });
-      leaveGame();
-    } catch (e: any) {
-      console.error('Error al finalizar workshop:', e);
+      await requestTransition({ complete: true });
+      setShowFinalizeModal(false);
+    } catch {
+      setShowFinalizeModal(false);
     }
   };
 
   const [copied, setCopied] = useState(false);
-  const handleCopyCode = () => {
-    if (roomCode) {
-      navigator.clipboard.writeText(roomCode);
+  const handleCopyCode = async () => {
+    if (!roomCode) return;
+    setActionError('');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(roomCode);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = roomCode;
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        const copiedWithFallback = document.execCommand('copy');
+        input.remove();
+        if (!copiedWithFallback) throw new Error('Clipboard unavailable');
+      }
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo copiar el código. Selecciónalo manualmente.'));
     }
   };
 
@@ -213,13 +378,15 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
               <LayoutDashboard className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-extrabold tracking-normal text-kreatum-dark dark:text-white">Panel del Alquimista</h1>
+              <h1 className="text-2xl font-extrabold tracking-normal text-kreatum-dark dark:text-white sm:text-3xl">Panel del Alquimista</h1>
               <p className="text-sm font-medium text-kreatum-gray/65 dark:text-white/55">Control del workshop y avance de fases</p>
             </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-3 bg-white/90 dark:bg-white/[0.04] p-2 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
-            <button 
+            <button
+              type="button"
+              aria-label={copied ? 'Código de sala copiado' : 'Copiar código de sala'}
               className={cn(
                 "px-4 py-2 rounded-xl transition-colors group flex flex-col items-center justify-center min-w-[126px]",
                 copied ? "bg-green-500/15 text-green-600" : "bg-kreatum-purple/10 hover:bg-kreatum-purple/15"
@@ -231,7 +398,7 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                  {copied ? "¡Copiado!" : "Código de Sala"}
                </p>
                <p className={cn(
-                 "text-xl font-bold font-mono tracking-wider",
+                 "select-all text-xl font-bold font-mono tracking-wider",
                  copied ? "" : "text-kreatum-purple"
                )}>
                  {roomCode || '---'}
@@ -240,7 +407,7 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
             <div className="h-10 w-px bg-black/10 dark:bg-white/10" />
             <div className="flex h-10 items-center gap-2 px-2">
               <Timer className="w-5 h-5 text-kreatum-purple" />
-              <span className="font-mono text-base font-bold px-2 opacity-45">—:—:—</span>
+              <span className="font-mono text-base font-bold px-2" aria-label="Tiempo transcurrido">{formatElapsed(elapsedMs)}</span>
             </div>
             {onResetPlatform && (
               <Button
@@ -253,16 +420,105 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                 Resetear datos
               </Button>
             )}
-            <Button size="sm" variant="ghost" className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={leaveGame}>Salir</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10"
+              onClick={leaveGame}
+              title={'La partida seguir\u00e1 activa y podr\u00e1s reanudarla desde el historial.'}
+            >
+              Salir del panel
+            </Button>
           </div>
         </header>
 
+        {actionError && (
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600" role="alert">
+            <span>{actionError}</span>
+            <button type="button" onClick={() => setActionError('')} aria-label="Cerrar aviso">×</button>
+          </div>
+        )}
+        {isGlobalLoading && (
+          <div className="rounded-xl border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.04]" role="status">
+            Cargando estado real de la partida…
+          </div>
+        )}
+        {globalError && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600" role="alert">
+            No se pudo actualizar el Control Room. Revisa la conexión.
+          </div>
+        )}
+        {activeTransition && (
+          <section className="rounded-2xl border border-kreatum-purple/25 bg-kreatum-purple/[0.07] p-5" aria-labelledby="safe-transition-title">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 id="safe-transition-title" className="text-lg font-extrabold text-kreatum-purple">
+                  Cambio seguro en curso
+                </h2>
+                <p className="mt-1 text-sm text-kreatum-gray/70 dark:text-white/65">
+                  {activeTransition.complete
+                    ? 'Finalizando la partida'
+                    : 'Preparando ' + (activeTransition.targetPhase || 'la siguiente fase')}
+                  {' · '}{receivedAckCount}/{requiredAckCount} equipos guardados
+                </p>
+              </div>
+              <span className={cn('rounded-full px-3 py-1 text-xs font-bold', pendingAckCount === 0 ? 'bg-green-500/15 text-green-600' : 'bg-amber-500/15 text-amber-700')}>
+                {pendingAckCount === 0 ? 'Todos confirmados' : pendingAckCount + ' pendientes'}
+              </span>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+              <div
+                className="h-full rounded-full bg-kreatum-purple transition-all"
+                style={{ width: requiredAckCount === 0 ? '100%' : Math.round((receivedAckCount / requiredAckCount) * 100) + '%' }}
+              />
+            </div>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <Button variant="outline" className="min-h-11" onClick={cancelTransition} disabled={transitionAction}>
+                Cancelar cambio
+              </Button>
+              {pendingAckCount === 0 && (
+                <Button className='min-h-11 bg-kreatum-purple text-white hover:bg-kreatum-purple-dark' onClick={() => commitTransition()} disabled={transitionAction}>
+                  {transitionAction ? 'Aplicando…' : 'Aplicar cambio'}
+                </Button>
+              )}
+              {pendingAckCount > 0 && (
+                <Button variant="outline" className="min-h-11 border-amber-500/30 text-amber-700" onClick={() => setShowOverride(true)} disabled={transitionAction}>
+                  Forzar con advertencia
+                </Button>
+              )}
+            </div>
+            {showOverride && pendingAckCount > 0 && (
+              <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4">
+                <label htmlFor="transition-override-reason" className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                  Motivo obligatorio
+                </label>
+                <textarea
+                  id="transition-override-reason"
+                  value={overrideReason}
+                  onChange={(event) => setOverrideReason(event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  className="mt-2 w-full rounded-xl border border-amber-500/25 bg-white px-3 py-2 text-sm text-kreatum-dark focus:outline-none focus:ring-2 focus:ring-amber-500 dark:bg-kreatum-bg-dark dark:text-white"
+                  placeholder="Explica por qué es seguro continuar sin todos los equipos."
+                />
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <Button variant="outline" className="min-h-11" onClick={() => setShowOverride(false)} disabled={transitionAction}>
+                    Volver
+                  </Button>
+                  <Button className="min-h-11 bg-amber-600 text-white hover:bg-amber-700" onClick={() => commitTransition(overrideReason)} disabled={transitionAction || overrideReason.trim().length < 5}>
+                    {transitionAction ? 'Aplicando…' : 'Confirmar avance forzado'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
         {/* Tab Navigation */}
-        <div className="flex gap-1 p-1 bg-white/90 dark:bg-white/[0.04] rounded-xl border border-black/[0.06] dark:border-white/[0.08] w-fit">
+        <div className="flex gap-1 p-1 bg-white/90 dark:bg-white/[0.04] rounded-xl border border-black/[0.06] dark:border-white/[0.08] w-fit max-w-full overflow-x-auto">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={cn(
-              "px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
+              "min-h-11 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
               activeTab === 'dashboard'
                 ? "bg-kreatum-purple text-white shadow-sm"
                 : "text-kreatum-gray/50 hover:text-kreatum-gray dark:text-white/40"
@@ -274,7 +530,7 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
           <button
             onClick={() => setActiveTab('history')}
             className={cn(
-              "px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
+              "min-h-11 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
               activeTab === 'history'
                 ? "bg-kreatum-purple text-white shadow-sm"
                 : "text-kreatum-gray/50 hover:text-kreatum-gray dark:text-white/40"
@@ -302,17 +558,33 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
               {PHASES.map((phase, idx) => {
                 const isActive = currentPhase === phase;
                 const isPast = PHASES.indexOf(currentPhase) > idx;
+                const isAllowed = isPhaseChangeAllowed(currentPhase, phase, unlockedPhases);
+                const isBlocked = !isAllowed;
+                const isPending = pendingPhase === phase;
                 return (
                   <div key={phase} className="relative">
                     <button
                       onClick={() => setGlobalPhase(phase)}
+                      disabled={isActive || isBlocked || pendingPhase !== null || Boolean(activeTransition) || transitionAction}
+                      aria-current={isActive ? 'step' : undefined}
+                      title={
+                        isActive
+                          ? 'Fase actual'
+                          : isBlocked
+                            ? 'Debes avanzar primero por la fase anterior'
+                            : isPast || unlockedPhases.includes(phase)
+                              ? 'Volver a ' + phase
+                              : 'Avanzar a ' + phase
+                      }
                       className={cn(
-                        "w-full flex items-center justify-between p-3.5 rounded-xl transition-colors duration-200 border text-left",
-                        isActive 
-                          ? "bg-kreatum-purple text-white border-kreatum-purple" 
-                          : isPast 
+                        "w-full flex items-center justify-between p-3.5 rounded-xl transition-colors duration-200 border text-left disabled:cursor-not-allowed",
+                        isActive
+                          ? "bg-kreatum-purple text-white border-kreatum-purple"
+                          : isPast
                             ? "bg-white dark:bg-white/[0.04] text-kreatum-purple border-kreatum-purple/20"
-                            : "bg-white dark:bg-white/[0.04] text-kreatum-gray/65 border-black/[0.06] dark:border-white/[0.08] hover:border-kreatum-purple/30"
+                            : isBlocked
+                              ? "bg-black/[0.02] dark:bg-white/[0.02] text-kreatum-gray/35 border-black/[0.05] dark:border-white/[0.05] opacity-70"
+                              : "bg-white dark:bg-white/[0.04] text-kreatum-gray/75 border-kreatum-purple/20 hover:border-kreatum-purple/50 hover:text-kreatum-purple"
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -321,41 +593,14 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                         </span>
                         <span className="font-semibold tracking-normal">{phase}</span>
                       </div>
-                      {isPast ? <CheckCircle2 className="w-5 h-5" /> : isActive ? (
-                        <div className="flex items-center gap-2">
-                          {idx >= 2 && idx < PHASES.length - 1 && (
-                            <div 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (!unlockedPhases.includes(PHASES[idx+1])) {
-                                  unlockPhase(PHASES[idx+1]); 
-                                }
-                              }}
-                              className={cn(
-                                "p-1 rounded-md transition-all",
-                                unlockedPhases.includes(PHASES[idx+1]) 
-                                  ? "text-white/40 cursor-default" 
-                                  : "text-white hover:bg-white/20 hover:scale-110 active:scale-95 cursor-pointer"
-                              )}
-                              title={unlockedPhases.includes(PHASES[idx+1]) ? "Siguiente fase ya abierta" : "Avanzar a la siguiente fase"}
-                            >
-                              {unlockedPhases.includes(PHASES[idx+1])
-                                ? <UnlockKeyhole className="w-4 h-4" />
-                                : <LockKeyhole className="w-4 h-4" />}
-                            </div>
-                          )}
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        </div>
-                      ) : (idx >= 2 && !unlockedPhases.includes(phase)) ? (
-                        <div 
-                          onClick={(e) => { e.stopPropagation(); unlockPhase(phase); }}
-                          className="text-kreatum-purple hover:text-kreatum-purple-dark transition-colors p-1 hover:bg-kreatum-purple/10 rounded-md cursor-pointer"
-                          title="Avanzar a esta fase"
-                        >
-                          <LockKeyhole className="w-4 h-4" />
-                        </div>
+                      {isPast ? (
+                        <CheckCircle2 className="w-5 h-5" />
+                      ) : isActive ? (
+                        <div className="w-2 h-2 rounded-full bg-white" />
+                      ) : isBlocked ? (
+                        <LockKeyhole className="w-4 h-4" aria-hidden="true" />
                       ) : (
-                        <ChevronRight className="w-4 h-4 opacity-30" />
+                        <ChevronRight className={cn("w-4 h-4", isPending && "animate-pulse")} aria-hidden="true" />
                       )}
                     </button>
 
@@ -383,11 +628,12 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                         {/* Unlock Fermentar button */}
                         {!unlockedPhases.includes('Fermentar') && (
                           <Button 
-                            onClick={(e) => { e.stopPropagation(); unlockPhase('Fermentar'); }}
+                            onClick={(e) => { e.stopPropagation(); setGlobalPhase('Fermentar'); }}
+                            disabled={pendingPhase !== null || Boolean(activeTransition) || transitionAction}
                             className="w-full bg-kreatum-green hover:bg-kreatum-green/90 text-white rounded-xl text-sm h-10"
                           >
                             <ChevronRight className="w-4 h-4 mr-2" />
-                            Avanzar a Fermentar (Fase 5)
+                            Avanzar a Fermentar (Fase 6)
                           </Button>
                         )}
                       </motion.div>
@@ -403,41 +649,48 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
               <h2 className="text-2xl font-extrabold flex items-center gap-3 text-kreatum-dark dark:text-white">
                 <Users className="w-6 h-6 text-kreatum-purple" />
-                Estado de los Equipos
+                Control Room · 4 equipos
               </h2>
               <div className="flex gap-4">
                  <span className="flex items-center gap-2 text-xs font-semibold opacity-60">
-                   <div className="w-2 h-2 rounded-full bg-kreatum-green" /> Conectados
+                   <div className="w-2 h-2 rounded-full bg-kreatum-green" /> Asignados
                  </span>
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
               {TEAM_NAMES.map((teamId) => {
                 const data = teams[teamId];
                 const config = TEAM_CONFIG[teamId];
                 const barColor = TEAM_BAR_COLORS[teamId];
-                const memberCount = getTeamMembers(data).length;
+                const teamSessions = participantSessions.filter((session) => session.team === teamId && session.status === 'active' && (!currentTimestamp || session.expiresAt > currentTimestamp));
+                const teamSession = teamSessions[0];
+                const memberCount = getTeamMembers(teamId, data).length;
                 const isAssigned = memberCount > 0;
+                const isOnline = Boolean(teamSession && currentTimestamp && currentTimestamp - teamSession.lastSeenAt < 60_000);
+                const hasConflict = memberCount > 1;
+                const presenceLabel = hasConflict ? 'CONFLICTO' : isOnline ? 'EN LÍNEA' : isAssigned ? 'SIN CONEXIÓN' : 'ESPERANDO';
+                const savedLabel = teamSession?.lastSavedAt ? new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' }).format(teamSession.lastSavedAt) : 'Sin confirmar';
+                const transitionReady = Boolean(activeTransition && teamSession?.transitionAckId === activeTransition.id);
                 const progress = isAssigned ? getTeamProgress(data) : 0;
 
                 return (
                   <Card key={teamId} className={cn("overflow-hidden border-black/[0.06] dark:border-white/[0.08] transition-colors duration-200", isAssigned ? "opacity-100" : "opacity-45 grayscale")}>
                     <div className={cn("h-2 w-full", barColor)} />
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("p-1.5 rounded-xl", config.bg)}>
+                    <CardHeader className="p-4 sm:p-5">
+                      <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className={cn("shrink-0 rounded-xl p-2", config.bg)}>
                             <img src={config.icon} alt={teamId} className="w-8 h-8 object-contain" />
                           </div>
-                          <CardTitle className="text-lg">Equipo {teamId}</CardTitle>
+                          <CardTitle className="min-w-0 text-lg leading-tight">Equipo {teamId}</CardTitle>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {isAssigned && globalState.status !== 'completed' && (
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-8 px-3 text-xs border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                              className="min-h-11 px-3 text-xs border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
                               onClick={() => openReassignment(teamId)}
                               title={`Mover un dispositivo del Equipo ${teamId}`}
                             >
@@ -445,13 +698,25 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                               Reasignar
                             </Button>
                           )}
-                          <span className={cn("text-xs font-mono px-2 py-1 rounded-md", isAssigned ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500")}>
-                            {isAssigned ? 'ACTIVO' : 'ESPERANDO'}
+                                                    {teamSession && globalState.status !== 'completed' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="min-h-11 px-3 text-xs border-red-500/25 text-red-600 hover:bg-red-500/10"
+                              onClick={() => setReleaseSession({ team: teamId, participantId: teamSession.id })}
+                              disabled={transitionAction}
+                              aria-label={'Liberar dispositivo del Equipo ' + teamId}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Liberar
+                            </Button>
+                          )}<span className={cn("shrink-0 rounded-md px-2.5 py-1.5 text-xs font-mono", hasConflict ? "bg-red-500/10 text-red-600" : isOnline ? "bg-green-500/10 text-green-600" : isAssigned ? "bg-amber-500/10 text-amber-700" : "bg-black/5 text-kreatum-gray/55")}>
+                            {presenceLabel}
                           </span>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-4 pt-4">
+                    <CardContent className="space-y-5 p-4 sm:p-6">
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs font-bold opacity-60 mb-2">
                           <span>Progreso</span>
@@ -466,14 +731,14 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                          <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
                             <p className="text-xs font-bold opacity-55 mb-1">Fase Actual</p>
-                            <p className="text-sm font-bold truncate">{data?.currentPhase || 'Selección'}</p>
+                            <p className="text-sm font-bold truncate">{currentPhase}</p>
                          </div>
                           <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
-                            <p className="text-xs font-bold opacity-55 mb-1">Dispositivos</p>
-                            <p className="text-sm font-bold">{memberCount} conectados</p>
+                            <p className="text-xs font-bold opacity-55 mb-1">Dispositivo</p>
+                            <p className="text-sm font-bold">{memberCount}/1 · {isOnline ? 'online' : 'offline'}</p>
                           </div>
                           <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/5">
                             <p className="text-xs font-bold opacity-55 mb-1">Ataques</p>
@@ -481,16 +746,18 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                           </div>
                       </div>
 
+                      <p className="text-xs font-semibold text-kreatum-gray/60 dark:text-white/50">Último guardado: {transitionReady ? 'Confirmado para transición' : savedLabel}</p>
+
                       <div className="bg-black/5 dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/5">
                         <p className="text-xs font-bold opacity-55 mb-2">Solución Definitiva</p>
-                        <div className="flex justify-between items-start gap-4">
+                        <div className="flex flex-col items-start gap-4 sm:flex-row sm:justify-between">
                           <p className="text-sm italic line-clamp-2 leading-relaxed flex-1">
                             {data?.reformulatedSolution || data?.selectedSolution || <span className="opacity-30">Aún no definida...</span>}
                           </p>
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="shrink-0 h-8 px-3 text-xs font-bold border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5"
+                            className="h-10 w-full shrink-0 px-3 text-xs font-bold border-kreatum-purple/20 text-kreatum-purple hover:bg-kreatum-purple/5 sm:w-auto"
                             onClick={() => setSummaryTeam(teamId)}
                           >
                             <Sparkles className="w-3 h-3 mr-1" />
@@ -517,6 +784,11 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
         {reassignmentSource && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
             <motion.div
+              ref={reassignmentDialogRef}
+              tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="reassignment-dialog-title"
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               className="relative bg-white dark:bg-kreatum-bg-dark p-7 rounded-2xl max-w-lg w-full shadow-[0_24px_60px_-34px_rgba(0,0,0,0.75)] border border-kreatum-purple/20"
@@ -531,7 +803,7 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
               </button>
 
               <div className="mb-6 pr-10">
-                <h2 className="text-2xl font-extrabold text-kreatum-dark dark:text-white">
+                <h2 id="reassignment-dialog-title" className="text-2xl font-extrabold text-kreatum-dark dark:text-white">
                   Reasignar dispositivo
                 </h2>
                 <p className="text-sm text-kreatum-gray/60 dark:text-white/60 mt-2">
@@ -545,7 +817,7 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                     1. Elige el dispositivo
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3">
-                    {getTeamMembers(teams[reassignmentSource]).map((memberId, index) => (
+                    {getTeamMembers(reassignmentSource, teams[reassignmentSource]).map((memberId, index) => (
                       <button
                         key={memberId}
                         onClick={() => setSelectedMemberId(memberId)}
@@ -609,21 +881,68 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
           </div>
         )}
 
+        {releaseSession && (
+          <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+            <motion.div
+              ref={releaseDialogRef}
+              tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="release-device-title"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative w-full max-w-md rounded-2xl border border-red-500/20 bg-white p-6 shadow-2xl dark:bg-kreatum-bg-dark"
+            >
+              <button type="button" onClick={closeRelease} disabled={isReleasing} className="absolute right-4 top-4 grid min-h-11 min-w-11 place-items-center rounded-xl hover:bg-black/5 dark:hover:bg-white/5" aria-label="Cerrar">
+                <X className="h-5 w-5" />
+              </button>
+              <h2 id="release-device-title" className="pr-12 text-2xl font-extrabold text-kreatum-dark dark:text-white">
+                Liberar Equipo {releaseSession.team}
+              </h2>
+              <p className="mt-2 text-sm text-kreatum-gray/65 dark:text-white/60">
+                El dispositivo dejará de editar. Podrá volver a ocupar el equipo entrando de nuevo con el código de sala.
+              </p>
+              <label htmlFor="release-device-reason" className="mt-5 block text-sm font-bold">
+                Motivo obligatorio
+              </label>
+              <textarea
+                id="release-device-reason"
+                value={releaseReason}
+                onChange={(event) => setReleaseReason(event.target.value)}
+                maxLength={500}
+                rows={3}
+                className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-kreatum-purple dark:border-white/10 dark:bg-white/[0.04]"
+                placeholder="Ej.: el dispositivo se ha bloqueado y será sustituido."
+              />
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <Button variant="outline" className="min-h-11 flex-1" onClick={closeRelease} disabled={isReleasing}>Cancelar</Button>
+                <Button variant="danger" className="min-h-11 flex-1" onClick={handleReleaseSession} disabled={isReleasing || releaseReason.trim().length < 5}>
+                  {isReleasing ? 'Liberando…' : 'Liberar dispositivo'}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
         {/* Finalize Modal */}
         {showFinalizeModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
             <motion.div
+              ref={finalizeDialogRef}
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="bg-white dark:bg-kreatum-bg-dark p-7 rounded-2xl max-w-md w-full shadow-[0_24px_60px_-34px_rgba(0,0,0,0.75)] border border-kreatum-purple/20"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="finalize-workshop-title"
             >
-              <h2 className="text-2xl font-extrabold text-center mb-2 text-kreatum-dark dark:text-white">Finalizar Workshop</h2>
+              <h2 id="finalize-workshop-title" className="text-2xl font-extrabold text-center mb-2 text-kreatum-dark dark:text-white">Finalizar Workshop</h2>
               <p className="text-sm text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
                 ¿Seguro que quieres finalizar el workshop? Esto marcará la sesión como completada para todos los equipos.
               </p>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 py-4" onClick={() => setShowFinalizeModal(false)}>Cancelar</Button>
-                <Button 
+                <Button
                   className="flex-1 py-4 bg-kreatum-purple hover:bg-kreatum-purple-dark text-white"
                   onClick={handleFinalize}
                 >
@@ -644,12 +963,12 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
                Como Alquimista, puedes forzar el cambio de fase para todos los equipos. Úsalo con sabiduría para mantener el ritmo del workshop.
              </p>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-             <Button variant="outline" className="rounded-xl px-6 h-12 w-full sm:w-auto" onClick={handleExportJSON} disabled={isExporting}>
-               {isExporting ? 'Exportando...' : 'Exportar Todo (JSON)'}
-             </Button>
-             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-xl px-8 h-12 w-full sm:w-auto" onClick={() => setShowFinalizeModal(true)}>
+             <p className="max-w-sm text-xs font-medium text-kreatum-gray/55 dark:text-white/45">
+               Los informes se generan desde Historial de Partidas después de finalizar el workshop.
+             </p>
+             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-xl px-8 h-12 w-full sm:w-auto" onClick={() => setShowFinalizeModal(true)} disabled={Boolean(activeTransition) || transitionAction}>
                Finalizar Workshop
              </Button>
           </div>

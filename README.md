@@ -1,20 +1,54 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# KREATUM
 
-# Run and deploy your AI Studio app
+Plataforma web del juego de innovación KREATUM. La dinámica funcional es un contrato del producto y no debe alterarse:
 
-This contains everything you need to run your app locally.
+- Equipos: Fuego, Agua, Aire y Tierra.
+- Etapas: Selección, Calcinar, Diluir, Conjugar, Sublimar, Fermentar y Proyectar.
+- Acceso: el Alquimista crea la partida; los participantes escriben el código en su PC y eligen equipo.
 
-View your app in AI Studio: https://ai.studio/apps/fd4a8510-5126-41e3-aa07-d9e362b7b4fe
+## Arquitectura
 
-## Run Locally
+- React 19 + TypeScript + Vite.
+- Firebase Authentication, Firestore, Cloud Functions v2 y Cloud Storage.
+- Aislamiento por organización y roles administrativos `owner` y `facilitator`.
+- Participantes con sesión anónima temporal, sin registro ni correo.
+- Firebase Hosting para staging y cabeceras de seguridad; producción permanece separada.
 
-**Prerequisites:**  Node.js
+Consulta [arquitectura](docs/ARCHITECTURE.md), [operación](docs/OPERATIONS.md), [seguridad](docs/SECURITY.md), [migración](docs/MIGRATION.md) e [informes](docs/REPORTS.md).
 
+## Desarrollo local
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Requisitos: Node.js 22, npm y Firebase CLI 15.2.0.
+
+```powershell
+Copy-Item .env.example .env.local
+npm ci
+npm --prefix functions ci
+npm run dev
+```
+
+Configura `.env.local` con un proyecto de desarrollo o los emuladores. No uses credenciales de producción.
+
+## Verificación
+
+```powershell
+npm run lint
+npm run typecheck
+npm run typecheck:functions
+npm run test:unit
+npm run test:rules
+npm run build
+npm run build:functions
+npm run test:integration
+npm run test:migration
+npm run test:e2e
+npm run test:load
+```
+
+`npm run verify` ejecuta el conjunto rápido de calidad. Las pruebas de integración y E2E se ejecutan por separado porque levantan emuladores o navegadores.
+
+## Despliegue
+
+No hay despliegue automático. Antes de producción son obligatorios staging, copia de seguridad, verificación de migración y plan de rollback. Véase [OPERATIONS.md](docs/OPERATIONS.md).
+
+La aplicación pública de producción permanece separada y no se modifica desde este repositorio sin aprobación explícita. El entorno validado es `https://kreatum-dinamic-staging.web.app/`; `/admin` reúne el panel del facilitador y enlaza a `/platform`, visible únicamente con el claim `platformAdmin=true`.

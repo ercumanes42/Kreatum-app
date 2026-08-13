@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Report downloads are mediated by audited server-side operations.
+    match /organizations/{orgId}/workshops/{workshopId}/reports/{fileName} {
+      allow read, write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,5 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap");
-@import "tailwindcss";
+@import "tailwindcss" source("./");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -32,21 +31,67 @@ html, body {
   overflow-x: hidden;
 }
 
+body {
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(162, 84, 156, 0.2);
+  color: #102f40;
+}
+
+.dark ::selection {
+  color: white;
+}
+
+.app-shell {
+  background-color: #f3f6f9;
+  background-image:
+    radial-gradient(circle at 4% 0%, rgba(162, 84, 156, 0.08), transparent 26rem),
+    radial-gradient(circle at 96% 2%, rgba(23, 171, 189, 0.055), transparent 30rem),
+    linear-gradient(180deg, #f9fafc 0%, #eff3f7 100%);
+}
+
+.dark .app-shell,
+.app-shell.dark {
+  background-color: #090b10;
+  background-image:
+    radial-gradient(circle at 4% 0%, rgba(162, 84, 156, 0.12), transparent 28rem),
+    radial-gradient(circle at 96% 2%, rgba(23, 171, 189, 0.07), transparent 30rem),
+    linear-gradient(180deg, #0d1016 0%, #090a0f 100%);
+}
+
 .grain-overlay {
   display: none;
 }
 
 .glass-card {
-  @apply bg-white/95 dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.08] relative overflow-hidden;
+  @apply bg-white/[0.97] dark:bg-white/[0.06] border border-black/[0.07] dark:border-white/[0.09] relative overflow-hidden;
   box-shadow: 
-    0 18px 45px -32px rgba(16, 47, 64, 0.35),
+    0 24px 60px -38px rgba(16, 47, 64, 0.46),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #a2549c 0%, #bd69b3 52%, #17abbd 100%);
+  opacity: 0.82;
 }
 
 .dark .glass-card {
   box-shadow: 
     0 22px 55px -36px rgba(0, 0, 0, 0.9),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.premium-panel {
+  @apply border border-black/[0.065] bg-white/[0.97] dark:border-white/[0.085] dark:bg-white/[0.055];
+  box-shadow:
+    0 22px 58px -42px rgba(16, 47, 64, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .btn-premium {

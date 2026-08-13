@@ -7,37 +7,45 @@ import { Button } from '../ui/Button';
 import { Sparkles, Eye, PartyPopper, CheckCircle2 } from 'lucide-react';
 import { sounds } from '../../lib/sounds';
 import { useGame } from '../../contexts/GameContext';
-import { useTeamSync, useAttacksSent, useAttacksReceived } from '../../hooks/useRealtime';
+
 import { WorkshopClosure } from './WorkshopClosure';
 import { createPortal } from 'react-dom';
 import { PhaseHeader } from './PhaseHeader';
+import { getUserFacingError } from '../../lib/errors';
 
 interface Props {
   state: GameState;
   updateState: (updates: Partial<GameState>) => void;
+  flushChanges: () => Promise<boolean>;
 }
 
-export function Proyectar({ state, updateState }: Props) {
-  const { gameId, isAlchemist } = useGame();
+export function Proyectar({ state, updateState, flushChanges }: Props) {
+  const { isAlchemist } = useGame();
   const [showSummary, setShowSummary] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const handleFinalize = async () => {
     setIsSaving(true);
+    setActionError('');
     try {
-      // Save pitch data and mark as finished
-      updateState({
-        pitchStart: state.pitchStart,
-        pitchProblem: state.pitchProblem,
-        pitchSolution: state.pitchSolution,
-        pitchAction: state.pitchAction,
-        isFinished: true,
-      });
+      const pendingSaved = await flushChanges();
+      if (!pendingSaved) {
+        throw new Error('Pending pitch data could not be saved.');
+      }
+
+      updateState({ isFinished: true });
+      const completionSaved = await flushChanges();
+      if (!completionSaved) {
+        updateState({ isFinished: false });
+        throw new Error('Workshop completion could not be saved.');
+      }
+
       sounds.playSuccess();
       setIsFinished(true);
-    } catch (e) {
-      console.error('Error al finalizar:', e);
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo guardar la finalización. Inténtalo de nuevo.'));
     } finally {
       setIsSaving(false);
     }
@@ -120,6 +128,12 @@ export function Proyectar({ state, updateState }: Props) {
           Ver Resumen
         </Button>
       </PhaseHeader>
+
+      {actionError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-300" role="alert">
+          {actionError}
+        </div>
+      )}
 
       {/* Summary Modal */}
       {showSummary && createPortal(

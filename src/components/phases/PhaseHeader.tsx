@@ -31,14 +31,14 @@ export function PhaseHeader({ phase, subtitle, children }: PhaseHeaderProps) {
   const number = PHASE_NUMBERS[phase];
 
   return (
-    <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-5">
+    <div className="mb-8 flex flex-col gap-5 sm:mb-10 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-4 sm:gap-5">
         {logo && (
-          <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-black/[0.06] bg-white shadow-[0_14px_28px_-24px_rgba(16,47,64,0.65)] dark:border-white/[0.08] dark:bg-white/[0.05]">
+          <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-black/[0.06] bg-white shadow-[0_14px_28px_-24px_rgba(16,47,64,0.65)] dark:border-white/[0.08] dark:bg-white/[0.05] sm:h-16 sm:w-16">
             <img
               src={logo}
               alt={`Logo fase ${phase}`}
-              className="h-11 w-11 object-contain"
+              className="h-9 w-9 object-contain sm:h-11 sm:w-11"
             />
           </div>
         )}
@@ -49,7 +49,7 @@ export function PhaseHeader({ phase, subtitle, children }: PhaseHeaderProps) {
               Fase {number}
             </p>
           </div>
-          <h2 className="text-4xl font-extrabold leading-tight text-kreatum-dark dark:text-white md:text-5xl">
+          <h2 className="text-3xl font-extrabold leading-tight text-kreatum-dark dark:text-white sm:text-4xl md:text-5xl">
             {phase}
           </h2>
           <p className="max-w-2xl text-sm font-medium leading-relaxed text-kreatum-gray/65 dark:text-white/60">

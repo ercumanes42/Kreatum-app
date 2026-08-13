@@ -1,26 +1,19 @@
-export type Team = 'Fuego' | 'Agua' | 'Aire' | 'Tierra';
+import {
+  PHASES,
+  ROOM_CODE_MAX_LENGTH,
+  ROOM_CODE_MIN_LENGTH,
+  TEAMS,
+  type Phase,
+  type Team,
+} from '../shared/contracts';
 
-export type Phase = 
-  | 'Selección' 
-  | 'Calcinar' 
-  | 'Diluir' 
-  | 'Conjugar' 
-  | 'Sublimar' 
-  | 'Fermentar' 
-  | 'Proyectar';
-
-export const PHASES: Phase[] = [
-  'Selección',
-  'Calcinar',
-  'Diluir',
-  'Conjugar',
-  'Sublimar',
-  'Fermentar',
-  'Proyectar'
-];
-
-export const ROOM_CODE_MIN_LENGTH = 4;
-export const ROOM_CODE_MAX_LENGTH = 10;
+export {
+  PHASES,
+  ROOM_CODE_MAX_LENGTH,
+  ROOM_CODE_MIN_LENGTH,
+  TEAMS,
+};
+export type { Phase, Team };
 
 export interface GameState {
   team: Team | null;

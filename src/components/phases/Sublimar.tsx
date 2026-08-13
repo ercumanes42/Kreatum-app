@@ -9,20 +9,13 @@ import { useAttacksReceived, useOpponentSolutions, useAttacksSent, Attack, useGa
 import { useGame } from '../../contexts/GameContext';
 import { cn } from '../../lib/utils';
 import { PhaseHeader } from './PhaseHeader';
+import { getUserFacingError } from '../../lib/errors';
 
 interface Props {
   state: GameState;
   updateState: (updates: Partial<GameState>) => void;
 }
 
-const TEAM_ICONS: Record<Team, React.ReactNode> = {
-  Fuego: <img src="/assets/logos/fuego.png" alt="Fuego" className="w-5 h-5 object-contain" />,
-  Agua: <img src="/assets/logos/agua.png" alt="Agua" className="w-5 h-5 object-contain" />,
-  Tierra: <img src="/assets/logos/tierra.png" alt="Tierra" className="w-5 h-5 object-contain" />,
-  Aire: <img src="/assets/logos/aire.png" alt="Aire" className="w-5 h-5 object-contain" />,
-};
-
-const ALL_TEAMS: Team[] = ['Fuego', 'Agua', 'Tierra', 'Aire'];
 const MIN_ATTACKS_PER_TEAM = 10;
 const MAX_ATTACKS_PER_TEAM = 10;
 
@@ -34,20 +27,36 @@ const ATTACK_MAP: Record<Team, Team> = {
 };
 
 export function Sublimar({ state, updateState }: Props) {
-  const { sendAttack, deleteAttack, editAttack, gameId, playerId } = useGame();
+  const { sendAttack, deleteAttack, editAttack, gameId } = useGame();
   const myTeam = state.team;
   const targetTeam = myTeam ? ATTACK_MAP[myTeam] : null;
 
   // ALL hooks BEFORE conditional return (Rules of Hooks)
   const { attacks: attacksReceived, isLoading: loadingAttacks } = useAttacksReceived(gameId, myTeam);
-  const { attacks: attacksSent, isLoading: loadingAttacksSent } = useAttacksSent(gameId, myTeam);
+  const { attacks: attacksSent } = useAttacksSent(gameId, myTeam);
   const { solutions: opponentSolutions } = useOpponentSolutions(gameId, myTeam);
   const [attackInput, setAttackInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
+  const [actionError, setActionError] = useState('');
   const { globalState } = useGameGlobal(gameId);
   const attackInputRef = useRef<HTMLInputElement>(null);
+
+  const subView = state.sublimarView || 'Ataque';
+  const totalAttacksSent = attacksSent.length;
+  const isAttackPhaseComplete = totalAttacksSent >= MIN_ATTACKS_PER_TEAM;
+  const isDefenseUnlocked = globalState?.sublimarDefenseUnlocked === true;
+  const isLocked = Boolean(
+    globalState?.currentPhase
+      && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Sublimar'),
+  );
+
+  React.useEffect(() => {
+    if (isAttackPhaseComplete && isDefenseUnlocked && subView === 'Ataque') {
+      updateState({ sublimarView: 'Defensa' });
+    }
+  }, [isAttackPhaseComplete, isDefenseUnlocked, subView, updateState]);
 
   if (!myTeam) {
     return (
@@ -61,43 +70,32 @@ export function Sublimar({ state, updateState }: Props) {
     );
   }
 
-  const subView = state.sublimarView || 'Ataque';
   const setSubView = (view: 'Ataque' | 'Defensa') => updateState({ sublimarView: view });
 
   const currentRivalSolution = targetTeam ? opponentSolutions[targetTeam] || state.receivedSolutionToAttack : state.receivedSolutionToAttack;
   const ownSolution = state.selectedSolution || state.reformulatedSolution || '';
-
-  const totalAttacksSent = attacksSent.length;
   const requiredTotalAttacks = MIN_ATTACKS_PER_TEAM;
-  const isAttackPhaseComplete = totalAttacksSent >= requiredTotalAttacks;
-
-  // Defense is unlocked via dedicated global flag, NOT via Fermentar unlock
-  const isDefenseUnlocked = globalState?.sublimarDefenseUnlocked === true;
-  const isFermentarUnlocked = globalState?.unlockedPhases?.includes('Fermentar');
-  const isLocked = globalState?.currentPhase && PHASES.indexOf(globalState.currentPhase) > PHASES.indexOf('Sublimar');
-
-  // Auto-transition to Defensa if defense unlocked and attacks are complete
-  React.useEffect(() => {
-    if (isAttackPhaseComplete && isDefenseUnlocked && subView === 'Ataque') {
-      setSubView('Defensa');
-    }
-  }, [isAttackPhaseComplete, isDefenseUnlocked, subView]);
 
   const handleSendAttack = async () => {
-    if (!attackInput.trim() || !targetTeam || !myTeam || isSending) return;
+    if (!attackInput.trim() || !targetTeam || !myTeam || isSending || isLocked) return;
     if (totalAttacksSent >= MAX_ATTACKS_PER_TEAM) return;
 
     setIsSending(true);
+    setActionError('');
     try {
       await sendAttack(attackInput, targetTeam, myTeam);
       const newAttacks = [...state.attacksOnOthers];
       newAttacks.push(attackInput);
       updateState({ attacksOnOthers: newAttacks });
       setAttackInput('');
-      // Auto-focus after send
-      setTimeout(() => {
-        attackInputRef.current?.focus();
-      }, 50);
+      window.requestAnimationFrame(() => {
+        const input = attackInputRef.current;
+        if (!input) return;
+        input.focus({ preventScroll: true });
+        input.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      });
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo enviar el ataque. Inténtalo de nuevo.'));
     } finally {
       setIsSending(false);
     }
@@ -110,12 +108,22 @@ export function Sublimar({ state, updateState }: Props) {
 
   const handleSaveEdit = async () => {
     if (!editingId || !editingContent.trim()) return;
+    setActionError('');
     try {
       await editAttack(editingId, editingContent.trim());
       setEditingId(null);
       setEditingContent('');
-    } catch (e) {
-      console.error('Error editing attack:', e);
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo editar el ataque. Inténtalo de nuevo.'));
+    }
+  };
+
+  const handleDeleteAttack = async (attackId: string) => {
+    setActionError('');
+    try {
+      await deleteAttack(attackId);
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(error, 'No se pudo eliminar el ataque. Inténtalo de nuevo.'));
     }
   };
 
@@ -152,6 +160,12 @@ export function Sublimar({ state, updateState }: Props) {
           </div>
         )}
       </PhaseHeader>
+
+      {actionError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-300" role="alert">
+          {actionError}
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {subView === 'Ataque' ? (
@@ -229,23 +243,33 @@ export function Sublimar({ state, updateState }: Props) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex gap-3">
+                  <form
+                    className="flex flex-col gap-3 sm:flex-row"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSendAttack();
+                    }}
+                  >
                     <Input
                       ref={attackInputRef}
+                      name="attack"
+                      type="text"
+                      enterKeyHint="send"
+                      autoComplete="off"
+                      aria-label={`Ataque para el Equipo ${targetTeam}`}
                       value={attackInput}
                       onChange={(e) => setAttackInput(e.target.value)}
                       placeholder={totalAttacksSent >= MAX_ATTACKS_PER_TEAM
                         ? "¡10 ataques completados!"
                         : `Escribe ataque #${totalAttacksSent + 1} para ${targetTeam}...`}
-                      className="flex-1"
+                      className="min-h-11 min-w-0 flex-1"
                       disabled={!targetTeam || totalAttacksSent >= MAX_ATTACKS_PER_TEAM || isSending || isLocked}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSendAttack()}
                     />
                     <button
-                      onClick={handleSendAttack}
-                      disabled={!attackInput.trim() || isSending || !targetTeam || totalAttacksSent >= MAX_ATTACKS_PER_TEAM}
+                      type="submit"
+                      disabled={!attackInput.trim() || isSending || !targetTeam || totalAttacksSent >= MAX_ATTACKS_PER_TEAM || isLocked}
                       className={cn(
-                        "px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2",
+                        "flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-6 py-2 font-bold transition-all sm:w-auto",
                         totalAttacksSent >= MAX_ATTACKS_PER_TEAM
                           ? "bg-kreatum-green/20 text-kreatum-green cursor-not-allowed"
                           : "bg-kreatum-red hover:bg-kreatum-red/90 text-white shadow-lg shadow-kreatum-red/20"
@@ -254,7 +278,7 @@ export function Sublimar({ state, updateState }: Props) {
                       {isSending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
                       <span>Enviar</span>
                     </button>
-                  </div>
+                  </form>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
                     {attacksSent.map((attack, idx) => (
@@ -276,10 +300,10 @@ export function Sublimar({ state, updateState }: Props) {
                               onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
                               autoFocus
                             />
-                            <button onClick={handleSaveEdit} className="p-1 text-kreatum-green hover:text-kreatum-green/80" title="Guardar">
+                            <button onClick={handleSaveEdit} className="p-1 text-kreatum-green hover:text-kreatum-green/80" title="Guardar" aria-label="Guardar ataque editado">
                               <Check className="w-4 h-4" />
                             </button>
-                            <button onClick={() => setEditingId(null)} className="p-1 text-kreatum-gray/40 hover:text-kreatum-gray" title="Cancelar">
+                            <button onClick={() => setEditingId(null)} className="p-1 text-kreatum-gray/40 hover:text-kreatum-gray" title="Cancelar" aria-label="Cancelar edición">
                               <X className="w-4 h-4" />
                             </button>
                           </div>
@@ -297,7 +321,7 @@ export function Sublimar({ state, updateState }: Props) {
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => deleteAttack(attack.id)}
+                                  onClick={() => void handleDeleteAttack(attack.id)}
                                   className="p-1.5 text-kreatum-red/40 hover:text-red-500 cursor-pointer"
                                   title="Eliminar ataque"
                                   aria-label="Eliminar ataque"

@@ -1,9 +1,39 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ROOM_CODE_MAX_LENGTH, ROOM_CODE_MIN_LENGTH, Team } from '../types';
 import { db, signInAnonymous, auth } from '../lib/firebase';
-import { doc, setDoc, collection, addDoc, updateDoc, getDocs, query, where, writeBatch, deleteDoc, runTransaction } from 'firebase/firestore';
+import {
+  doc,
+  setDoc,
+  collection,
+  addDoc,
+  updateDoc,
+  getDocs,
+  query,
+  where,
+  writeBatch,
+  deleteDoc,
+  runTransaction,
+  serverTimestamp,
+} from 'firebase/firestore';
+import {
+  SCHEMA_VERSION,
+  TEAMS,
+  isRoomCodeValid,
+  normalizeRoomCode,
+} from '../../shared/contracts';
+import {
+  isV2DataModel,
+  requireDefaultOrganizationId,
+  workshopCollectionName,
+} from '../lib/dataModel';
+import { createIdempotencyKey, workshopApi } from '../lib/workshopApi';
 import type { DocumentData, DocumentReference } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { reportClientError } from '../lib/clientLogger';
+import {
+  participantRecoveryApi,
+  type ReconnectParticipantSessionOutput,
+} from '../lib/platformApi';
 
 
 
@@ -27,45 +57,38 @@ interface GameContextType {
   updateSolution: (reformulated: string, results: string) => Promise<void>;
   saveSolution: (team: Team, content: string) => Promise<void>;
   validateRoomCode: (code: string) => Promise<boolean>;
-  purgeAllGames: () => Promise<{ gamesDeleted: number; documentsDeleted: number }>;
+  purgeAllGames: (reason: string) => Promise<{ gamesDeleted: number; documentsDeleted: number }>;
   deleteAttack: (attackId: string) => Promise<void>;
+  reconnectParticipantSession: () => Promise<ReconnectParticipantSessionOutput>;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
 
-const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 horas
-const TEAM_NAMES: Team[] = ['Agua', 'Aire', 'Fuego', 'Tierra'];
+const TEAM_NAMES: Team[] = [...TEAMS];
+const PARTICIPANT_IDENTITY_KEY = 'kreatum_participant_identity_uid';
 
-const isSessionExpired = (): boolean => {
-  const savedAt = localStorage.getItem('kreatum_session_at');
-  if (!savedAt) return true;
-  return Date.now() - parseInt(savedAt, 10) > SESSION_EXPIRY_MS;
-};
-
-const clearExpiredSession = () => {
+const clearStoredSession = () => {
   localStorage.removeItem('kreatum_game_id');
   localStorage.removeItem('kreatum_team');
   localStorage.removeItem('kreatum_is_alchemist');
   localStorage.removeItem('kreatum_room_code');
   localStorage.removeItem('kreatum_session_at');
+  localStorage.removeItem(PARTICIPANT_IDENTITY_KEY);
 };
 
-export function GameProvider({ children }: { children: React.ReactNode }) {
-  const sessionExpired = isSessionExpired();
-  if (sessionExpired) clearExpiredSession();
+const isStoredTeam = (value: string | null): value is Team =>
+  value !== null && TEAM_NAMES.includes(value as Team);
 
+export function GameProvider({ children }: { children: React.ReactNode }) {
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [gameId, setGameId] = useState<string | null>(
-    sessionExpired ? null : localStorage.getItem('kreatum_game_id')
-  );
-  const [team, setTeam] = useState<Team | null>(
-    sessionExpired ? null : (localStorage.getItem('kreatum_team') as Team)
-  );
-  const [roomCode, setRoomCode] = useState<string | null>(
-    sessionExpired ? null : localStorage.getItem('kreatum_room_code')
-  );
+  const [gameId, setGameId] = useState<string | null>(() => localStorage.getItem('kreatum_game_id'));
+  const [team, setTeam] = useState<Team | null>(() => {
+    const storedTeam = localStorage.getItem('kreatum_team');
+    return isStoredTeam(storedTeam) ? storedTeam : null;
+  });
+  const [roomCode, setRoomCode] = useState<string | null>(() => localStorage.getItem('kreatum_room_code'));
   const [isAlchemist, setIsAlchemist] = useState(
-    sessionExpired ? false : localStorage.getItem('kreatum_is_alchemist') === 'true'
+    () => localStorage.getItem('kreatum_is_alchemist') === 'true',
   );
   const [isLoading, setIsLoading] = useState(true);
 
@@ -74,12 +97,30 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       try {
         if (user) {
           setPlayerId(user.uid);
+          const storedIdentityUid = localStorage.getItem(PARTICIPANT_IDENTITY_KEY);
+          const hasRememberedParticipant = Boolean(
+            localStorage.getItem('kreatum_game_id')
+            && localStorage.getItem('kreatum_team'),
+          );
+          if (hasRememberedParticipant && storedIdentityUid !== user.uid) {
+            clearStoredSession();
+            setGameId(null);
+            setTeam(null);
+            setRoomCode(null);
+            setIsAlchemist(false);
+          }
+        } else if (
+          window.location.pathname === '/admin'
+          || window.location.pathname === '/alquimista'
+          || window.location.pathname === '/platform'
+        ) {
+          setPlayerId(null);
         } else {
           const result = await signInAnonymous();
           setPlayerId(result.user.uid);
         }
       } catch (error) {
-        console.error('Error de autenticación anónima:', error);
+        reportClientError('Error de autenticación anónima', error);
         // Aunque falle, desbloquear la UI para que el usuario vea la pantalla
         // y pueda intentarlo de nuevo
       } finally {
@@ -88,6 +129,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     });
     return () => unsubscribe();
   }, []);
+
+  const rememberParticipantSession = (
+    workshopId: string,
+    selectedTeam: Team,
+    selectedRoomCode: string,
+  ) => {
+    if (!playerId) throw new Error('No se pudo verificar la identidad de este navegador.');
+    localStorage.setItem('kreatum_game_id', workshopId);
+    localStorage.setItem('kreatum_team', selectedTeam);
+    localStorage.setItem('kreatum_is_alchemist', 'false');
+    localStorage.setItem('kreatum_room_code', selectedRoomCode);
+    localStorage.setItem('kreatum_session_at', Date.now().toString());
+    localStorage.setItem(PARTICIPANT_IDENTITY_KEY, playerId);
+  };
 
 const generateRoomCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -98,29 +153,75 @@ const generateRoomCode = () => {
   return code;
 };
 
-const normalizeRoomCode = (code: string) => code.trim().toUpperCase();
-
 const assertValidRoomCode = (code: string) => {
-  if (code.length < ROOM_CODE_MIN_LENGTH || code.length > ROOM_CODE_MAX_LENGTH) {
-    throw new Error(`El código debe tener entre ${ROOM_CODE_MIN_LENGTH} y ${ROOM_CODE_MAX_LENGTH} caracteres.`);
-  }
-  if (!/^[A-Z0-9]+$/.test(code)) {
-    throw new Error('El código solo puede contener letras y números.');
+  if (!isRoomCodeValid(code)) {
+    throw new Error(
+      'El código debe contener entre '
+        + ROOM_CODE_MIN_LENGTH
+        + ' y '
+        + ROOM_CODE_MAX_LENGTH
+        + ' letras o números.',
+    );
   }
 };
 
 const validateRoomCode = async (code: string): Promise<boolean> => {
-  const gamesRef = collection(db, 'games');
-  const q = query(gamesRef, where('roomCode', '==', normalizeRoomCode(code)));
+  const normalizedCode = normalizeRoomCode(code);
+  if (!isRoomCodeValid(normalizedCode)) return false;
+
+  if (isV2DataModel) {
+    try {
+      await workshopApi.joinWorkshopByCode({
+        roomCode: normalizedCode,
+        idempotencyKey: createIdempotencyKey('validateRoomCode'),
+      });
+      return true;
+    } catch (error) {
+      const errorCode = typeof error === 'object' && error && 'code' in error
+        ? String(error.code)
+        : '';
+      if (errorCode.includes('not-found')) return false;
+      throw error;
+    }
+  }
+
+  const gamesRef = collection(db, workshopCollectionName);
+  const q = query(gamesRef, where('roomCode', '==', normalizedCode));
   const snapshot = await getDocs(q);
   return !snapshot.empty;
 };
 
   const createGame = async (team: Team | null, asAlchemist: boolean = false, metadata?: { client?: string; facilitator?: string; challenge?: string, customCode?: string }): Promise<string> => {
-    if (!playerId) throw new Error('No se ha podido identificar al usuario. Reintenta en unos segundos.');
     const currentUser = auth.currentUser;
     if (!asAlchemist || !currentUser || currentUser.isAnonymous || !currentUser.email) {
       throw new Error('Solo el Alquimista autenticado puede crear partidas.');
+    }
+
+    if (isV2DataModel) {
+      const tokenResult = await currentUser.getIdTokenResult(true);
+      if (tokenResult.signInProvider === 'anonymous') {
+        throw new Error(
+          'La sesi\u00f3n de administrador no se pudo validar. Cierra las dem\u00e1s pesta\u00f1as de KREATUM y vuelve a identificarte.',
+        );
+      }
+      const result = await workshopApi.createWorkshop({
+        organizationId: requireDefaultOrganizationId(),
+        client: metadata?.client || '',
+        facilitator: metadata?.facilitator || '',
+        challenge: metadata?.challenge || '',
+        customCode: metadata?.customCode || undefined,
+        idempotencyKey: createIdempotencyKey('createWorkshop'),
+      });
+
+      setGameId(result.workshopId);
+      setRoomCode(result.roomCode);
+      setIsAlchemist(true);
+      setTeam(null);
+      localStorage.setItem('kreatum_game_id', result.workshopId);
+      localStorage.setItem('kreatum_room_code', result.roomCode);
+      localStorage.setItem('kreatum_is_alchemist', 'true');
+      localStorage.setItem('kreatum_session_at', Date.now().toString());
+      return result.workshopId;
     }
 
     // Validate room code uniqueness
@@ -146,7 +247,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       }
     }
 
-    const gameRef = await addDoc(collection(db, 'games'), {
+    const gameRef = await addDoc(collection(db, workshopCollectionName), {
       createdAt: Date.now(),
       status: 'active',
       currentPhase: 'Selección',
@@ -160,7 +261,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     const gameId = gameRef.id;
 
     if (!asAlchemist && team) {
-      await setDoc(doc(db, 'games', gameId, 'teams', team), {
+      await setDoc(doc(db, workshopCollectionName, gameId, 'teams', team), {
         playerId,
         memberIds: [playerId],
         team,
@@ -191,8 +292,48 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     if (!inputCode) throw new Error('Por favor, introduce un código de sala válido.');
     assertValidRoomCode(inputCode);
 
+    if (isV2DataModel) {
+      if (joinAs === 'Alchemist') {
+        const currentUser = auth.currentUser;
+        if (!currentUser || currentUser.isAnonymous || !currentUser.email) {
+          throw new Error('Solo el Alquimista autenticado puede recuperar una partida.');
+        }
+        const resumedWorkshop = await workshopApi.resumeWorkshopByCode({
+          roomCode: inputCode,
+          idempotencyKey: createIdempotencyKey('resumeWorkshopByCode'),
+        });
+        setGameId(resumedWorkshop.workshopId);
+        setIsAlchemist(true);
+        setTeam(null);
+        setRoomCode(resumedWorkshop.roomCode);
+        localStorage.setItem('kreatum_game_id', resumedWorkshop.workshopId);
+        localStorage.setItem('kreatum_is_alchemist', 'true');
+        localStorage.setItem('kreatum_room_code', resumedWorkshop.roomCode);
+        localStorage.setItem('kreatum_session_at', Date.now().toString());
+        return;
+      }
+
+      const joinedWorkshop = await workshopApi.joinWorkshopByCode({
+        roomCode: inputCode,
+        idempotencyKey: createIdempotencyKey('joinWorkshopByCode'),
+      });
+      const selectedTeam = joinAs as Team;
+      await workshopApi.selectTeam({
+        workshopId: joinedWorkshop.workshopId,
+        team: selectedTeam,
+        idempotencyKey: createIdempotencyKey('selectTeam'),
+      });
+
+      setGameId(joinedWorkshop.workshopId);
+      setTeam(selectedTeam);
+      setIsAlchemist(false);
+      setRoomCode(joinedWorkshop.roomCode);
+      rememberParticipantSession(joinedWorkshop.workshopId, selectedTeam, joinedWorkshop.roomCode);
+      return;
+    }
+
     // Query the games collection to find the game by roomCode
-    const gamesRef = collection(db, 'games');
+    const gamesRef = collection(db, workshopCollectionName);
     const q = query(gamesRef, where('roomCode', '==', inputCode));
     const querySnapshot = await getDocs(q);
     
@@ -217,7 +358,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
 
     const team = joinAs as Team;
     await runTransaction(db, async (transaction) => {
-      const teamRefs = TEAM_NAMES.map((teamName) => doc(db, 'games', targetGameId, 'teams', teamName));
+      const teamRefs = TEAM_NAMES.map((teamName) => doc(db, workshopCollectionName, targetGameId, 'teams', teamName));
       const teamSnapshots = await Promise.all(teamRefs.map((teamRef) => transaction.get(teamRef)));
 
       const existingMembership = teamSnapshots.find((snapshot) => {
@@ -231,7 +372,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
         throw new Error(`Ya estás registrado en el Equipo ${existingMembership.id} de esta partida. El Alquimista debe reabrir tu selección para que puedas cambiar.`);
       }
 
-      const selectedTeamRef = doc(db, 'games', targetGameId, 'teams', team);
+      const selectedTeamRef = doc(db, workshopCollectionName, targetGameId, 'teams', team);
       const selectedTeamSnapshot = teamSnapshots.find((snapshot) => snapshot.id === team);
       const now = Date.now();
 
@@ -269,12 +410,24 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     setTeam(team);
     setIsAlchemist(false);
     setRoomCode(targetRoomCode);
-    
-    localStorage.setItem('kreatum_game_id', targetGameId);
-    localStorage.setItem('kreatum_team', team);
-    localStorage.setItem('kreatum_is_alchemist', 'false');
-    localStorage.setItem('kreatum_room_code', targetRoomCode);
-    localStorage.setItem('kreatum_session_at', Date.now().toString());
+    rememberParticipantSession(targetGameId, team, targetRoomCode);
+  };
+
+  const reconnectParticipantSession = async () => {
+    if (!gameId || !team || !playerId) throw new Error('No hay una sesión anterior que recuperar.');
+    if (localStorage.getItem(PARTICIPANT_IDENTITY_KEY) !== playerId) {
+      throw Object.assign(new Error('La identidad del navegador ha cambiado.'), {
+        code: 'functions/unauthenticated',
+      });
+    }
+    const result = await participantRecoveryApi.reconnect({
+      workshopId: gameId,
+      team,
+      idempotencyKey: createIdempotencyKey('reconnectParticipantSession'),
+    });
+    setRoomCode(result.roomCode);
+    rememberParticipantSession(result.workshopId, result.team, result.roomCode);
+    return result;
   };
 
   const leaveGame = () => {
@@ -283,11 +436,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     setRoomCode(null);
     setIsAlchemist(false);
     // Only clear Kreatum-specific keys to avoid wiping unrelated localStorage data
-    localStorage.removeItem('kreatum_game_id');
-    localStorage.removeItem('kreatum_team');
-    localStorage.removeItem('kreatum_is_alchemist');
-    localStorage.removeItem('kreatum_room_code');
-    localStorage.removeItem('kreatum_session_at');
+    clearStoredSession();
   };
 
   const clearTeamSelection = () => {
@@ -314,9 +463,19 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       throw new Error('Solo el Alquimista autenticado puede reasignar dispositivos.');
     }
 
-    const gameRef = doc(db, 'games', gameId);
-    const sourceRef = doc(db, 'games', gameId, 'teams', sourceTeam);
-    const destinationRef = doc(db, 'games', gameId, 'teams', destinationTeam);
+    if (isV2DataModel) {
+      await workshopApi.reassignParticipant({
+        workshopId: gameId,
+        participantId: memberId,
+        destinationTeam,
+        idempotencyKey: createIdempotencyKey('reassignParticipant'),
+      });
+      return;
+    }
+
+    const gameRef = doc(db, workshopCollectionName, gameId);
+    const sourceRef = doc(db, workshopCollectionName, gameId, 'teams', sourceTeam);
+    const destinationRef = doc(db, workshopCollectionName, gameId, 'teams', destinationTeam);
 
     await runTransaction(db, async (transaction) => {
       const [gameSnapshot, sourceSnapshot, destinationSnapshot] = await Promise.all([
@@ -385,13 +544,27 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     });
   };
 
-  const purgeAllGames = async () => {
+  const purgeAllGames = async (reason: string) => {
     const currentUser = auth.currentUser;
     if (!currentUser || currentUser.isAnonymous || !currentUser.email) {
-      throw new Error('Solo el administrador autenticado puede resetear la plataforma.');
+      throw new Error('Solo el administrador autenticado puede archivar las partidas.');
     }
 
-    const gamesRef = collection(db, 'games');
+    if (isV2DataModel) {
+      const organizationId = requireDefaultOrganizationId();
+      const result = await workshopApi.archiveOrganizationWorkshops({
+        organizationId,
+        reason,
+        idempotencyKey: createIdempotencyKey('archiveOrganizationWorkshops'),
+      });
+      leaveGame();
+      return {
+        gamesDeleted: result.archivedCount,
+        documentsDeleted: result.archivedCount,
+      };
+    }
+
+    const gamesRef = collection(db, workshopCollectionName);
     const snapshot = await getDocs(gamesRef);
     const SUB_COLLECTIONS = ['attacks', 'defenses', 'teams', 'solutions'];
     const MAX_BATCH_OPS = 499;
@@ -421,7 +594,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
     for (const gameDoc of snapshot.docs) {
       // Borrar subcolecciones antes del documento padre
       for (const sub of SUB_COLLECTIONS) {
-        const subSnap = await getDocs(collection(db, 'games', gameDoc.id, sub));
+        const subSnap = await getDocs(collection(db, workshopCollectionName, gameDoc.id, sub));
         for (const subDoc of subSnap.docs) {
           await queueDelete(subDoc.ref);
         }
@@ -438,8 +611,18 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
 
   const sendAttack = async (content: string, toTeam: Team, fromTeam: Team) => {
     if (!gameId || !playerId) throw new Error('No game or player ID');
-    
-    await addDoc(collection(db, 'games', gameId, 'attacks'), {
+
+    if (isV2DataModel) {
+      await workshopApi.submitWorkshopAttack({
+        workshopId: gameId,
+        toTeam,
+        content,
+        idempotencyKey: createIdempotencyKey('submitWorkshopAttack'),
+      });
+      return;
+    }
+
+    await addDoc(collection(db, workshopCollectionName, gameId, 'attacks'), {
       fromTeam,
       toTeam,
       content,
@@ -450,7 +633,16 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
 
   const editAttack = async (attackId: string, newContent: string) => {
     if (!gameId || !playerId) throw new Error('No game or player ID');
-    await updateDoc(doc(db, 'games', gameId, 'attacks', attackId), {
+    if (isV2DataModel) {
+      await workshopApi.updateWorkshopAttack({
+        workshopId: gameId,
+        attackId,
+        content: newContent,
+        idempotencyKey: createIdempotencyKey('updateWorkshopAttack'),
+      });
+      return;
+    }
+    await updateDoc(doc(db, workshopCollectionName, gameId, 'attacks', attackId), {
       content: newContent,
       editedAt: Date.now(),
     });
@@ -458,8 +650,17 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
 
   const sendDefense = async (attackId: string, content: string) => {
     if (!gameId || !team || !playerId) throw new Error('Not in a game');
+    if (isV2DataModel) {
+      await workshopApi.saveWorkshopDefense({
+        workshopId: gameId,
+        attackId,
+        content,
+        idempotencyKey: createIdempotencyKey('saveWorkshopDefense'),
+      });
+      return;
+    }
 
-    await addDoc(collection(db, 'games', gameId, 'defenses'), {
+    await addDoc(collection(db, workshopCollectionName, gameId, 'defenses'), {
       attackId,
       team,
       content,
@@ -467,30 +668,38 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
       playerId,
     });
   };
-
   const updateSolution = async (reformulated: string, results: string) => {
     if (!gameId || !team) return;
 
-    await setDoc(doc(db, 'games', gameId, 'teams', team), {
+    await setDoc(doc(db, workshopCollectionName, gameId, 'teams', team), {
       reformulatedSolution: reformulated,
       expectedResults: results,
+      ...(isV2DataModel ? { updatedAt: serverTimestamp() } : {}),
     }, { merge: true });
   };
 
   const saveSolution = async (team: Team, content: string) => {
     if (!gameId) return;
-    await setDoc(doc(db, 'games', gameId, 'solutions', team), {
+    await setDoc(doc(db, workshopCollectionName, gameId, 'solutions', team), {
       team,
       content,
-      timestamp: Date.now(),
+      timestamp: isV2DataModel ? serverTimestamp() : Date.now(),
+      ...(isV2DataModel ? { schemaVersion: SCHEMA_VERSION } : {}),
     });
   };
 
   const deleteAttack = async (attackId: string) => {
     if (!gameId) return;
-    await deleteDoc(doc(db, 'games', gameId, 'attacks', attackId));
+    if (isV2DataModel) {
+      await workshopApi.deleteWorkshopAttack({
+        workshopId: gameId,
+        attackId,
+        idempotencyKey: createIdempotencyKey('deleteWorkshopAttack'),
+      });
+      return;
+    }
+    await deleteDoc(doc(db, workshopCollectionName, gameId, 'attacks', attackId));
   };
-
   return (
     <GameContext.Provider
       value={{
@@ -515,6 +724,7 @@ const validateRoomCode = async (code: string): Promise<boolean> => {
         validateRoomCode,
         purgeAllGames,
         deleteAttack,
+        reconnectParticipantSession,
       }}
     >
       {children}

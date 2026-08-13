@@ -1,183 +1,475 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function signedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return signedIn() && request.auth.token.email != null;
+    function validRole(role) {
+      return role in ['owner', 'facilitator'];
     }
 
-    function isValidTeamName(teamName) {
-      return teamName in ['Fuego', 'Agua', 'Aire', 'Tierra'];
+    function organization(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId));
     }
 
-    function isTeamMember(gameId, teamName) {
-      return signedIn()
-        && isValidTeamName(teamName)
-        && exists(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName))
+    function hasVersionedCommercialAccess(orgId) {
+      let record = organization(orgId).data;
+      return record.keys().hasAll(['status', 'schemaVersion', 'commercial'])
+        && record.status == 'active'
+        && record.schemaVersion is int
+        && record.schemaVersion >= 2
+        && record.commercial is map
+        && record.commercial.keys().hasAll(['status', 'validFrom', 'validUntil'])
+        && record.commercial.status in ['trial', 'active']
+        && record.commercial.validFrom is timestamp
+        && record.commercial.validFrom <= request.time
         && (
-          get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.playerId == request.auth.uid
+          record.commercial.validUntil == null
           || (
-            get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.memberIds is list
-            && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamName)).data.memberIds
+            record.commercial.validUntil is timestamp
+            && record.commercial.validUntil > request.time
           )
         );
     }
 
-    function isGamePhase(gameId, phase) {
-      return exists(/databases/$(database)/documents/games/$(gameId))
-        && get(/databases/$(database)/documents/games/$(gameId)).data.currentPhase == phase;
+    function isOrganizationOperational(orgId) {
+      return exists(/databases/$(database)/documents/organizations/$(orgId))
+        && hasVersionedCommercialAccess(orgId);
     }
 
-    match /games/{gameId} {
-      // Players need read access to join by room code and listen to the active phase.
-      allow read: if signedIn();
+    function membership(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid));
+    }
 
-      // Only the Alchemist/admin can create, update, complete, or purge games.
-      allow create: if isAdmin()
-        && request.resource.data.roomCode is string
-        && request.resource.data.roomCode.size() >= 4
-        && request.resource.data.roomCode.size() <= 10
-        && request.resource.data.currentPhase == 'Selección'
-        && request.resource.data.status == 'active';
-      allow update, delete: if isAdmin();
+    function isOrganizationMember(orgId) {
+      return signedIn()
+        && isOrganizationOperational(orgId)
+        && exists(
+          /databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)
+        )
+        && membership(orgId).data.status == 'active'
+        && validRole(membership(orgId).data.role);
+    }
 
-      match /teams/{teamName} {
-        allow read: if signedIn();
+    function hasOrganizationRole(orgId, roles) {
+      return isOrganizationMember(orgId)
+        && membership(orgId).data.role in roles;
+    }
 
-        allow create: if signedIn()
-          && isValidTeamName(teamName)
-          && request.resource.data.playerId == request.auth.uid
-          && request.resource.data.memberIds is list
-          && request.auth.uid in request.resource.data.memberIds
-          && request.resource.data.team == teamName;
+    function workshop(workshopId) {
+      return get(/databases/$(database)/documents/workshops/$(workshopId));
+    }
 
-        allow update: if isAdmin()
+    function workshopOrganizationId(workshopId) {
+      return workshop(workshopId).data.organizationId;
+    }
+
+    function hasCanonicalFacilitator(workshopData) {
+      return workshopData.keys().hasAll(['facilitatorUid'])
+        && workshopData.facilitatorUid is string
+        && workshopData.facilitatorUid.size() >= 3
+        && workshopData.facilitatorUid.size() <= 128;
+    }
+
+    function isExplicitLegacyWorkshop(workshopData) {
+      return workshopData.keys().hasAll(['schemaVersion', 'migration'])
+        && workshopData.schemaVersion == 2
+        && workshopData.migration is map
+        && workshopData.migration.keys().hasAll(['sourceCollection'])
+        && workshopData.migration.sourceCollection == 'games';
+    }
+
+    function hasRecognizedWorkshopAssignment(workshopData) {
+      return hasCanonicalFacilitator(workshopData)
+        || isExplicitLegacyWorkshop(workshopData);
+    }
+
+    function canManageWorkshopData(workshopData) {
+      return signedIn()
+        && workshopData.keys().hasAll(['organizationId'])
+        && workshopData.organizationId is string
+        && isOrganizationOperational(workshopData.organizationId)
+        && hasRecognizedWorkshopAssignment(workshopData)
+        && (
+          hasOrganizationRole(workshopData.organizationId, ['owner'])
           || (
-            signedIn()
-            && isValidTeamName(teamName)
-            && isTeamMember(gameId, teamName)
-            && request.resource.data.playerId == resource.data.playerId
-            && request.resource.data.get('memberIds', []) == resource.data.get('memberIds', [])
-            && request.resource.data.team == resource.data.team
+            hasCanonicalFacilitator(workshopData)
+            && workshopData.facilitatorUid == request.auth.uid
+            && hasOrganizationRole(workshopData.organizationId, ['facilitator'])
+          )
+        );
+    }
+    function canListWorkshopData(workshopData) {
+      return signedIn()
+        && workshopData.keys().hasAll(['organizationId'])
+        && workshopData.organizationId is string
+        && isOrganizationOperational(workshopData.organizationId)
+        && (
+          hasOrganizationRole(workshopData.organizationId, ['owner'])
+          || (
+            hasCanonicalFacilitator(workshopData)
+            && workshopData.facilitatorUid == request.auth.uid
+            && hasOrganizationRole(workshopData.organizationId, ['facilitator'])
+          )
+        );
+    }
+
+
+
+    function isWorkshopAdmin(workshopId) {
+      return canManageWorkshopData(workshop(workshopId).data);
+    }
+
+    function participantSession(workshopId) {
+      return get(
+        /databases/$(database)/documents/workshops/$(workshopId)/participantSessions/$(request.auth.uid)
+      );
+    }
+
+    function isWorkshopParticipant(workshopId) {
+      return signedIn()
+        && isActiveWorkshop(workshopId)
+        && exists(
+          /databases/$(database)/documents/workshops/$(workshopId)/participantSessions/$(request.auth.uid)
+        )
+        && participantSession(workshopId).data.status == 'active'
+        && participantSession(workshopId).data.expiresAt > request.time;
+    }
+
+    function isTerminalWorkshopParticipant(workshopId) {
+      let workshopData = workshop(workshopId).data;
+      return signedIn()
+        && workshopData.status in ['completed', 'archived']
+        && workshopData.keys().hasAll(['organizationId'])
+        && workshopData.organizationId is string
+        && hasRecognizedWorkshopAssignment(workshopData)
+        && isOrganizationOperational(workshopData.organizationId)
+        && exists(
+          /databases/$(database)/documents/workshops/$(workshopId)/participantSessions/$(request.auth.uid)
+        )
+        && participantSession(workshopId).data.status in ['active', 'expired'];
+    }
+
+    function participantTeam(workshopId) {
+      return participantSession(workshopId).data.team;
+    }
+
+    function ownsTeamReservation(workshopId, team) {
+      let reservation = get(
+        /databases/$(database)/documents/workshops/$(workshopId)/teams/$(team)
+      );
+      return reservation.data.keys().hasAll([
+          'activeParticipantId',
+          'activeDeviceExpiresAt'
+        ])
+        && reservation.data.activeParticipantId == request.auth.uid
+        && reservation.data.activeDeviceExpiresAt > request.time;
+    }
+
+    function hasAcknowledgedPendingTransition(workshopId) {
+      return workshop(workshopId).data.keys().hasAny(['pendingTransitionId'])
+        && participantSession(workshopId).data.keys().hasAny(['transitionAckId'])
+        && participantSession(workshopId).data.transitionAckId
+          == workshop(workshopId).data.pendingTransitionId;
+    }
+
+    function isActiveWorkshop(workshopId) {
+      let workshopData = workshop(workshopId).data;
+      return workshopData.status == 'active'
+        && workshopData.keys().hasAll(['organizationId'])
+        && workshopData.organizationId is string
+        && hasRecognizedWorkshopAssignment(workshopData)
+        && isOrganizationOperational(workshopData.organizationId);
+    }
+
+    function isWorkshopPhase(workshopId, phase) {
+      return workshop(workshopId).data.currentPhase == phase;
+    }
+
+    function validTeam(team) {
+      return team in ['Fuego', 'Agua', 'Aire', 'Tierra'];
+    }
+
+    function validText(value) {
+      return value is string && value.size() <= 20000;
+    }
+
+    function validOptionalText(field) {
+      return validText(request.resource.data.get(field, ''));
+    }
+
+    function validOptionalBool(field) {
+      return request.resource.data.get(field, false) is bool;
+    }
+    function validOptionalList(field, maxItems) {
+      let value = request.resource.data.get(field, []);
+      return value is list && value.size() <= maxItems;
+    }
+
+    function validTeamContentShape() {
+      return validOptionalList('perspectives', 50)
+        && validOptionalList('top3Perspectives', 3)
+        && validOptionalList('perspectiveVotes', 3)
+        && validOptionalText('selectedPerspective')
+        && validOptionalList('solutions', 50)
+        && validOptionalList('top3Solutions', 3)
+        && validOptionalList('solutionVotes', 3)
+        && validOptionalText('selectedSolution')
+        && validOptionalText('receivedSolutionToAttack')
+        && validOptionalList('attacksOnOthers', 20)
+        && validOptionalList('receivedAttacks', 20)
+        && validOptionalList('defenses', 20)
+        && validOptionalText('reformulatedSolution')
+        && validOptionalText('expectedResults')
+        && validOptionalText('audience')
+        && validOptionalText('strengths')
+        && validOptionalText('weaknesses')
+        && validOptionalText('pilot')
+        && validOptionalText('resources')
+        && validOptionalText('pitch')
+        && validOptionalText('pitchStart')
+        && validOptionalText('pitchProblem')
+        && validOptionalText('pitchSolution')
+        && validOptionalText('pitchAction')
+        && validOptionalBool('isFinished');
+    }
+
+    function validTeamStateUpdate(workshopId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let phase = workshop(workshopId).data.currentPhase;
+      return validTeamContentShape()
+        && request.resource.data.team == resource.data.team
+        && request.resource.data.schemaVersion == 2
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastSavedAt == request.time
+        && (
+          (
+            phase == 'Diluir'
+            && changed.hasOnly([
+              'perspectives',
+              'top3Perspectives',
+              'perspectiveVotes',
+              'selectedPerspective',
+              'lastSavedAt',
+              'updatedAt'
+            ])
           )
           || (
-            signedIn()
-            && isGamePhase(gameId, 'Selección')
-            && isValidTeamName(teamName)
-            && request.resource.data.team == resource.data.team
-            && request.resource.data.memberIds is list
-            && request.auth.uid in request.resource.data.memberIds
-            && request.resource.data.memberIds.hasAll(
-              resource.data.get(
-                'memberIds',
-                resource.data.get('playerId', null) is string
-                  ? [resource.data.get('playerId', null)]
-                  : []
-              )
-            )
-            && request.resource.data.memberIds.size() <= resource.data.get(
-              'memberIds',
-              resource.data.get('playerId', null) is string
-                ? [resource.data.get('playerId', null)]
-                : []
-            ).size() + 1
+            phase == 'Conjugar'
+            && changed.hasOnly([
+              'solutions',
+              'top3Solutions',
+              'solutionVotes',
+              'selectedSolution',
+              'lastSavedAt',
+              'updatedAt'
+            ])
+          )
+          || (
+            phase == 'Sublimar'
+            && changed.hasOnly([
+              'receivedSolutionToAttack',
+              'attacksOnOthers',
+              'receivedAttacks',
+              'defenses',
+              'reformulatedSolution',
+              'expectedResults',
+              'sublimarView',
+              'sublimarDefenseCompleted',
+              'lastSavedAt',
+              'updatedAt'
+            ])
             && (
-              request.resource.data.playerId == resource.data.get('playerId', null)
-              || (
-                resource.data.get('playerId', null) == null
-                && request.resource.data.playerId == request.auth.uid
-              )
+              request.resource.data.get('sublimarView', 'Ataque') == 'Ataque'
+              || request.resource.data.get('sublimarView', 'Ataque') == 'Defensa'
             )
-            && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['playerId', 'memberIds', 'updatedAt'])
-          );
+            && validOptionalBool('sublimarDefenseCompleted')
+          )
+          || (
+            phase == 'Fermentar'
+            && changed.hasOnly([
+              'audience',
+              'strengths',
+              'weaknesses',
+              'pilot',
+              'resources',
+              'lastSavedAt',
+              'updatedAt'
+            ])
+          )
+          || (
+            phase == 'Proyectar'
+            && changed.hasOnly([
+              'pitch',
+              'pitchStart',
+              'pitchProblem',
+              'pitchSolution',
+              'pitchAction',
+              'isFinished',
+              'lastSavedAt',
+              'updatedAt'
+            ])
+          )
+        );
+    }
 
-        allow delete: if isAdmin();
+    match /organizations/{orgId} {
+      allow read: if isOrganizationMember(orgId);
+      allow create, update, delete: if false;
+
+      match /members/{userId} {
+        allow read: if isOrganizationMember(orgId)
+          && (
+            request.auth.uid == userId
+            || hasOrganizationRole(orgId, ['owner'])
+          );
+        allow create, update, delete: if false;
+      }
+
+      match /invitations/{invitationId} {
+        allow read: if hasOrganizationRole(orgId, ['owner']);
+        allow create, update, delete: if false;
+      }
+
+      match /auditEvents/{eventId} {
+        allow read: if hasOrganizationRole(orgId, ['owner']);
+        allow create, update, delete: if false;
+      }
+
+      match /commandKeys/{commandId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /activeRoomCodes/{roomCode} {
+      allow read, write: if false;
+    }
+
+    match /joinRateLimits/{rateLimitId} {
+      allow read, write: if false;
+    }
+
+    match /invitationRateLimits/{rateLimitId} {
+      allow read, write: if false;
+    }
+
+    match /workshops/{workshopId} {
+      allow get: if canManageWorkshopData(resource.data)
+        || isWorkshopParticipant(workshopId)
+        || isTerminalWorkshopParticipant(workshopId);
+      allow list: if canListWorkshopData(resource.data);
+      allow create, update, delete: if false;
+
+      match /participantSessions/{participantId} {
+        allow read: if isWorkshopAdmin(workshopId)
+          || (
+            request.auth.uid == participantId
+            && isWorkshopParticipant(workshopId)
+          );
+        allow create, update, delete: if false;
+      }
+
+      match /teams/{teamName} {
+        allow read: if isWorkshopAdmin(workshopId)
+          || (
+            isWorkshopParticipant(workshopId)
+            && participantTeam(workshopId) == teamName
+          );
+        allow create, delete: if false;
+        allow update: if ownsTeamReservation(workshopId, teamName)
+          && !hasAcknowledgedPendingTransition(workshopId)
+          && isActiveWorkshop(workshopId)
+          && validTeam(teamName)
+          && participantTeam(workshopId) == teamName
+          && validTeamStateUpdate(workshopId);
       }
 
       match /attacks/{attackId} {
-        allow read: if signedIn();
-
-        allow create: if signedIn()
-          && isGamePhase(gameId, 'Sublimar')
-          && request.resource.data.keys().hasAll(['fromTeam', 'toTeam', 'content', 'timestamp', 'playerId'])
-          && request.resource.data.playerId == request.auth.uid
-          && isValidTeamName(request.resource.data.fromTeam)
-          && isValidTeamName(request.resource.data.toTeam)
-          && isTeamMember(gameId, request.resource.data.fromTeam)
-          && request.resource.data.content is string
-          && request.resource.data.content.size() > 0;
-
-        allow update: if signedIn()
-          && isGamePhase(gameId, 'Sublimar')
-          && isTeamMember(gameId, resource.data.fromTeam)
-          && request.resource.data.playerId == resource.data.playerId
-          && request.resource.data.fromTeam == resource.data.fromTeam
-          && request.resource.data.toTeam == resource.data.toTeam
-          && request.resource.data.timestamp == resource.data.timestamp
-          && request.resource.data.content is string
-          && request.resource.data.content.size() > 0;
-
-        allow delete: if isAdmin()
+        allow read: if isWorkshopAdmin(workshopId)
           || (
-            signedIn()
-            && isGamePhase(gameId, 'Sublimar')
-            && isTeamMember(gameId, resource.data.fromTeam)
+            isWorkshopParticipant(workshopId)
+            && (
+              resource.data.fromTeam == participantTeam(workshopId)
+              || resource.data.toTeam == participantTeam(workshopId)
+            )
           );
+        allow create, update, delete: if false;
       }
 
       match /defenses/{defenseId} {
-        allow read: if signedIn();
-
-        allow create: if signedIn()
-          && isGamePhase(gameId, 'Sublimar')
-          && request.resource.data.keys().hasAll(['attackId', 'team', 'content', 'timestamp', 'playerId'])
-          && request.resource.data.playerId == request.auth.uid
-          && isValidTeamName(request.resource.data.team)
-          && isTeamMember(gameId, request.resource.data.team)
-          && request.resource.data.content is string
-          && request.resource.data.content.size() > 0;
-
-        allow update: if signedIn()
-          && isGamePhase(gameId, 'Sublimar')
-          && isTeamMember(gameId, resource.data.team)
-          && request.resource.data.playerId == resource.data.playerId
-          && request.resource.data.team == resource.data.team
-          && request.resource.data.attackId == resource.data.attackId
-          && request.resource.data.content is string
-          && request.resource.data.content.size() > 0;
-
-        allow delete: if isAdmin()
+        allow read: if isWorkshopAdmin(workshopId)
           || (
-            signedIn()
-            && isGamePhase(gameId, 'Sublimar')
-            && isTeamMember(gameId, resource.data.team)
+            isWorkshopParticipant(workshopId)
+            && resource.data.team == participantTeam(workshopId)
           );
+        allow create, update, delete: if false;
       }
 
       match /solutions/{teamName} {
-        allow read: if signedIn();
-
-        allow create, update: if isAdmin()
+        allow read: if isWorkshopAdmin(workshopId)
           || (
-            signedIn()
-            && isValidTeamName(teamName)
-            && isTeamMember(gameId, teamName)
-            && request.resource.data.team == teamName
-            && request.resource.data.content is string
+            isWorkshopParticipant(workshopId)
+            && (
+              participantTeam(workshopId) == teamName
+              || workshop(workshopId).data.currentPhase in [
+                'Sublimar',
+                'Fermentar',
+                'Proyectar'
+              ]
+            )
           );
-
-        allow delete: if isAdmin()
-          || (
-            signedIn()
-            && isValidTeamName(teamName)
-            && isTeamMember(gameId, teamName)
-          );
+        allow create, update: if isWorkshopParticipant(workshopId)
+          && isActiveWorkshop(workshopId)
+          && isWorkshopPhase(workshopId, 'Conjugar')
+          && participantTeam(workshopId) == teamName
+          && request.resource.data.team == teamName
+          && validText(request.resource.data.content)
+          && request.resource.data.timestamp == request.time
+          && request.resource.data.schemaVersion == 2
+          && request.resource.data.keys().hasOnly([
+            'team',
+            'content',
+            'timestamp',
+            'schemaVersion'
+          ]);
+        allow delete: if false;
       }
+
+      match /reports/{reportId} {
+        allow read: if isWorkshopAdmin(workshopId);
+        allow create, update, delete: if false;
+      }
+
+      match /reportJobs/{jobId} {
+        allow read: if isWorkshopAdmin(workshopId);
+        allow create, update, delete: if false;
+      }
+
+      match /participantDeviceSlots/{slotId} {
+        allow read, write: if false;
+      }
+
+      match /auditEvents/{eventId} {
+        allow read: if isWorkshopAdmin(workshopId);
+        allow create, update, delete: if false;
+      }
+
+      match /commandKeys/{commandId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Legacy reads also pass through audited server-side platform operations.
+    match /games/{gameId} {
+      allow read, write: if false;
+      match /{legacySubcollection}/{documentId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

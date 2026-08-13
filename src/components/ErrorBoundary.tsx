@@ -1,4 +1,5 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportClientError } from '../lib/clientLogger';
 
 interface Props {
   children: ReactNode;
@@ -11,82 +12,52 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false };
-  }
+  state: State = { hasError: false };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // En producción, aquí se podría enviar a un servicio como Sentry
-    console.error('Kreatum ErrorBoundary caught:', error, info);
+    reportClientError('KREATUM ErrorBoundary caught', error);
+    void info;
   }
 
   render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
+    if (!this.state.hasError) return this.props.children;
+    if (this.props.fallback) return this.props.fallback;
 
-      return (
-        <div
-          style={{
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '2rem',
-            textAlign: 'center',
-            background: '#f8fafc',
-            fontFamily: 'Inter, sans-serif',
-          }}
-        >
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚗️</div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem', color: '#102F40' }}>
-            Algo salió mal
-          </h1>
-          <p style={{ color: '#404040', marginBottom: '2rem', maxWidth: '400px', lineHeight: 1.6 }}>
-            La aplicación encontró un error inesperado. Intenta recargar la página.
-            Si el problema persiste, contacta con tu facilitador.
+    return (
+      <main
+        className="min-h-screen grid place-items-center bg-kreatum-bg-light px-6 text-center"
+        role="alert"
+      >
+        <div className="max-w-md">
+          <div
+            className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-2xl bg-red-500/10 text-2xl font-bold text-red-600"
+            aria-hidden="true"
+          >
+            !
+          </div>
+          <h1 className="text-2xl font-bold text-kreatum-dark">Algo salió mal</h1>
+          <p className="mt-3 leading-relaxed text-kreatum-gray/75">
+            KREATUM encontró un error inesperado. Recarga la página y, si continúa,
+            comunica el problema al facilitador.
           </p>
           <button
+            type="button"
             onClick={() => window.location.reload()}
-            style={{
-              padding: '0.75rem 2rem',
-              background: '#A2549C',
-              color: 'white',
-              border: 'none',
-              borderRadius: '1rem',
-              cursor: 'pointer',
-              fontSize: '1rem',
-              fontWeight: 500,
-            }}
+            className="mt-7 rounded-xl bg-kreatum-purple px-6 py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-kreatum-purple focus-visible:ring-offset-2"
           >
             Recargar página
           </button>
-          {process.env.NODE_ENV === 'development' && this.state.error && (
-            <pre
-              style={{
-                marginTop: '2rem',
-                padding: '1rem',
-                background: '#fee2e2',
-                borderRadius: '0.5rem',
-                fontSize: '0.75rem',
-                textAlign: 'left',
-                maxWidth: '600px',
-                overflow: 'auto',
-                color: '#991b1b',
-              }}
-            >
+          {import.meta.env.DEV && this.state.error && (
+            <pre className="mt-8 max-h-48 overflow-auto rounded-xl bg-red-50 p-4 text-left text-xs text-red-800">
               {this.state.error.toString()}
             </pre>
           )}
         </div>
-      );
-    }
-
-    return this.props.children;
+      </main>
+    );
   }
 }

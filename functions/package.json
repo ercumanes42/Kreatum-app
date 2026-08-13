@@ -1,0 +1,43 @@
+{
+    "name": "@kreatum/functions",
+    "private": true,
+    "version": "1.0.0",
+    "main": "lib/index.js",
+    "engines": {
+        "node": "22"
+    },
+    "scripts": {
+        "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=lib/index.js --sourcemap --external:firebase-admin --external:firebase-admin/* --external:firebase-functions --external:firebase-functions/* && node scripts/copy-pdfkit-data.mjs && node scripts/generate-manifest.mjs",
+    "build:production": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=lib/index.js --sourcemap --external:firebase-admin --external:firebase-admin/* --external:firebase-functions --external:firebase-functions/* && node scripts/copy-pdfkit-data.mjs && node scripts/generate-manifest.mjs kreatum-dinamic",
+        "build:staging": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=lib/index.js --sourcemap --external:firebase-admin --external:firebase-admin/* --external:firebase-functions --external:firebase-functions/* && node scripts/copy-pdfkit-data.mjs && node scripts/generate-manifest.mjs kreatum-dinamic-staging",
+        "typecheck": "tsc --noEmit",
+        "test": "tsx --test src/**/*.test.ts",
+        "test:load:worker": "node --test tests/load.integration.test.mjs",
+        "migrate:legacy": "node scripts/migrate-legacy.mjs",
+        "migrate:access": "node scripts/migrate-access.mjs",
+        "migrate:platform-access": "node scripts/migrate-platform-access.mjs",
+        "migrate:organizations": "node scripts/migrate-organization-memberships.mjs",
+        "bootstrap:membership": "node scripts/bootstrap-membership.mjs",
+        "test:migration:worker": "node --test --test-concurrency=1 tests/migration.integration.test.mjs tests/access-migration.integration.test.mjs tests/organization-memberships.integration.test.mjs tests/platform-access-migration.integration.test.mjs"
+    },
+    "dependencies": {
+        "@firebase/app": "0.16.0",
+        "firebase-admin": "14.2.0",
+        "firebase-functions": "7.3.2",
+        "pdfkit": "^0.19.1",
+        "pptxgenjs": "^4.0.1"
+    },
+    "overrides": {
+        "image-size": "2.0.2"
+    },
+    "devDependencies": {
+        "@types/jszip": "^3.4.0",
+        "@types/node": "22.14.0",
+        "@types/pdfkit": "^0.17.6",
+        "esbuild": "0.28.1",
+        "jszip": "^3.10.1",
+        "pdf-lib": "^1.17.1",
+        "tsx": "4.23.5",
+        "typescript": "5.8.2"
+    }
+}

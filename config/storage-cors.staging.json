@@ -1,0 +1,17 @@
+[
+  {
+    "origin": [
+      "https://kreatum-dinamic-staging.web.app"
+    ],
+    "method": [
+      "GET",
+      "HEAD"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Disposition"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

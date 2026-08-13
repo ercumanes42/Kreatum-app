@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kreatum | Generador de Informes Premium</title>
+    <title>KREATUM™ | Generador de Informes Premium</title>
     <!-- Tailwind CSS for screen interface -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->
@@ -208,10 +208,10 @@
         <!-- Header -->
         <header class="no-print bg-slate-900/80 backdrop-blur border-b border-slate-800 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
             <div class="flex items-center gap-3">
-                <img src="./public/logo.png" alt="Kreatum Logo" class="h-10 object-contain onerror-fallback" data-element="kreatum">
+                <img src="./public/logo.png" alt="KREATUM™ Logo" class="h-10 object-contain onerror-fallback" data-element="kreatum">
                 <div>
                     <h1 class="font-outfit text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                        KREATUM <span class="text-xs bg-kreatum-purple/20 text-purple-300 border border-kreatum-purple/30 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold font-sans">Report Builder</span>
+                        KREATUM™ <span class="text-xs bg-kreatum-purple/20 text-purple-300 border border-kreatum-purple/30 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold font-sans">Report Builder</span>
                     </h1>
                     <p class="text-xs text-slate-400">Generador Autónomo de Informes Premium de Resultados</p>
                 </div>
@@ -243,16 +243,13 @@
                         <p class="text-[10px] text-slate-500 mt-1">o haz clic para explorar</p>
                     </div>
 
-                    <!-- Preset Loader -->
-                    <div class="mt-3">
-                        <button onclick="loadSampleData()" class="w-full text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2 rounded-lg transition-colors border border-slate-700/60">
-                            Cargar Historial de Ejemplo (`2026-06-11.csv`)
-                        </button>
+                    <div id="csv-status" class="mt-3 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-2 text-[10px] leading-relaxed text-slate-400">
+                        Ningún archivo cargado. El informe permanecerá vacío hasta importar un CSV.
                     </div>
                 </div>
 
                 <!-- Session Meta Editors -->
-                <div class="border-t border-slate-800 pt-4">
+                <div class="hidden border-t border-slate-800 pt-4">
                     <h2 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
                         <i data-lucide="edit-3" class="w-4 h-4 text-kreatum-purple"></i>
                         Ficha del Taller
@@ -440,1323 +437,1126 @@
 
     <!-- Templates & Logic -->
     <script>
-        // Default Mock / Uploaded data holder
-        let sessionData = {
-            metadata: {
-                reportTitle: "Alquimia de Innovación Territorial",
-                reportSubtitle: "Resultados y conceptos generados durante el ritual de workshop en tiempo real.",
-                client: "Rural Innova S.L.",
-                facilitator: "Alex Rivera (Facilitador Alquimista)",
-                challenge: "Cómo impulsar y fijar población emprendedora en entornos rurales aprovechando la innovación digital.",
-                date: "09 jun 2026",
-                location: "San Xoán de Río, Ourense (Presencial)",
-                roomCode: "DSJULR",
-                participants: 16,
-                businessObjective: "Identificar y diseñar 4 conceptos de negocio viables y escalables basados en los recursos y esencia del territorio.",
-                contextObservations: "Sesión presencial de co-creación con la participación de emprendedores locales, artesanos y autoridades municipales.",
-                sessionResponsible: "Alex Rivera"
-            },
-            teams: {
-                Agua: {
-                    name: "Agua",
-                    challenge: "Cómo impulsar y fijar población emprendedora en entornos rurales...",
-                    perspective: "COMO HACER UNA CARRERA DEL SALMON EN EL RURAL",
-                    solution: "clonar chemis en el rural",
-                    reformulatedSolution: "Creamos un programa pionero de innovación política basada en el liderazgo y el diseño regenerativo, que incluye trabajar las habilidades que harán que los alcaldes del presente puedan desarrollar sus propias iniciativas basadas en la esencia de sus territorios y en la colaboración mutua entre aldeas.",
-                    expectedResults: "Lograr que un piloto de 5 alcaldes valide la viabilidad de la coinnovación rural y codiseñe planes estratégicos de desarrollo local.",
-                    audience: "Alcaldes rurales y líderes municipales.",
-                    strengths: "Innovación política local, liderazgo colaborativo, fácil de probar con prototipo.",
-                    weaknesses: "Resistencia inicial al cambio político, disponibilidad de agenda de alcaldes.",
-                    pilot: "Videoconferencia colaborativa con 5 alcaldes una mañana para validar y testear necesidades críticas.",
-                    resources: "Herramientas de videoconferencia, metodología de coinnovación estructurada, facilitador.",
-                    pitchStart: "Los alcaldes rurales son los alquimistas del territorio.",
-                    pitchProblem: "Actúan aislados ante retos globales que amenazan sus aldeas.",
-                    pitchSolution: "Un programa de liderazgo regenerativo que los una para co-crear soluciones territoriales.",
-                    pitchAction: "Comenzamos un piloto con 5 alcaldes el próximo mes. Únete para regenerar el rural."
-                },
-                Aire: {
-                    name: "Aire",
-                    challenge: "Cómo impulsar y fijar población emprendedora en entornos rurales...",
-                    perspective: "que la población gane más dinero aquí que en el resto de España",
-                    solution: "hiper ennichar la economía de un pueblo conectado con la tradición (pan, queso)",
-                    reformulatedSolution: "Escoger un nicho con alta demanda, baja resistencia y aplicabilidad global. Eliminar barreras de distribución física y epistemológica. Crear una economía próspera para todo el pueblo a posteridad, partiendo de la tradición quesera y del pan artesanal.",
-                    expectedResults: "Incrementar los ingresos locales en un 40% a través de canales de comercio online directo y posicionamiento de marca gourmet.",
-                    audience: "Emprendedores locales y artesanos tradicionales.",
-                    strengths: "Alto valor añadido, conexión con la tradición artesana local, distribución global directa.",
-                    weaknesses: "Logística de productos frescos en zonas aisladas, digitalización de artesanos.",
-                    pilot: "Lanzar una preventa online de una caja gourmet premium 'El Pueblo Inmortal' para validar demanda.",
-                    resources: "Plataforma e-commerce sencilla, pack de envíos refrigerados, catálogo de 3 artesanos.",
-                    pitchStart: "El rural no es el sitio del que te vas, sino a donde vas a construir.",
-                    pitchProblem: "La economía tradicional muere por falta de distribución y digitalización.",
-                    pitchSolution: "El Pueblo Inmortal: una plataforma para hiper-ennichar la producción artesana gourmet.",
-                    pitchAction: "Lanzamos preventa el 25 de junio. Conecta tradición y rentabilidad global."
-                },
-                Fuego: {
-                    name: "Fuego",
-                    challenge: "Cómo impulsar y fijar población emprendedora en entornos rurales...",
-                    perspective: "aumentar la longevidad del ecosistema emprendedor y asegurar relevo",
-                    solution: "comidas e ingredientes locales y naturales",
-                    reformulatedSolution: "Proveemos comidas e ingredientes locales y naturales con denominación de origen, basados en filosofía regenerativa y gestión agrícola inteligente. Se facilita una plataforma cooperativa para gestión de stocks y distribución mediante redes compartidas.",
-                    expectedResults: "Crear una cadena corta de suministro local autogestionada que provea a 70 km cuadrados a la redonda de forma sostenible.",
-                    audience: "Agricultores locales, restaurantes de km 0 y consumidores del territorio.",
-                    strengths: "Banco de semillas locales, cultivos extensivos optimizados, alta sostenibilidad.",
-                    weaknesses: "Coordinación de múltiples productores independientes, inversión inicial en transporte.",
-                    pilot: "Ruta de reparto semanal compartida entre 3 agricultores para proveer a 4 restaurantes piloto.",
-                    resources: "Vehículo de transporte común, plataforma digital de stocks compartida, banco local de semillas.",
-                    pitchStart: "Alimenta tu futuro con la esencia de tu tierra.",
-                    pitchProblem: "La alimentación urbana destruye el suelo y los productores locales no tienen salida rentable.",
-                    pitchSolution: "Comida regenerativa local: una plataforma logística e inteligente para proveer ingredientes naturales.",
-                    pitchAction: "Apoya a los agricultores de km 0. Adquiere tu cesta de temporada hoy mismo."
-                },
-                Tierra: {
-                    name: "Tierra",
-                    challenge: "Cómo impulsar y fijar población emprendedora en entornos rurales...",
-                    perspective: "como podriamos hacer para los emprendedores entiendan como repercute la calma en los procesos creativos",
-                    solution: "dieta de sueño y alimentación natural en coworking rural",
-                    reformulatedSolution: "La única forma de que alguien adopte un cambio es experimentándolo. Por eso creamos Rural Valley: una estancia-laboratorio de un año para startups donde el sueño de calidad y la alimentación km 0 actúan como catalizadores de la creatividad y la toma de decisiones estratégicas.",
-                    expectedResults: "Demostrar mediante datos biométricos reales y medibles el éxito de rendimiento de las startups en Rural Valley.",
-                    audience: "Emprendedores digitales, programadores y creativos estresados de la ciudad.",
-                    strengths: "Experiencia inmersiva única, valor de bienestar empírico, generación de comunidad de alto nivel.",
-                    weaknesses: "Capacidad limitada en el espacio físico de estancia, coste de manutención inicial.",
-                    pilot: "Retiro de fin de semana con 3 fundadores de startups de alto estrés para medir impacto biométrico.",
-                    resources: "Espacio rural adaptado, dispositivos biométricos de monitorización de sueño, menús km 0.",
-                    pitchStart: "La calma es la mayor ventaja competitiva en el diseño del futuro.",
-                    pitchProblem: "El burnout en la ciudad ahoga las grandes ideas creativas.",
-                    pitchSolution: "Rural Valley: un laboratorio vivo de un año para startups que combina bienestar extremo y alto rendimiento.",
-                    pitchAction: "Aplica para la cohorte beta de Rural Valley. Recupera tu creatividad y tu negocio."
-                }
-            },
-            nextSteps: [
-                { action: "Consolidar base de datos del prototipo con el cliente", owner: "Alex Rivera", deadline: "15 Jun, 2026" },
-                { action: "Diseñar wireframes del informe integrado en la plataforma", owner: "Equipo Técnico", deadline: "22 Jun, 2026" },
-                { action: "Reunión de contraste de propuestas viables con Rural Innova", owner: "Facilitador", deadline: "28 Jun, 2026" }
-            ],
-            metrics: {
-                totalContributions: 62,
-                attacksCount: 38,
-                defensesCount: 24,
-                ideasCount: 45
-            },
-            rawInputs: {
-                Fuego: [
-                    "Crear cooperativa de hornos de leña tradicionales.",
-                    "Fomentar el turismo agrícola interactivo.",
-                    "Optimizar el cultivo de castañas mediante drones locales."
-                ],
-                Agua: [
-                    "Diseñar rutas fluviales recreativas en el río Sil.",
-                    "Aprovechar la pesca sostenible como atractivo turístico.",
-                    "Escuela móvil de vela y deportes acuáticos en embalses."
-                ],
-                Tierra: [
-                    "Coworking rural con integración agrícola.",
-                    "Campamento de bioconstrucción y techos verdes.",
-                    "Huertos urbanos compartidos gestionados por app."
-                ],
-                Aire: [
-                    "Distribución e-commerce directa de quesos de oveja.",
-                    "Podcast de historias del rural gallego.",
-                    "Red wifi comunitaria autogestionada en aldeas."
-                ]
-            },
-            rawIdeas: {
-                Fuego: [
-                    "Restauración arquitectónica para venta local.",
-                    "Procesamiento slow-cooking con energía solar.",
-                    "Plataforma digital para stocks de productores."
-                ],
-                Agua: [
-                    "Talleres de innovación política para alcaldes.",
-                    "Red colaborativa de comunicación entre ayuntamientos.",
-                    "Coinnovación basada en recursos hídricos locales."
-                ],
-                Tierra: [
-                    "Retiro de fin de semana para medir estrés biométrico.",
-                    "Monitorización de sueño y alimentación km 0 en startups.",
-                    "Espacio inmersivo Rural Valley de un año."
-                ],
-                Aire: [
-                    "Preventa de cajas gourmet premium gourmet.",
-                    "Distribución en frío compartida entre productores.",
-                    "Portal web El Pueblo Inmortal de artesanos locales."
-                ]
-            },
-            contraste: {
-                Fuego: {
-                    cuestionado: "El transporte compartido puede generar roces de stock entre agricultores.",
-                    ajuste: "Se programará un gestor de stock automatizado y reparto por turnos fijos semanales."
-                },
-                Agua: {
-                    cuestionado: "Los alcaldes no tienen tiempo ni agenda para talleres cooperativos.",
-                    ajuste: "Sesiones híbridas cortas de 45 minutos online grabadas para visualización flexible."
-                },
-                Tierra: {
-                    cuestionado: "Una estancia de un año es muy larga para startups en fases tempranas.",
-                    ajuste: "Ofrecer estancias cortas de prueba de 3 meses con opción a renovación anual."
-                },
-                Aire: {
-                    cuestionado: "Los productores ancianos no saben manejar la tecnología e-commerce.",
-                    ajuste: "Gestión centralizada del catálogo y logística por un administrador local del pueblo."
-                }
-            },
-            votaciones: {
-                Agua: 12,
-                Aire: 15,
-                Fuego: 9,
-                Tierra: 14
-            },
-            feedback: {
-                Agua: "Gran enfoque institucional para resolver la desconexión local.",
-                Aire: "Excelente rentabilidad a corto plazo y conexión con la tradición local.",
-                Fuego: "Propuesta con alto impacto ecológico y sostenibilidad.",
-                Tierra: "Concepto muy innovador para contrarrestar el estrés de las ciudades."
-            }
-        };
+// Kreatum Report Builder v2
+// Reads the detailed row-based CSV generated by the production platform.
 
-        // Lucide icon replacement helper
-        function initIcons() {
-            lucide.createIcons();
-            
-            // Handle element logo fallbacks cleanly if local paths fail to load
-            document.querySelectorAll('.onerror-fallback').forEach(img => {
-                img.onerror = function() {
-                    const el = this.getAttribute('data-element');
-                    const fallbackIconName = this.getAttribute('data-fallback-icon');
-                    
-                    if (el === 'agua') this.src = 'https://raw.githubusercontent.com/user-attachments/assets/b835ec44-c7eb-4fb8-bfec-607e477610ec';
-                    else if (el === 'aire') this.src = 'https://raw.githubusercontent.com/user-attachments/assets/691d5755-d6d7-463f-b3f3-0a77517c3be1';
-                    else if (el === 'fuego') this.src = 'https://raw.githubusercontent.com/user-attachments/assets/7be04a43-0941-47cc-9c60-a29938b8de31';
-                    else if (el === 'tierra') this.src = 'https://raw.githubusercontent.com/user-attachments/assets/48ff8d51-9ef0-4bb5-950c-3d20deee8e59';
-                    else if (el === 'kreatum') this.src = 'https://raw.githubusercontent.com/user-attachments/assets/384a51e6-1262-42c2-b5e1-8845347fa6fe';
-                    else {
-                        // Hide image, and unhide Lucide icon next to it if defined
-                        this.classList.add('hidden');
-                        const parent = this.parentElement;
-                        if (parent && fallbackIconName) {
-                            const icon = parent.querySelector('.fallback-icon');
-                            if (icon) {
-                                icon.classList.remove('hidden');
-                                lucide.createIcons();
-                            }
-                        }
-                    }
-                }
-            });
-        }
+const REPORT_TEAMS = ['Fuego', 'Agua', 'Tierra', 'Aire'];
+const TEAM_STYLES = {
+  Fuego: {
+    text: 'text-kreatum-red',
+    border: 'border-kreatum-red',
+    bg: 'bg-red-50/50',
+    softBorder: 'border-red-100',
+    badge: 'bg-red-500 text-white border-red-500',
+  },
+  Agua: {
+    text: 'text-kreatum-blue',
+    border: 'border-kreatum-blue',
+    bg: 'bg-blue-50/50',
+    softBorder: 'border-blue-100',
+    badge: 'bg-blue-500 text-white border-blue-500',
+  },
+  Tierra: {
+    text: 'text-kreatum-green',
+    border: 'border-kreatum-green',
+    bg: 'bg-green-50/50',
+    softBorder: 'border-green-100',
+    badge: 'bg-emerald-500 text-white border-emerald-500',
+  },
+  Aire: {
+    text: 'text-kreatum-turquoise',
+    border: 'border-kreatum-turquoise',
+    bg: 'bg-cyan-50/50',
+    softBorder: 'border-cyan-100',
+    badge: 'bg-cyan-500 text-white border-cyan-500',
+  },
+};
 
-        // On document ready
-        window.addEventListener('DOMContentLoaded', () => {
-            initCSVReader();
-            renderNextStepsEditor();
-            
-            // Load meta default values in the sidebar fields
-            document.getElementById('meta-report-title').value = sessionData.metadata.reportTitle;
-            document.getElementById('meta-report-subtitle').value = sessionData.metadata.reportSubtitle;
-            document.getElementById('meta-client').value = sessionData.metadata.client;
-            document.getElementById('meta-facilitator').value = sessionData.metadata.facilitator;
-            document.getElementById('meta-challenge').value = sessionData.metadata.challenge;
-            document.getElementById('meta-date').value = sessionData.metadata.date;
-            document.getElementById('meta-location').value = sessionData.metadata.location;
-            document.getElementById('meta-participants').value = sessionData.metadata.participants;
-            document.getElementById('meta-business-obj').value = sessionData.metadata.businessObjective;
-            document.getElementById('meta-context-obs').value = sessionData.metadata.contextObservations;
-            document.getElementById('meta-session-resp').value = sessionData.metadata.sessionResponsible;
-            
-            selectEditorTeam('Agua');
-            
-            updateMetadata();
-        });
+function createEmptyTeam(name) {
+  return {
+    name,
+    challenge: '',
+    perspective: '',
+    solution: '',
+    reformulatedSolution: '',
+    expectedResults: '',
+    audience: '',
+    strengths: '',
+    weaknesses: '',
+    pilot: '',
+    resources: '',
+    pitchStart: '',
+    pitchProblem: '',
+    pitchSolution: '',
+    pitchAction: '',
+    perspectives: [],
+    topPerspectives: [],
+    perspectiveVotes: [],
+    solutions: [],
+    topSolutions: [],
+    solutionVotes: [],
+    attacks: [],
+    defenses: [],
+  };
+}
 
-        // Setup CSV loading options
-        function initCSVReader() {
-            const dropZone = document.getElementById('drop-zone');
-            const fileInput = document.getElementById('csv-file-input');
+function createEmptySession() {
+  return {
+    loaded: false,
+    metadata: {
+      reportTitle: 'Informe de Resultados KREATUM™',
+      reportSubtitle: 'Resultados documentados durante el taller de co-creación.',
+      client: '',
+      facilitator: '',
+      challenge: '',
+      date: '',
+      endDate: '',
+      location: '',
+      roomCode: '',
+      gameId: '',
+      status: '',
+      participants: null,
+      businessObjective: '',
+      contextObservations: '',
+      sessionResponsible: '',
+    },
+    teams: Object.fromEntries(REPORT_TEAMS.map((team) => [team, createEmptyTeam(team)])),
+    nextSteps: [],
+    metrics: {
+      totalContributions: 0,
+      ideasCount: 0,
+      attacksCount: 0,
+      defensesCount: 0,
+      finalSolutions: 0,
+    },
+    rawInputs: Object.fromEntries(REPORT_TEAMS.map((team) => [team, []])),
+    rawIdeas: Object.fromEntries(REPORT_TEAMS.map((team) => [team, []])),
+    contraste: Object.fromEntries(REPORT_TEAMS.map((team) => [
+      team,
+      { cuestionado: '', ajuste: '' },
+    ])),
+    votaciones: Object.fromEntries(REPORT_TEAMS.map((team) => [team, 0])),
+    feedback: Object.fromEntries(REPORT_TEAMS.map((team) => [team, ''])),
+  };
+}
 
-            dropZone.addEventListener('click', () => fileInput.click());
+let sessionData = createEmptySession();
+window.__kreatumReportVersion = '2.0';
 
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    processCSVFile(e.target.files[0]);
-                    fileInput.value = ''; // Reset value to allow loading the same file again
-                }
-            });
+function normalizeKey(value) {
+  return String(value || '')
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.classList.add('border-kreatum-purple', 'bg-slate-800/40');
-            });
+function normalizeTeam(value) {
+  const normalized = normalizeKey(value);
+  return REPORT_TEAMS.find((team) => normalizeKey(team) === normalized) || '';
+}
 
-            dropZone.addEventListener('dragleave', () => {
-                dropZone.classList.remove('border-kreatum-purple', 'bg-slate-800/40');
-            });
+function cleanValue(value) {
+  return String(value ?? '').trim();
+}
 
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('border-kreatum-purple', 'bg-slate-800/40');
-                if (e.dataTransfer.files.length > 0) {
-                    processCSVFile(e.dataTransfer.files[0]);
-                }
-            });
-        }
+const PRESERVED_REPORT_TERMS = new Map([
+  ['ai', 'AI'],
+  ['api', 'API'],
+  ['b2b', 'B2B'],
+  ['b2c', 'B2C'],
+  ['ceo', 'CEO'],
+  ['cfo', 'CFO'],
+  ['coo', 'COO'],
+  ['crm', 'CRM'],
+  ['cto', 'CTO'],
+  ['erp', 'ERP'],
+  ['ia', 'IA'],
+  ['kpi', 'KPI'],
+  ['kpis', 'KPIs'],
+  ['mvp', 'MVP'],
+  ['okr', 'OKR'],
+  ['okrs', 'OKRs'],
+  ['ong', 'ONG'],
+  ['roi', 'ROI'],
+  ['rrhh', 'RRHH'],
+  ['saas', 'SaaS'],
+  ['seo', 'SEO'],
+  ['ui', 'UI'],
+  ['ux', 'UX'],
+  ['ux/ui', 'UX/UI'],
+  ['vercel', 'Vercel'],
+  ['firestore', 'Firestore'],
+  ['kreatum', 'KREATUM™'],
+]);
 
-        function loadSampleData() {
-            console.log("Loading preset CSV data...");
-            const sampleCSV = `"ID Partida","Código Sala","Estado","Fecha Creación","Fecha Fin","Equipo","Fase","Reto","Perspectiva","Solución","Solución Reformulada"\n` +
-                `"hxJpFGNh7RBD3eXdGMN6","DSJULR","completed","09 jun 2026, 17:49","10 jun 2026, 00:04","Agua","Proyectar","Cómo impulsar y fijar población emprendedora en entornos rurales aprovechando la innovación digital.","COMO HACER UNA CARRERA DEL SALMON EN EL RURAL","clonar chemis en el rural","Creamos un programa pionero de innovación política basada en el liderazgo y el diseño regenerativo, que incluye trabajar las habilidades que harán que los alcaldes del presente puedan desarrollar sus propias iniciativas basadas en la esencia de sus territorios y en la colaboración mutua entre aldeas.\\n\\nMVP: videoconferencia con 5 alcaldes una mañana para testear"\n` +
-                `"hxJpFGNh7RBD3eXdGMN6","DSJULR","completed","09 jun 2026, 17:49","10 jun 2026, 00:04","Aire","Sublimar","Cómo impulsar y fijar población emprendedora en entornos rurales aprovechando la innovación digital.","que la población gane más dinero aquí que en el resto de España","hiper ennichar la economía de un pueblo conectado con la tradición (pan, queso)","Escoger un nicho con alta demanda, baja resistencia y aplicabilidad global. Eliminar barreras de distribución física y epistemológica. Crear una economía próspera para todo el pueblo a posteridad. \\n\\nEl Pueblo Inmortal\\nDonde se juntan tradicion e innovacion \\nSan Xoan del Rio, el Pueblo Inmortal\\nEl rural no es el sitio del que te vas, sino el sitio donde vas a construir"\n` +
-                `"hxJpFGNh7RBD3eXdGMN6","DSJULR","completed","09 jun 2026, 17:49","10 jun 2026, 00:04","Fuego","Proyectar","Cómo impulsar y fijar población emprendedora en entornos rurales aprovechando la innovación digital.","aumentar la longevidad del ecosistema emprendedor y ","comidas e ingredientes locales y naturales ","Vamos a proveer comidas e ingredientes locales y naturales con denominacion de origen, con una filosofía regenerativa y una buena gestión agrícola, Se facilitara una plataforma para gestion y comunicacion de stock y producción.   Las semillas actuales vienen de un banco local y nacional, con variedad como para tener una dieta equilibrada, para 70 km cuadrados y alto nivel de produccion en todo el terreno.con capacidad de cultivo extensivo, variado y optimizado. Se ha validado el uso de coches autónomos en la localidad , habilitando el transporte de personas y el uso de tecnologïa fotovoltaica, favoreciendo tecnologïas renovables y captura de dióxido de carbono. Nuestra tecnología y posicionamiento geoestratégico nos permite proporcionar un procesamiento de alimentos y productos con slow cooking. Se preve restauración arquitectónica que facilitará la venta y distribución de los alimentos y proveerá sesiones de ocio. "\n` +
-                `"hxJpFGNh7RBD3eXdGMN6","DSJULR","completed","09 jun 2026, 17:49","10 jun 2026, 00:04","Tierra","Proyectar","Cómo impulsar y fijar población emprendedora en entornos rurales aprovechando la innovación digital.","como podriamos hacer para los emprendedores entiendan como repercute la calma en los procesos creativos","dieta de sueño y alimentación natural ","La unica forma de que alguien tome algo es experimentandolo por eso creamos rural valley para que los emprendedores puedan vivir una experiencia completa durante un año como el sueño de calidad y una alimentacion de km 0 favorece la creatividad la toma de decisiones .\\nEs un laboratorio vivo en tiempo real, Don de podemos demostracion datos reales y medibles el exito de las startups que se creen en rural valley"`;
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-            parseAndLoadCSV(sampleCSV);
-        }
+function capitalizeSentenceStarts(text) {
+  let shouldCapitalize = true;
+  return Array.from(text).map((char) => {
+    if (/\p{L}/u.test(char)) {
+      const nextChar = shouldCapitalize ? char.toLocaleUpperCase('es-ES') : char;
+      shouldCapitalize = false;
+      return nextChar;
+    }
+    if (/[.!?]/.test(char)) shouldCapitalize = true;
+    return char;
+  }).join('');
+}
 
-        function processCSVFile(file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const text = e.target.result;
-                parseAndLoadCSV(text);
-            };
-            reader.readAsText(file, 'UTF-8');
-        }
+function normalizeReportCasing(value) {
+  const cleaned = cleanValue(value);
+  if (!cleaned) return '';
 
-        function parseAndLoadCSV(csvText) {
-            try {
-                // Auto-detect separator (comma or semicolon)
-                let separator = ',';
-                const firstLine = csvText.split('\n')[0];
-                const commaCount = (firstLine.match(/,/g) || []).length;
-                const semicolonCount = (firstLine.match(/;/g) || []).length;
-                if (semicolonCount > commaCount) {
-                    separator = ';';
-                }
-                console.log(`Detected CSV delimiter: "${separator}" (commas: ${commaCount}, semicolons: ${semicolonCount})`);
+  return cleaned.split('\n').map((line) => {
+    const [, leading = '', body = '', trailing = ''] = line.match(/^(\s*)(.*?)(\s*)$/) || [];
+    if (!body) return line;
 
-                // Simple CSV Parser that handles double quotes and newlines
-                const lines = [];
-                let row = [""];
-                let inQuotes = false;
-                
-                for (let i = 0; i < csvText.length; i++) {
-                    const char = csvText[i];
-                    const nextChar = csvText[i+1];
-                    
-                    if (char === '"') {
-                        if (inQuotes && nextChar === '"') {
-                            row[row.length - 1] += '"';
-                            i++;
-                        } else {
-                            inQuotes = !inQuotes;
-                        }
-                    } else if (char === separator && !inQuotes) {
-                        row.push("");
-                    } else if ((char === '\r' || char === '\n') && !inQuotes) {
-                        if (char === '\r' && nextChar === '\n') i++;
-                        lines.push(row);
-                        row = [""];
-                        inQuotes = false;
-                    } else {
-                        row[row.length - 1] += char;
-                    }
-                }
-                if (row.length > 1 || row[0] !== "") {
-                    lines.push(row);
-                }
+    const protectedFragments = [];
+    const protect = (match) => {
+      const placeholder = `§${protectedFragments.length}§`;
+      protectedFragments.push(match);
+      return placeholder;
+    };
 
-                if (lines.length < 2) {
-                    throw new Error("El archivo CSV no contiene suficientes líneas de datos.");
-                }
+    let formatted = body.replace(
+      /(https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w.-]+\.[a-z]{2,})/gi,
+      protect,
+    );
+    formatted = formatted.toLocaleLowerCase('es-ES');
 
-                // Normalize headers: lowercase and remove BOM
-                const rawHeaders = lines[0].map(h => h.trim().replace(/^\ufeff/, ''));
-                const headers = rawHeaders.map(h => h.toLowerCase());
-                console.log("CSV Normalised Headers:", headers);
+    [...PRESERVED_REPORT_TERMS.entries()]
+      .sort((a, b) => b[0].length - a[0].length)
+      .forEach(([term, replacement]) => {
+        const pattern = new RegExp(`(^|[^\\p{L}\\p{N}])(${escapeRegExp(term)})(?=$|[^\\p{L}\\p{N}])`, 'giu');
+        formatted = formatted.replace(pattern, (_, prefix) => `${prefix}${replacement}`);
+      });
 
-                const isSingleGame = headers.includes('equipo') && (headers.includes('pitch - inicio') || headers.includes('pitch-inicio'));
-                const isHistoryGame = headers.includes('id partida') || headers.includes('código sala') || headers.includes('codigo sala') || headers.includes('estado');
+    formatted = capitalizeSentenceStarts(formatted);
+    protectedFragments.forEach((fragment, index) => {
+      formatted = formatted.replace(`§${index}§`, fragment);
+    });
 
-                const parsedInputs = { Agua: [], Aire: [], Fuego: [], Tierra: [] };
-                const parsedIdeas = { Agua: [], Aire: [], Fuego: [], Tierra: [] };
+    return `${leading}${formatted}${trailing}`;
+  }).join('\n');
+}
 
-                const teamIdx = headers.indexOf('equipo');
-                if (teamIdx === -1) {
-                    throw new Error("No se encontró la columna 'Equipo' en el archivo CSV.");
-                }
+function addUnique(target, value) {
+  const cleaned = cleanValue(value);
+  if (cleaned && !target.includes(cleaned)) target.push(cleaned);
+}
 
-                const challengeIdx = headers.indexOf('reto');
-                
-                let perspectiveIdx = headers.indexOf('perspectiva definitiva');
-                if (perspectiveIdx === -1) perspectiveIdx = headers.indexOf('perspectiva');
-                if (perspectiveIdx === -1) perspectiveIdx = headers.indexOf('perspectivas');
-                if (perspectiveIdx === -1) perspectiveIdx = headers.indexOf('aportaciones');
-                if (perspectiveIdx === -1) perspectiveIdx = headers.indexOf('aportación');
-                if (perspectiveIdx === -1) perspectiveIdx = headers.indexOf('aportacion');
-                
-                let solutionIdx = headers.indexOf('solución definitiva');
-                if (solutionIdx === -1) solutionIdx = headers.indexOf('solucion definitiva');
-                if (solutionIdx === -1) solutionIdx = headers.indexOf('solución');
-                if (solutionIdx === -1) solutionIdx = headers.indexOf('solucion');
-                if (solutionIdx === -1) solutionIdx = headers.indexOf('soluciones');
-                if (solutionIdx === -1) solutionIdx = headers.indexOf('ideas');
-                if (solutionIdx === -1) solutionIdx = headers.indexOf('idea');
-                
-                const refSolIdx = headers.indexOf('solución reformulada') !== -1 ? headers.indexOf('solución reformulada') : headers.indexOf('solucion reformulada');
+function setIndexedValue(target, rawIndex, value) {
+  const cleaned = cleanValue(value);
+  if (!cleaned) return;
+  const parsedIndex = Number.parseInt(rawIndex, 10);
+  const index = Number.isFinite(parsedIndex) && parsedIndex > 0 ? parsedIndex - 1 : target.length;
+  target[index] = cleaned;
+}
 
-                if (isSingleGame) {
-                    const expResIdx = headers.indexOf('resultados esperados');
-                    const audienceIdx = headers.indexOf('audiencia');
-                    const strengthsIdx = headers.indexOf('fortalezas');
-                    const weaknessesIdx = headers.indexOf('debiliades') !== -1 ? headers.indexOf('debiliades') : headers.indexOf('debilidades');
-                    const pilotIdx = headers.indexOf('prueba piloto');
-                    const resourcesIdx = headers.indexOf('recursos');
-                    const pStartIdx = headers.indexOf('pitch - inicio') !== -1 ? headers.indexOf('pitch - inicio') : headers.indexOf('pitch-inicio');
-                    const pProbIdx = headers.indexOf('pitch - problema') !== -1 ? headers.indexOf('pitch - problema') : headers.indexOf('pitch-problema');
-                    const pSolIdx = headers.indexOf('pitch - solución') !== -1 ? headers.indexOf('pitch - solución') : headers.indexOf('pitch - solucion');
-                    const pActIdx = headers.indexOf('pitch - acción') !== -1 ? headers.indexOf('pitch - acción') : headers.indexOf('pitch - accion');
+function compactArray(values) {
+  return values.filter((value) => cleanValue(value));
+}
 
-                    for (let i = 1; i < lines.length; i++) {
-                        const data = lines[i];
-                        if (data.length < headers.length) continue;
-                        
-                        let teamName = data[teamIdx] ? data[teamIdx].trim() : '';
-                        if (!teamName) continue;
-                        
-                        // Normalize team name (Capitalize first letter, lowercase rest)
-                        teamName = teamName.charAt(0).toUpperCase() + teamName.slice(1).toLowerCase();
-                        
-                        if (sessionData.teams[teamName]) {
-                            const t = sessionData.teams[teamName];
-                            if (challengeIdx !== -1 && data[challengeIdx]) t.challenge = data[challengeIdx];
-                            if (perspectiveIdx !== -1 && data[perspectiveIdx]) {
-                                t.perspective = data[perspectiveIdx];
-                                const val = data[perspectiveIdx].trim();
-                                if (val && !parsedInputs[teamName].includes(val)) {
-                                    parsedInputs[teamName].push(val);
-                                }
-                            }
-                            if (solutionIdx !== -1 && data[solutionIdx]) {
-                                t.solution = data[solutionIdx];
-                                const val = data[solutionIdx].trim();
-                                if (val && !parsedIdeas[teamName].includes(val)) {
-                                    parsedIdeas[teamName].push(val);
-                                }
-                            }
-                            if (refSolIdx !== -1 && data[refSolIdx]) t.reformulatedSolution = data[refSolIdx];
-                            if (expResIdx !== -1 && data[expResIdx]) t.expectedResults = data[expResIdx];
-                            if (audienceIdx !== -1 && data[audienceIdx]) t.audience = data[audienceIdx];
-                            if (strengthsIdx !== -1 && data[strengthsIdx]) t.strengths = data[strengthsIdx];
-                            if (weaknessesIdx !== -1 && data[weaknessesIdx]) t.weaknesses = data[weaknessesIdx];
-                            if (pilotIdx !== -1 && data[pilotIdx]) t.pilot = data[pilotIdx];
-                            if (resourcesIdx !== -1 && data[resourcesIdx]) t.resources = data[resourcesIdx];
-                            if (pStartIdx !== -1 && data[pStartIdx]) t.pitchStart = data[pStartIdx];
-                            if (pProbIdx !== -1 && data[pProbIdx]) t.pitchProblem = data[pProbIdx];
-                            if (pSolIdx !== -1 && data[pSolIdx]) t.pitchSolution = data[pSolIdx];
-                            if (pActIdx !== -1 && data[pActIdx]) t.pitchAction = data[pActIdx];
-                        }
-                    }
+function parseCSVRows(csvText) {
+  const firstLine = csvText.split(/\r?\n/, 1)[0] || '';
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semicolonCount = (firstLine.match(/;/g) || []).length;
+  const separator = semicolonCount > commaCount ? ';' : ',';
+  const rows = [];
+  let row = [''];
+  let inQuotes = false;
 
-                    if (lines[1] && challengeIdx !== -1 && lines[1][challengeIdx]) {
-                        sessionData.metadata.challenge = lines[1][challengeIdx];
-                        document.getElementById('meta-challenge').value = lines[1][challengeIdx];
-                    }
-                    alert("¡Informe de Partida individual cargado con éxito! Se han actualizado las diapositivas y el editor lateral.");
+  for (let index = 0; index < csvText.length; index += 1) {
+    const char = csvText[index];
+    const nextChar = csvText[index + 1];
 
-                } else {
-                    // History Game or generic team data loading
-                    let code = 'DSJULR';
-                    let dateStr = '09 de junio de 2026';
-                    
-                    for (let i = 1; i < lines.length; i++) {
-                        const data = lines[i];
-                        if (data.length < headers.length) continue;
-                        
-                        let teamName = data[teamIdx] ? data[teamIdx].trim() : '';
-                        if (!teamName) continue;
-                        
-                        teamName = teamName.charAt(0).toUpperCase() + teamName.slice(1).toLowerCase();
-                        
-                        if (sessionData.teams[teamName]) {
-                            const t = sessionData.teams[teamName];
-                            if (challengeIdx !== -1 && data[challengeIdx]) {
-                                t.challenge = data[challengeIdx];
-                                sessionData.metadata.challenge = data[challengeIdx];
-                            }
-                            if (perspectiveIdx !== -1 && data[perspectiveIdx]) {
-                                t.perspective = data[perspectiveIdx];
-                                const val = data[perspectiveIdx].trim();
-                                if (val && !parsedInputs[teamName].includes(val)) {
-                                    parsedInputs[teamName].push(val);
-                                }
-                            }
-                            if (solutionIdx !== -1 && data[solutionIdx]) {
-                                t.solution = data[solutionIdx];
-                                const val = data[solutionIdx].trim();
-                                if (val && !parsedIdeas[teamName].includes(val)) {
-                                    parsedIdeas[teamName].push(val);
-                                }
-                            }
-                            if (refSolIdx !== -1 && data[refSolIdx]) t.reformulatedSolution = data[refSolIdx];
-                        }
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        row[row.length - 1] += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === separator && !inQuotes) {
+      row.push('');
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') index += 1;
+      if (row.some((cell) => cleanValue(cell))) rows.push(row);
+      row = [''];
+    } else {
+      row[row.length - 1] += char;
+    }
+  }
 
-                        const roomCodeIdx = headers.indexOf('código sala') !== -1 ? headers.indexOf('código sala') : headers.indexOf('codigo sala');
-                        const dateIdx = headers.indexOf('fecha creación') !== -1 ? headers.indexOf('fecha creación') : headers.indexOf('fecha creacion');
+  if (row.some((cell) => cleanValue(cell))) rows.push(row);
+  if (rows.length < 2) throw new Error('El archivo CSV no contiene datos suficientes.');
+  return rows;
+}
 
-                        if (roomCodeIdx !== -1 && data[roomCodeIdx]) code = data[roomCodeIdx];
-                        if (dateIdx !== -1 && data[dateIdx]) dateStr = data[dateIdx].split(',')[0];
-                    }
+function toRecords(rows) {
+  const rawHeaders = rows[0].map((header) => cleanValue(header).replace(/^\uFEFF/, ''));
+  const normalizedHeaders = rawHeaders.map(normalizeKey);
+  return {
+    headers: normalizedHeaders,
+    records: rows.slice(1).map((cells) => {
+      const record = {};
+      normalizedHeaders.forEach((header, index) => {
+        record[header] = cleanValue(cells[index]);
+      });
+      return record;
+    }),
+  };
+}
 
-                    sessionData.metadata.roomCode = code;
-                    sessionData.metadata.date = dateStr;
-                    document.getElementById('meta-date').value = dateStr;
-                    document.getElementById('meta-challenge').value = sessionData.metadata.challenge || "Desafío de Innovación Rural";
+function getRecordValue(record, ...keys) {
+  for (const key of keys) {
+    const value = record[normalizeKey(key)];
+    if (cleanValue(value)) return cleanValue(value);
+  }
+  return '';
+}
 
-                    alert(isHistoryGame ? `¡Historial cargado para la sala ${code}! Se han actualizado los textos de las fases en todas las diapositivas.` : "¡Datos de partida cargados con éxito!");
-                }
+function loadMetadata(record) {
+  const metadata = sessionData.metadata;
+  metadata.gameId = getRecordValue(record, 'ID Partida');
+  metadata.roomCode = getRecordValue(record, 'Código Sala', 'Codigo Sala');
+  metadata.status = getRecordValue(record, 'Estado');
+  metadata.date = getRecordValue(record, 'Fecha Creación', 'Fecha Creacion').split(',')[0];
+  metadata.endDate = getRecordValue(record, 'Fecha Fin').split(',')[0];
+  metadata.client = getRecordValue(record, 'Cliente');
+  metadata.facilitator = getRecordValue(record, 'Facilitador');
+  metadata.sessionResponsible = metadata.facilitator;
+  metadata.challenge = getRecordValue(record, 'Reto Principal', 'Reto');
+  metadata.reportSubtitle = 'Resultados documentados del taller de co-creación.';
+}
 
-                // Update raw inputs and ideas with parsed CSV values if any were found
-                let totalContributionsCount = 0;
-                let totalIdeasCount = 0;
-                ['Agua', 'Aire', 'Fuego', 'Tierra'].forEach(team => {
-                    if (parsedInputs[team].length > 0) {
-                        sessionData.rawInputs[team] = parsedInputs[team];
-                    }
-                    if (parsedIdeas[team].length > 0) {
-                        sessionData.rawIdeas[team] = parsedIdeas[team];
-                    }
-                    totalContributionsCount += sessionData.rawInputs[team].length;
-                    totalIdeasCount += sessionData.rawIdeas[team].length;
-                });
-                
-                // Recalculate metrics based on parsed values
-                sessionData.metrics.totalContributions = totalContributionsCount;
-                sessionData.metrics.ideasCount = totalIdeasCount;
+function parseDetailedRecords(records) {
+  const firstRecord = records.find((record) => Object.values(record).some(cleanValue)) || {};
+  loadMetadata(firstRecord);
 
-                // Refresh active team input values
-                const currentTeam = document.getElementById('editor-active-team').value;
-                selectEditorTeam(currentTeam);
-                
-                updateMetadata();
+  records.forEach((record) => {
+    const teamName = normalizeTeam(getRecordValue(record, 'Equipo'));
+    const category = normalizeKey(getRecordValue(record, 'Categoría', 'Categoria'));
+    const field = normalizeKey(getRecordValue(record, 'Campo'));
+    const value = getRecordValue(record, 'Valor');
+    const rowChallenge = getRecordValue(record, 'Reto Principal');
 
-            } catch (err) {
-                console.error(err);
-                alert("Error al procesar el archivo CSV: " + err.message);
-            }
-        }
+    if (!sessionData.metadata.challenge && rowChallenge) {
+      sessionData.metadata.challenge = rowChallenge;
+    }
+    if (!value) return;
 
-        // Update active team inputs
-        function selectEditorTeam(teamName) {
-            document.getElementById('editor-active-team').value = teamName;
-            
-            // Handle buttons styling
-            ['Agua', 'Aire', 'Fuego', 'Tierra'].forEach(t => {
-                const btn = document.getElementById(`tab-btn-${t}`);
-                if (t === teamName) {
-                    btn.className = "flex-1 text-[10px] font-bold py-1 rounded-md bg-kreatum-purple text-white shadow-sm";
-                } else {
-                    btn.className = "flex-1 text-[10px] font-bold py-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-900/60";
-                }
-            });
+    if (!teamName) {
+      if (field === 'reto principal') sessionData.metadata.challenge = value;
+      return;
+    }
 
-            // Load data into forms
-            const t = sessionData.teams[teamName];
-            document.getElementById('team-perspective').value = t.perspective || '';
-            document.getElementById('team-solution').value = t.solution || '';
-            document.getElementById('team-reformulated').value = t.reformulatedSolution || '';
-            document.getElementById('team-expected').value = t.expectedResults || '';
-            document.getElementById('team-audience').value = t.audience || '';
-            document.getElementById('team-pilot').value = t.pilot || '';
-            document.getElementById('team-strengths').value = t.strengths || '';
-            document.getElementById('team-weaknesses').value = t.weaknesses || '';
-            document.getElementById('team-resources').value = t.resources || '';
-            document.getElementById('team-pitch-start').value = t.pitchStart || '';
-            document.getElementById('team-pitch-problem').value = t.pitchProblem || '';
-            document.getElementById('team-pitch-solution').value = t.pitchSolution || '';
-            document.getElementById('team-pitch-action').value = t.pitchAction || '';
-        }
+    const team = sessionData.teams[teamName];
+    const rowIndex = getRecordValue(record, 'Índice', 'Indice');
 
-        function updateTeamData() {
-            const teamName = document.getElementById('editor-active-team').value;
-            const t = sessionData.teams[teamName];
-            
-            t.perspective = document.getElementById('team-perspective').value;
-            t.solution = document.getElementById('team-solution').value;
-            t.reformulatedSolution = document.getElementById('team-reformulated').value;
-            t.expectedResults = document.getElementById('team-expected').value;
-            t.audience = document.getElementById('team-audience').value;
-            t.pilot = document.getElementById('team-pilot').value;
-            t.strengths = document.getElementById('team-strengths').value;
-            t.weaknesses = document.getElementById('team-weaknesses').value;
-            t.resources = document.getElementById('team-resources').value;
-            t.pitchStart = document.getElementById('team-pitch-start').value;
-            t.pitchProblem = document.getElementById('team-pitch-problem').value;
-            t.pitchSolution = document.getElementById('team-pitch-solution').value;
-            t.pitchAction = document.getElementById('team-pitch-action').value;
-            
-            renderSlides();
-        }
+    if (field === 'perspectiva' && category === 'ideas generadas') {
+      addUnique(team.perspectives, value);
+      return;
+    }
+    if (field === 'perspectiva preseleccionada') {
+      setIndexedValue(team.topPerspectives, rowIndex, value);
+      return;
+    }
+    if (field === 'votos de perspectiva') {
+      setIndexedValue(team.perspectiveVotes, rowIndex, value);
+      return;
+    }
+    if (field === 'perspectiva definitiva') {
+      team.perspective = value;
+      return;
+    }
+    if (field === 'solucion' && category === 'ideas generadas') {
+      addUnique(team.solutions, value);
+      return;
+    }
+    if (field === 'solucion preseleccionada') {
+      setIndexedValue(team.topSolutions, rowIndex, value);
+      return;
+    }
+    if (field === 'votos de solucion') {
+      setIndexedValue(team.solutionVotes, rowIndex, value);
+      return;
+    }
+    if (field === 'solucion definitiva') {
+      team.solution = value;
+      return;
+    }
+    if (field === 'solucion reformulada') {
+      team.reformulatedSolution = value;
+      return;
+    }
+    if (field === 'resultados esperados') {
+      team.expectedResults = value;
+      return;
+    }
+    if (field === 'ataque enviado' && category === 'ataques registrados') {
+      team.attacks.push({
+        content: value,
+        fromTeam: normalizeTeam(getRecordValue(record, 'Equipo Origen')) || teamName,
+        toTeam: normalizeTeam(getRecordValue(record, 'Equipo Destino')),
+        timestamp: getRecordValue(record, 'Fecha Registro'),
+        id: getRecordValue(record, 'ID Registro'),
+      });
+      return;
+    }
+    if (field === 'mitigacion' && category === 'defensas y mitigaciones') {
+      team.defenses.push({
+        content: value,
+        fromTeam: normalizeTeam(getRecordValue(record, 'Equipo Origen')),
+        toTeam: normalizeTeam(getRecordValue(record, 'Equipo Destino')) || teamName,
+        timestamp: getRecordValue(record, 'Fecha Registro'),
+        relatedId: getRecordValue(record, 'ID Relacionado'),
+      });
+      return;
+    }
 
-        // Update metadata parameters
-        function updateMetadata() {
-            sessionData.metadata.reportTitle = document.getElementById('meta-report-title').value;
-            sessionData.metadata.reportSubtitle = document.getElementById('meta-report-subtitle').value;
-            sessionData.metadata.client = document.getElementById('meta-client').value;
-            sessionData.metadata.facilitator = document.getElementById('meta-facilitator').value;
-            sessionData.metadata.challenge = document.getElementById('meta-challenge').value;
-            sessionData.metadata.date = document.getElementById('meta-date').value;
-            sessionData.metadata.location = document.getElementById('meta-location').value;
-            sessionData.metadata.participants = parseInt(document.getElementById('meta-participants').value) || 16;
-            sessionData.metadata.businessObjective = document.getElementById('meta-business-obj').value;
-            sessionData.metadata.contextObservations = document.getElementById('meta-context-obs').value;
-            sessionData.metadata.sessionResponsible = document.getElementById('meta-session-resp').value;
-            
-            renderSlides();
-        }
+    const optionalFields = {
+      audiencia: 'audience',
+      fortalezas: 'strengths',
+      debilidades: 'weaknesses',
+      'prueba piloto / prototipo': 'pilot',
+      'prueba piloto': 'pilot',
+      'recursos necesarios': 'resources',
+      '1. captacion': 'pitchStart',
+      '2. accion': 'pitchProblem',
+      '3. testeo': 'pitchSolution',
+      '4. conclusiones': 'pitchAction',
+    };
+    if (optionalFields[field]) team[optionalFields[field]] = value;
+  });
+}
 
-        // Render Next Steps editor list
-        function renderNextStepsEditor() {
-            const container = document.getElementById('next-steps-editor');
-            container.innerHTML = '';
-            
-            sessionData.nextSteps.forEach((step, idx) => {
-                const stepEl = document.createElement('div');
-                stepEl.className = 'bg-slate-800/80 p-3 rounded-lg border border-slate-700/60 relative flex flex-col gap-2';
-                stepEl.innerHTML = `
-                    <button onclick="removeNextStep(${idx})" class="absolute top-2 right-2 text-slate-500 hover:text-red-400">
-                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                    </button>
-                    <div>
-                        <label class="text-[9px] uppercase font-bold text-slate-400">Acción</label>
-                        <input type="text" value="${step.action}" oninput="updateNextStep(${idx}, 'action', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white outline-none">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="text-[9px] uppercase font-bold text-slate-400">Responsable</label>
-                            <input type="text" value="${step.owner}" oninput="updateNextStep(${idx}, 'owner', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white outline-none">
-                        </div>
-                        <div>
-                            <label class="text-[9px] uppercase font-bold text-slate-400">Plazo</label>
-                            <input type="text" value="${step.deadline}" oninput="updateNextStep(${idx}, 'deadline', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white outline-none">
-                        </div>
-                    </div>
-                `;
-                container.appendChild(stepEl);
-            });
-            initIcons();
-        }
+function parseLegacyRecords(records) {
+  const firstRecord = records.find((record) => Object.values(record).some(cleanValue)) || {};
+  loadMetadata(firstRecord);
 
-        function updateNextStep(idx, field, value) {
-            sessionData.nextSteps[idx][field] = value;
-            renderSlides();
-        }
+  records.forEach((record) => {
+    const teamName = normalizeTeam(getRecordValue(record, 'Equipo'));
+    if (!teamName) return;
+    const team = sessionData.teams[teamName];
+    team.challenge = getRecordValue(record, 'Reto');
+    team.perspective = getRecordValue(record, 'Perspectiva definitiva', 'Perspectiva');
+    team.solution = getRecordValue(record, 'Solución definitiva', 'Solución', 'Solucion');
+    team.reformulatedSolution = getRecordValue(record, 'Solución reformulada', 'Solucion reformulada');
+    team.expectedResults = getRecordValue(record, 'Resultados esperados');
+    team.audience = getRecordValue(record, 'Audiencia');
+    team.strengths = getRecordValue(record, 'Fortalezas');
+    team.weaknesses = getRecordValue(record, 'Debilidades');
+    team.pilot = getRecordValue(record, 'Prueba piloto');
+    team.resources = getRecordValue(record, 'Recursos');
+    team.pitchStart = getRecordValue(record, 'Pitch - Inicio');
+    team.pitchProblem = getRecordValue(record, 'Pitch - Problema');
+    team.pitchSolution = getRecordValue(record, 'Pitch - Solución', 'Pitch - Solucion');
+    team.pitchAction = getRecordValue(record, 'Pitch - Acción', 'Pitch - Accion');
+    addUnique(team.perspectives, team.perspective);
+    addUnique(team.solutions, team.solution);
+  });
+}
 
-        function addNextStep() {
-            sessionData.nextSteps.push({ action: "Nueva tarea pendiente", owner: "Responsable", deadline: "Plazo" });
-            renderNextStepsEditor();
-            renderSlides();
-        }
+function finalizeImportedData() {
+  REPORT_TEAMS.forEach((teamName) => {
+    const team = sessionData.teams[teamName];
+    team.perspectives = compactArray(team.perspectives);
+    team.topPerspectives = compactArray(team.topPerspectives);
+    team.perspectiveVotes = compactArray(team.perspectiveVotes);
+    team.solutions = compactArray(team.solutions);
+    team.topSolutions = compactArray(team.topSolutions);
+    team.solutionVotes = compactArray(team.solutionVotes);
+    sessionData.rawInputs[teamName] = [...team.perspectives];
+    sessionData.rawIdeas[teamName] = [...team.solutions];
+    sessionData.votaciones[teamName] = team.perspectiveVotes.reduce(
+      (total, vote) => total + (Number.parseInt(vote, 10) || 0),
+      0,
+    );
+  });
 
-        function renderSlides() {
-            const wrapper = document.getElementById('report-slides-wrapper');
-            wrapper.innerHTML = '';
+  sessionData.metrics.totalContributions = REPORT_TEAMS.reduce(
+    (total, team) => total + sessionData.teams[team].perspectives.length,
+    0,
+  );
+  sessionData.metrics.ideasCount = REPORT_TEAMS.reduce(
+    (total, team) => total + sessionData.teams[team].solutions.length,
+    0,
+  );
+  sessionData.metrics.attacksCount = REPORT_TEAMS.reduce(
+    (total, team) => total + sessionData.teams[team].attacks.length,
+    0,
+  );
+  sessionData.metrics.defensesCount = REPORT_TEAMS.reduce(
+    (total, team) => total + sessionData.teams[team].defenses.length,
+    0,
+  );
+  sessionData.metrics.finalSolutions = REPORT_TEAMS.filter(
+    (team) => cleanValue(sessionData.teams[team].solution),
+  ).length;
+  sessionData.loaded = true;
+}
 
-            const meta = sessionData.metadata;
-            const teamsList = [sessionData.teams.Fuego, sessionData.teams.Agua, sessionData.teams.Tierra, sessionData.teams.Aire];
+function parseAndLoadCSV(csvText) {
+  try {
+    sessionData = createEmptySession();
+    const rows = parseCSVRows(csvText);
+    const { headers, records } = toRecords(rows);
+    const isDetailed = headers.includes('categoria') && headers.includes('campo') && headers.includes('valor');
 
-            // Helper to build slide footer
-            const getFooterHTML = (pageNum) => `
-                <div class="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-400 font-semibold font-sans">
-                    <span>Informe de Taller: ${meta.client}</span>
-                    <span>KREATUM™ Alquimia de Innovación</span>
-                    <span>Pág. ${pageNum}</span>
+    if (isDetailed) parseDetailedRecords(records);
+    else parseLegacyRecords(records);
+
+    finalizeImportedData();
+    syncSidebarFromData();
+    selectEditorTeam('Agua');
+    renderSlides();
+    updateCSVStatus();
+  } catch (error) {
+    console.error(error);
+    const status = document.getElementById('csv-status');
+    if (status) {
+      status.className = 'mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] leading-relaxed text-red-300';
+      status.textContent = `No se pudo cargar el CSV: ${error.message}`;
+    }
+    alert(`Error al procesar el archivo CSV: ${error.message}`);
+  }
+}
+
+function updateCSVStatus() {
+  const status = document.getElementById('csv-status');
+  if (!status || !sessionData.loaded) return;
+  status.className = 'mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] leading-relaxed text-emerald-200';
+  status.textContent = [
+    `Sala ${sessionData.metadata.roomCode || 'sin código'} cargada.`,
+    `${sessionData.metrics.totalContributions} perspectivas,`,
+    `${sessionData.metrics.ideasCount} soluciones,`,
+    `${sessionData.metrics.attacksCount} debilidades y`,
+    `${sessionData.metrics.defensesCount} mitigaciones.`,
+  ].join(' ');
+}
+
+function initCSVReader() {
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('csv-file-input');
+  if (!dropZone || !fileInput || dropZone.dataset.kreatumBound === 'true') return;
+  dropZone.dataset.kreatumBound = 'true';
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (event) => {
+    if (event.target.files?.[0]) processCSVFile(event.target.files[0]);
+    fileInput.value = '';
+  });
+  dropZone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    dropZone.classList.add('border-kreatum-purple', 'bg-slate-800/40');
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('border-kreatum-purple', 'bg-slate-800/40');
+  });
+  dropZone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    dropZone.classList.remove('border-kreatum-purple', 'bg-slate-800/40');
+    if (event.dataTransfer.files?.[0]) processCSVFile(event.dataTransfer.files[0]);
+  });
+}
+
+function processCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = (event) => parseAndLoadCSV(event.target.result);
+  reader.onerror = () => alert('No se pudo leer el archivo CSV.');
+  reader.readAsText(file, 'UTF-8');
+}
+
+function selectEditorTeam(teamName) {
+  const selectedTeam = sessionData.teams[teamName];
+  const activeInput = document.getElementById('editor-active-team');
+  if (!selectedTeam || !activeInput) return;
+  activeInput.value = teamName;
+
+  REPORT_TEAMS.forEach((team) => {
+    const button = document.getElementById(`tab-btn-${team}`);
+    if (!button) return;
+    button.className = team === teamName
+      ? 'flex-1 text-[10px] font-bold py-1 rounded-md transition-all bg-kreatum-purple text-white'
+      : 'flex-1 text-[10px] font-bold py-1 rounded-md transition-all text-slate-400 hover:text-white';
+  });
+
+  const fields = {
+    'team-perspective': selectedTeam.perspective,
+    'team-solution': selectedTeam.solution,
+    'team-reformulated': selectedTeam.reformulatedSolution,
+    'team-expected': selectedTeam.expectedResults,
+    'team-audience': selectedTeam.audience,
+    'team-pilot': selectedTeam.pilot,
+    'team-strengths': selectedTeam.strengths,
+    'team-weaknesses': selectedTeam.weaknesses,
+    'team-resources': selectedTeam.resources,
+    'team-pitch-start': selectedTeam.pitchStart,
+    'team-pitch-problem': selectedTeam.pitchProblem,
+    'team-pitch-solution': selectedTeam.pitchSolution,
+    'team-pitch-action': selectedTeam.pitchAction,
+  };
+  Object.entries(fields).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.value = value || '';
+  });
+}
+
+function updateTeamData() {
+  const teamName = document.getElementById('editor-active-team')?.value;
+  const team = sessionData.teams[teamName];
+  if (!team) return;
+  const getValue = (id) => cleanValue(document.getElementById(id)?.value);
+  team.perspective = getValue('team-perspective');
+  team.solution = getValue('team-solution');
+  team.reformulatedSolution = getValue('team-reformulated');
+  team.expectedResults = getValue('team-expected');
+  team.audience = getValue('team-audience');
+  team.pilot = getValue('team-pilot');
+  team.strengths = getValue('team-strengths');
+  team.weaknesses = getValue('team-weaknesses');
+  team.resources = getValue('team-resources');
+  team.pitchStart = getValue('team-pitch-start');
+  team.pitchProblem = getValue('team-pitch-problem');
+  team.pitchSolution = getValue('team-pitch-solution');
+  team.pitchAction = getValue('team-pitch-action');
+  renderSlides();
+}
+
+function renderNextStepsEditor() {
+  const container = document.getElementById('next-steps-editor');
+  if (container) container.innerHTML = '';
+}
+
+function addNextStep() {
+  // The CSV does not contain next steps. They are intentionally not generated.
+}
+
+function initIcons() {
+  if (window.lucide?.createIcons) window.lucide.createIcons();
+  document.querySelectorAll('.onerror-fallback').forEach((image) => {
+    image.onerror = function handleMissingImage() {
+      this.classList.add('hidden');
+      const fallback = this.parentElement?.querySelector('.fallback-icon');
+      if (fallback) fallback.classList.remove('hidden');
+      if (window.lucide?.createIcons) window.lucide.createIcons();
+    };
+  });
+}
+
+function syncSidebarFromData() {
+  const metadata = sessionData.metadata;
+  const values = {
+    'meta-report-title': metadata.reportTitle,
+    'meta-report-subtitle': metadata.reportSubtitle,
+    'meta-client': metadata.client,
+    'meta-facilitator': metadata.facilitator,
+    'meta-challenge': metadata.challenge,
+    'meta-date': metadata.date,
+    'meta-location': metadata.location,
+    'meta-participants': metadata.participants || '',
+    'meta-business-obj': metadata.businessObjective,
+    'meta-context-obs': metadata.contextObservations,
+    'meta-session-resp': metadata.sessionResponsible,
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.value = value;
+  });
+}
+
+function updateMetadata() {
+  const getValue = (id) => cleanValue(document.getElementById(id)?.value);
+  const participantValue = getValue('meta-participants');
+  sessionData.metadata.reportTitle = getValue('meta-report-title') || 'Informe de Resultados KREATUM™';
+  sessionData.metadata.reportSubtitle = getValue('meta-report-subtitle');
+  sessionData.metadata.client = getValue('meta-client');
+  sessionData.metadata.facilitator = getValue('meta-facilitator');
+  sessionData.metadata.challenge = getValue('meta-challenge');
+  sessionData.metadata.date = getValue('meta-date');
+  sessionData.metadata.location = getValue('meta-location');
+  sessionData.metadata.participants = participantValue ? Number.parseInt(participantValue, 10) : null;
+  sessionData.metadata.businessObjective = getValue('meta-business-obj');
+  sessionData.metadata.contextObservations = getValue('meta-context-obs');
+  sessionData.metadata.sessionResponsible = getValue('meta-session-resp');
+  renderSlides();
+}
+
+function escapeHTML(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function displayValue(value, fallback = 'No registrado en la partida') {
+  const cleaned = cleanValue(value);
+  return cleaned ? escapeHTML(cleaned).replace(/\n/g, '<br>') : fallback;
+}
+
+function displayReportText(value, fallback = 'No registrado en la partida') {
+  const cleaned = cleanValue(value);
+  return cleaned ? escapeHTML(normalizeReportCasing(cleaned)).replace(/\n/g, '<br>') : fallback;
+}
+
+function reportBadge(label, tone = 'dark') {
+  const className = tone === 'dark'
+    ? 'bg-slate-900 text-white border-slate-900 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.8)]'
+    : 'bg-white text-slate-700 border-slate-200 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.6)]';
+  return `
+    <span class="inline-flex items-center rounded-full border px-4 py-2 text-[10px] font-black uppercase tracking-[0.22em] ${className}">
+      ${escapeHTML(label)}
+    </span>
+  `;
+}
+
+function metadataCard(label, value, formatAsReportText = false) {
+  if (!cleanValue(value)) return '';
+  const displayedValue = formatAsReportText ? displayReportText(value, '') : displayValue(value, '');
+  return `
+    <div class="rounded-2xl border border-slate-100 bg-white/85 p-4 shadow-[0_18px_50px_-42px_rgba(15,23,42,0.45)]">
+      <span class="text-[9px] uppercase font-black tracking-[0.18em] text-slate-400">${escapeHTML(label)}</span>
+      <p class="mt-1.5 text-sm font-extrabold text-slate-800 leading-snug">${displayedValue}</p>
+    </div>
+  `;
+}
+
+function chunkByWeight(items, maxItems = 6, maxCharacters = 720) {
+  const chunks = [];
+  let current = [];
+  let currentCharacters = 0;
+
+  items.forEach((item) => {
+    const text = typeof item === 'string'
+      ? item
+      : `${item.attack?.content || ''}${item.defense?.content || ''}`;
+    const weight = Math.max(50, cleanValue(text).length);
+    if (current.length && (current.length >= maxItems || currentCharacters + weight > maxCharacters)) {
+      chunks.push(current);
+      current = [];
+      currentCharacters = 0;
+    }
+    current.push(item);
+    currentCharacters += weight;
+  });
+
+  if (current.length) chunks.push(current);
+  return chunks.length ? chunks : [[]];
+}
+
+function getPhaseIconHTML(phase, iconName) {
+  return `
+    <div class="flex items-center justify-center shrink-0">
+      <img src="./public/assets/logos/fases/${phase}.png" class="h-7 object-contain onerror-fallback" data-element="${phase}" data-fallback-icon="${iconName}" alt="">
+      <i data-lucide="${iconName}" class="w-7 h-7 text-kreatum-purple hidden fallback-icon"></i>
+    </div>
+  `;
+}
+
+function renderSlides() {
+  const wrapper = document.getElementById('report-slides-wrapper');
+  if (!wrapper) return;
+  wrapper.innerHTML = '';
+
+  if (!sessionData.loaded) {
+    const emptySlide = document.createElement('div');
+    emptySlide.className = 'slide-container justify-center items-center text-center';
+    emptySlide.innerHTML = `
+      <img src="./public/logo.png" alt="KREATUM™ Logo" class="h-16 object-contain mb-8 onerror-fallback" data-element="kreatum">
+      <p class="text-xs uppercase font-extrabold tracking-[0.25em] text-kreatum-purple mb-3">Generador de informes</p>
+      <h2 class="text-4xl font-serif font-black text-slate-900">Carga un CSV para comenzar</h2>
+      <p class="mt-4 max-w-xl text-slate-500 leading-relaxed">
+        El informe se construirá únicamente con los datos reales incluidos en el archivo.
+      </p>
+    `;
+    wrapper.appendChild(emptySlide);
+    initIcons();
+    return;
+  }
+
+  const meta = sessionData.metadata;
+  const teams = REPORT_TEAMS.map((team) => sessionData.teams[team]);
+  const allAttacks = teams.flatMap((team) => team.attacks);
+  const attacksById = new Map(allAttacks.filter((attack) => attack.id).map((attack) => [attack.id, attack]));
+  let pageCounter = 1;
+
+  const footer = () => `
+    <div class="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-400 font-bold font-sans">
+      <span>Informe de Taller: ${displayValue(meta.client, 'Cliente no registrado')}</span>
+      <span>KREATUM™ Alquimia de Innovación</span>
+      <span>Pág. ${pageCounter}</span>
+    </div>
+  `;
+
+  const addSlide = (content, className = 'slide-container justify-between', includeFooter = true) => {
+    const slide = document.createElement('div');
+    slide.className = className;
+    slide.innerHTML = `${content}${includeFooter ? footer() : ''}`;
+    wrapper.appendChild(slide);
+    pageCounter += 1;
+  };
+
+  const addSeparator = (number, title, description) => {
+    addSlide(`
+      <div class="absolute inset-0" style="background: linear-gradient(135deg, #fbf6ff 0%, #edd8fb 48%, #d8a9e6 100%);"></div>
+      <div class="absolute inset-x-0 bottom-0 h-28 bg-white/20 blur-3xl"></div>
+      <div class="absolute inset-y-0 right-0 w-1/3 blur-3xl" style="background: rgba(182, 75, 183, 0.18);"></div>
+      <div class="relative flex flex-col items-center justify-center space-y-5">
+        <span class="rounded-full border border-violet-300/60 bg-white/35 px-5 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-violet-950">Sección ${number}</span>
+        <span class="text-8xl font-sans font-black text-violet-950/10 leading-none">${number}</span>
+        <h2 class="text-5xl font-serif italic font-semibold text-violet-950 leading-tight max-w-4xl">${escapeHTML(title)}</h2>
+        <p class="text-lg text-violet-950/70 mt-3 max-w-2xl mx-auto leading-relaxed">${escapeHTML(description)}</p>
+      </div>
+      <div class="absolute bottom-6 text-[10px] uppercase tracking-widest text-violet-950/50 font-bold font-sans">KREATUM™</div>
+    `, 'slide-container relative overflow-hidden bg-[#edd8fb] text-violet-950 separator-slide', false);
+  };
+
+  const header = (title, label, phase = 'calcinar', icon = 'file-text') => `
+    <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+      <h2 class="text-lg font-serif font-extrabold text-slate-900 flex items-center gap-2.5">
+        ${getPhaseIconHTML(phase, icon)}
+        ${escapeHTML(title)}
+      </h2>
+      ${reportBadge(label)}
+    </div>
+  `;
+
+  const teamHeader = (team, title, label) => {
+    const style = TEAM_STYLES[team.name];
+    return `
+      <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div class="flex items-center gap-3">
+          <img src="./public/assets/logos/${team.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${team.name.toLowerCase()}" alt="">
+          <div>
+            <h2 class="text-base font-serif font-bold text-slate-800">${escapeHTML(title)}</h2>
+            <p class="text-[10px] uppercase font-bold ${style.text} tracking-widest">Equipo ${team.name}</p>
+          </div>
+        </div>
+        <span class="inline-flex items-center rounded-full border px-4 py-2 text-[10px] font-black uppercase tracking-[0.22em] ${style.badge} shadow-[0_14px_28px_-22px_rgba(15,23,42,0.75)]">
+          ${escapeHTML(label)}
+        </span>
+      </div>
+    `;
+  };
+
+  const technicalCards = [
+    metadataCard('Cliente', meta.client),
+    metadataCard('Facilitador', meta.facilitator),
+    metadataCard('Fecha de sesión', meta.date),
+    metadataCard('Participantes', meta.participants),
+    metadataCard('Lugar / Modalidad', meta.location),
+    metadataCard('Responsable', meta.sessionResponsible),
+  ].filter(Boolean).join('');
+
+  const contextCards = [
+    metadataCard('Objetivo de negocio', meta.businessObjective, true),
+    metadataCard('Observaciones de contexto', meta.contextObservations, true),
+  ].filter(Boolean).join('');
+
+  // Cover
+  addSlide(`
+    <div class="absolute inset-0 bg-gradient-to-br from-white via-violet-50/50 to-cyan-50/60"></div>
+    <div class="absolute -top-32 -right-24 w-80 h-80 rounded-full bg-kreatum-purple/10 blur-3xl"></div>
+    <div class="absolute -bottom-28 -left-20 w-72 h-72 rounded-full bg-kreatum-turquoise/15 blur-3xl"></div>
+    <div class="relative flex items-center justify-between">
+      <div class="rounded-2xl bg-white/90 border border-white shadow-[0_24px_70px_-48px_rgba(15,23,42,0.6)] px-5 py-3">
+        <img src="./public/logo.png" alt="KREATUM™ Logo" class="h-12 object-contain onerror-fallback" data-element="kreatum">
+      </div>
+      <span class="rounded-full bg-slate-900 text-white px-5 py-2 text-[10px] uppercase tracking-[0.24em] font-black font-sans shadow-xl">Taller de Co-creación</span>
+    </div>
+    <div class="relative my-auto py-6 max-w-4xl">
+      <p class="text-xs uppercase font-extrabold tracking-[0.28em] text-kreatum-purple mb-4">Informe de partida KREATUM™</p>
+      <h1 class="text-6xl font-serif font-black tracking-tight text-slate-950 leading-[0.95]">${displayValue(meta.reportTitle)}</h1>
+      <div class="mt-7 h-1.5 w-32 rounded-full bg-gradient-to-r from-kreatum-purple via-kreatum-red to-kreatum-turquoise"></div>
+      <p class="text-lg text-slate-600 font-semibold mt-7 max-w-3xl leading-relaxed">${displayValue(meta.reportSubtitle)}</p>
+    </div>
+  `, 'slide-container relative overflow-hidden border-t-[12px] border-kreatum-purple justify-between', false);
+
+  // Technical sheet
+  addSlide(`
+    ${header('Ficha Técnica y Reto del Proyecto', 'Contexto verificado')}
+    <div class="my-auto space-y-6">
+      <div class="relative overflow-hidden bg-slate-950 text-white border border-slate-900 p-8 rounded-[1.75rem] shadow-[0_30px_80px_-55px_rgba(15,23,42,0.85)]">
+        <div class="absolute -right-14 -top-20 h-48 w-48 rounded-full bg-kreatum-purple/30 blur-3xl"></div>
+        <div class="relative">
+          <span class="text-[10px] uppercase font-extrabold text-violet-200 tracking-[0.22em] block mb-3">Reto principal trabajado</span>
+          <p class="text-2xl font-serif italic font-semibold leading-relaxed">“${displayReportText(meta.challenge)}”</p>
+        </div>
+      </div>
+      ${technicalCards ? `<div class="grid grid-cols-3 gap-4">${technicalCards}</div>` : ''}
+      ${contextCards ? `<div class="grid grid-cols-2 gap-4">${contextCards}</div>` : ''}
+    </div>
+  `);
+
+  // Index
+  const sections = [
+    ['01', 'Volumen y trazabilidad del taller'],
+    ['02', 'Nuevas perspectivas del reto'],
+    ['03', 'Perspectivas priorizadas y votaciones'],
+    ['04', 'Soluciones generadas y priorizadas'],
+    ['05', 'Debilidades, mitigaciones y reformulación'],
+    ['06', 'Soluciones finales documentadas'],
+  ];
+  addSlide(`
+    ${header('Índice del Informe de Resultados', 'Índice', 'calcinar', 'list')}
+    <div class="grid grid-cols-2 gap-x-12 gap-y-4 my-auto">
+      ${sections.map(([number, title]) => `
+        <div class="flex items-baseline gap-3 border-b border-slate-100 pb-3">
+          <span class="font-serif font-bold text-kreatum-purple text-lg">${number}</span>
+          <span class="text-base font-bold text-slate-800">${escapeHTML(title)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `);
+
+  // Metrics
+  addSeparator('01', 'Volumen y trazabilidad', 'Resumen cuantitativo de todo el contenido realmente registrado en la plataforma.');
+  const metricCards = [
+    [sessionData.metrics.totalContributions, 'Perspectivas generadas', 'text-kreatum-turquoise', 'bg-cyan-50/60 border-cyan-100'],
+    [sessionData.metrics.ideasCount, 'Soluciones planteadas', 'text-kreatum-red', 'bg-red-50/60 border-red-100'],
+    [sessionData.metrics.attacksCount, 'Debilidades registradas', 'text-kreatum-purple', 'bg-violet-50/60 border-violet-100'],
+    [sessionData.metrics.defensesCount, 'Mitigaciones registradas', 'text-kreatum-green', 'bg-green-50/60 border-green-100'],
+    [sessionData.metrics.finalSolutions, 'Soluciones finales', 'text-kreatum-blue', 'bg-blue-50/60 border-blue-100'],
+    [4, 'Equipos participantes', 'text-slate-700', 'bg-slate-50 border-slate-100'],
+  ];
+  addSlide(`
+      ${header('Volumen de Contenido y Co-creación', 'Métricas verificadas', 'diluir', 'bar-chart-2')}
+      <div class="grid grid-cols-3 gap-5 my-auto">
+        ${metricCards.map(([value, label, color, background]) => `
+          <div class="relative overflow-hidden ${background} border rounded-[1.75rem] p-5 text-center h-40 flex flex-col items-center justify-center shadow-[0_26px_70px_-52px_rgba(15,23,42,0.85)]">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-kreatum-purple via-kreatum-red to-kreatum-turquoise"></div>
+            <span class="text-5xl font-serif font-black ${color} leading-none">${value}</span>
+            <span class="mt-2 text-xs font-extrabold uppercase tracking-wider text-slate-700">${label}</span>
+          </div>
+        `).join('')}
+    </div>
+  `);
+
+  // Perspectives
+  addSeparator('02', 'Nuevas perspectivas del reto', 'Registro completo de los ángulos planteados por cada equipo.');
+  teams.forEach((team) => {
+    const style = TEAM_STYLES[team.name];
+    const chunks = chunkByWeight(team.perspectives, 6, 700);
+    let itemOffset = 0;
+    chunks.forEach((items, chunkIndex) => {
+      addSlide(`
+        ${teamHeader(team, 'Nuevas perspectivas del reto', `Diluir · ${team.perspectives.length} registros · ${chunkIndex + 1}/${chunks.length}`)}
+        <div class="my-auto space-y-3">
+          ${items.length ? items.map((item, index) => `
+            <div class="flex gap-4 p-3 rounded-xl border ${style.softBorder} ${style.bg}">
+              <span class="font-serif font-bold ${style.text} text-sm shrink-0">${itemOffset + index + 1}</span>
+              <p class="text-sm text-slate-700 font-semibold leading-relaxed">${displayReportText(item)}</p>
+            </div>
+          `).join('') : '<p class="text-center text-slate-400">No se registraron perspectivas para este equipo.</p>'}
+        </div>
+      `);
+      itemOffset += items.length;
+    });
+  });
+
+  // Prioritized perspectives
+  addSeparator('03', 'Perspectivas priorizadas', 'Preselección, votaciones y enfoque definitivo de cada equipo.');
+  teams.forEach((team) => {
+    const style = TEAM_STYLES[team.name];
+    addSlide(`
+      ${teamHeader(team, 'Perspectivas priorizadas', 'Diluir · Decisión del equipo')}
+      <div class="my-auto grid grid-cols-12 gap-7">
+        <div class="col-span-7 space-y-3">
+          <p class="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preselección y votación</p>
+          ${team.topPerspectives.length ? team.topPerspectives.map((item, index) => `
+            <div class="flex items-center gap-4 rounded-xl border ${style.softBorder} ${style.bg} p-4">
+              <span class="w-8 h-8 rounded-lg bg-white flex items-center justify-center font-serif font-black ${style.text}">${index + 1}</span>
+              <p class="flex-1 text-sm font-semibold text-slate-700">${displayReportText(item)}</p>
+              <span class="text-xs font-black ${style.text}">${displayValue(team.perspectiveVotes[index], '0')} votos</span>
+            </div>
+          `).join('') : '<p class="text-sm text-slate-400">No se registró preselección.</p>'}
+        </div>
+        <div class="col-span-5 flex">
+          <div class="w-full rounded-2xl border-2 ${style.border} p-6 flex flex-col justify-center">
+            <span class="text-[10px] uppercase font-black ${style.text} tracking-wider">Perspectiva definitiva</span>
+            <p class="mt-3 text-xl font-serif italic font-semibold text-slate-800 leading-relaxed">“${displayReportText(team.perspective)}”</p>
+          </div>
+        </div>
+      </div>
+    `, `slide-container border-l-[8px] ${style.border} justify-between`);
+  });
+
+  // Solutions
+  addSeparator('04', 'Soluciones generadas', 'Todas las propuestas formuladas y las opciones priorizadas por los equipos.');
+  teams.forEach((team) => {
+    const style = TEAM_STYLES[team.name];
+    const chunks = chunkByWeight(team.solutions, 6, 700);
+    let itemOffset = 0;
+    chunks.forEach((items, chunkIndex) => {
+      addSlide(`
+        ${teamHeader(team, 'Soluciones generadas', `Conjugar · ${team.solutions.length} registros · ${chunkIndex + 1}/${chunks.length}`)}
+        <div class="my-auto space-y-3">
+          ${items.length ? items.map((item, index) => `
+            <div class="flex gap-4 p-3 rounded-xl border ${style.softBorder} ${style.bg}">
+              <span class="font-serif font-bold ${style.text} text-sm shrink-0">${itemOffset + index + 1}</span>
+              <p class="text-sm text-slate-700 font-semibold leading-relaxed">${displayReportText(item)}</p>
+            </div>
+          `).join('') : '<p class="text-center text-slate-400">No se registraron soluciones para este equipo.</p>'}
+        </div>
+      `);
+      itemOffset += items.length;
+    });
+
+    addSlide(`
+      ${teamHeader(team, 'Soluciones priorizadas', 'Conjugar · Decisión del equipo')}
+      <div class="my-auto grid grid-cols-12 gap-7">
+        <div class="col-span-7 space-y-3">
+          <p class="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preselección y votación</p>
+          ${team.topSolutions.length ? team.topSolutions.map((item, index) => `
+            <div class="flex items-center gap-4 rounded-xl border ${style.softBorder} ${style.bg} p-4">
+              <span class="w-8 h-8 rounded-lg bg-white flex items-center justify-center font-serif font-black ${style.text}">${index + 1}</span>
+              <p class="flex-1 text-sm font-semibold text-slate-700">${displayReportText(item)}</p>
+              <span class="text-xs font-black ${style.text}">${displayValue(team.solutionVotes[index], '0')} votos</span>
+            </div>
+          `).join('') : '<p class="text-sm text-slate-400">No se registró preselección.</p>'}
+        </div>
+        <div class="col-span-5 flex">
+          <div class="w-full rounded-2xl border-2 ${style.border} p-6 flex flex-col justify-center">
+            <span class="text-[10px] uppercase font-black ${style.text} tracking-wider">Solución definitiva</span>
+            <p class="mt-3 text-xl font-serif italic font-semibold text-slate-800 leading-relaxed">“${displayReportText(team.solution)}”</p>
+          </div>
+        </div>
+      </div>
+    `, `slide-container border-l-[8px] ${style.border} justify-between`);
+  });
+
+  // Weakness and mitigation traceability
+  addSeparator('05', 'Debilidades, mitigaciones y reformulación', 'Trazabilidad del contraste entre equipos, sin síntesis ni contenido añadido.');
+  teams.forEach((team) => {
+    const style = TEAM_STYLES[team.name];
+    const pairs = team.defenses.map((defense) => ({
+      attack: attacksById.get(defense.relatedId) || null,
+      defense,
+    }));
+    const unpairedAttacks = allAttacks
+      .filter((attack) => attack.toTeam === team.name)
+      .filter((attack) => !pairs.some((pair) => pair.attack?.id === attack.id))
+      .map((attack) => ({ attack, defense: null }));
+    const contrastRows = [...pairs, ...unpairedAttacks];
+    const contrastChunks = chunkByWeight(contrastRows, 5, 1600);
+
+    contrastChunks.forEach((items, chunkIndex) => {
+      const offset = contrastChunks.slice(0, chunkIndex).reduce((total, chunk) => total + chunk.length, 0);
+      addSlide(`
+        ${teamHeader(team, 'Contraste del concepto', `Sublimar · ${contrastRows.length} intercambios · ${chunkIndex + 1}/${contrastChunks.length}`)}
+        <div class="my-auto space-y-3">
+          ${items.length ? items.map((pair, index) => `
+            <div class="grid grid-cols-[2.75rem_1fr_1fr] gap-3 items-stretch">
+              <div class="rounded-2xl bg-slate-900 text-white flex items-center justify-center text-xs font-black shadow-[0_18px_40px_-30px_rgba(15,23,42,0.8)]">${offset + index + 1}</div>
+              <div class="rounded-2xl border border-red-100 bg-red-50/50 px-4 py-3">
+                <div class="flex justify-between gap-2 mb-1.5">
+                  <span class="text-[8px] uppercase font-black tracking-wider text-red-500">Debilidad</span>
+                  <span class="text-[8px] font-bold text-slate-400">${displayValue(pair.attack?.fromTeam, '')}${cleanValue(pair.attack?.fromTeam) ? ` → ${team.name}` : ''}</span>
                 </div>
-            `;
-
-            // Helper for phase icons/fallbacks
-            const getPhaseIconHTML = (phase, iconName) => `
-                <div class="flex items-center justify-center shrink-0">
-                    <img src="./public/assets/logos/fases/${phase}.png" class="h-7 object-contain onerror-fallback" data-element="${phase}" data-fallback-icon="${iconName}">
-                    <i data-lucide="${iconName}" class="w-7 h-7 text-kreatum-purple hidden fallback-icon"></i>
+                <p class="text-[10px] font-semibold leading-[1.35] text-slate-700">${displayReportText(pair.attack?.content)}</p>
+              </div>
+              <div class="rounded-2xl border border-green-100 bg-green-50/50 px-4 py-3">
+                <div class="flex justify-between gap-2 mb-1.5">
+                  <span class="text-[8px] uppercase font-black tracking-wider text-green-600">Mitigación</span>
+                  <span class="text-[8px] font-bold text-slate-400">${displayValue(pair.defense?.timestamp, '')}</span>
                 </div>
-            `;
+                <p class="text-[10px] font-semibold leading-[1.35] text-slate-700">${displayReportText(pair.defense?.content)}</p>
+              </div>
+            </div>
+          `).join('') : '<p class="text-center text-slate-400">No se registraron debilidades ni mitigaciones para este equipo.</p>'}
+        </div>
+      `, `slide-container border-l-[8px] ${style.border} justify-between`);
+    });
+  });
 
-            let pageCounter = 1;
+  // Final solutions
+  addSeparator('06', 'Soluciones finales documentadas', 'Resultado final de cada equipo utilizando exclusivamente los campos guardados.');
+  teams.forEach((team) => {
+    const style = TEAM_STYLES[team.name];
+    const optionalValues = [
+      ['Público / destinatario', team.audience],
+      ['Fortalezas', team.strengths],
+      ['Debilidades', team.weaknesses],
+      ['Prueba piloto', team.pilot],
+      ['Recursos', team.resources],
+    ].filter(([, value]) => cleanValue(value));
 
-            // ─────────────────── SLIDE 1: PORTADA ───────────────────
-            const s1 = document.createElement('div');
-            s1.className = 'slide-container border-t-[12px] border-kreatum-purple justify-between';
-            s1.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <img src="./public/logo.png" alt="Kreatum Logo" class="h-12 object-contain onerror-fallback" data-element="kreatum">
-                    <span class="text-sm uppercase tracking-widest text-slate-400 font-bold font-sans">Taller de Co-creación</span>
-                </div>
-                <div class="my-auto py-6">
-                    <p class="text-xs uppercase font-extrabold tracking-widest text-kreatum-purple mb-2">Informe de Resultados</p>
-                    <h1 class="text-5xl font-serif font-black tracking-tight text-slate-900 leading-tight">
-                        ${meta.reportTitle}
-                    </h1>
-                    <p class="text-base text-slate-600 font-medium mt-3 border-l-4 border-slate-200 pl-4 max-w-3xl">
-                        ${meta.reportSubtitle}
-                    </p>
-                </div>
-                <div class="grid grid-cols-3 gap-6 border-t border-slate-100 pt-5 w-full">
-                    <div>
-                        <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Cliente</p>
-                        <p class="text-base font-bold text-slate-800">${meta.client}</p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Facilitador</p>
-                        <p class="text-base font-bold text-slate-800">${meta.facilitator}</p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Fecha de Sesión</p>
-                        <p class="text-base font-bold text-slate-800">${meta.date}</p>
-                    </div>
-                </div>
-            `;
-            wrapper.appendChild(s1);
-            pageCounter++;
+    addSlide(`
+      ${teamHeader(team, 'Solución final y reformulación', 'Resultado documentado')}
+      <div class="my-auto space-y-5">
+        <div class="rounded-2xl border-2 ${style.border} p-6">
+          <span class="text-[9px] uppercase font-black ${style.text} tracking-wider">Solución definitiva</span>
+          <p class="mt-2 text-xl font-serif italic font-semibold text-slate-800">“${displayReportText(team.solution)}”</p>
+        </div>
+        <div class="grid grid-cols-2 gap-5">
+          <div class="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <span class="text-[9px] uppercase font-black text-slate-400 tracking-wider">Solución reformulada</span>
+            <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-700">${displayReportText(team.reformulatedSolution)}</p>
+          </div>
+          <div class="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <span class="text-[9px] uppercase font-black text-slate-400 tracking-wider">Resultados esperados</span>
+            <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-700">${displayReportText(team.expectedResults)}</p>
+          </div>
+        </div>
+      </div>
+    `, `slide-container border-l-[8px] ${style.border} justify-between`);
 
-            // ─────────────────── SLIDE 2: FICHA DEL PROYECTO ───────────────────
-            const s2 = document.createElement('div');
-            s2.className = 'slide-container justify-between';
-            s2.innerHTML = `
-                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h2 class="text-lg font-serif font-extrabold text-slate-900 flex items-center gap-2.5">
-                        ${getPhaseIconHTML('calcinar', 'file-text')}
-                        Ficha Técnica & Contexto del Proyecto
-                    </h2>
-                    <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Ficha del Proyecto</span>
-                </div>
-                <div class="flex flex-col justify-between my-auto space-y-5 w-full">
-                    <!-- Top Part: Big Cards -->
-                    <div class="grid grid-cols-2 gap-6 w-full">
-                        <div class="bg-violet-50/50 border border-violet-100/80 p-5 rounded-2xl flex flex-col justify-center">
-                            <span class="text-[10px] uppercase font-extrabold text-kreatum-purple tracking-wider mb-2 block">Reto Inicial Trabajado</span>
-                            <p class="text-base font-bold text-slate-800 leading-relaxed italic">
-                                "${meta.challenge}"
-                            </p>
-                        </div>
-                        <div class="flex flex-col gap-4">
-                            <div class="bg-slate-50 border border-slate-100 p-4.5 rounded-2xl flex flex-col justify-center">
-                                <span class="text-[10px] uppercase font-extrabold text-kreatum-purple tracking-wider mb-1 block">Objetivo de Negocio Asociado</span>
-                                <p class="text-sm text-slate-700 leading-relaxed font-semibold">
-                                    ${meta.businessObjective}
-                                </p>
-                            </div>
-                            <div class="bg-slate-50 border border-slate-100 p-4.5 rounded-2xl flex flex-col justify-center">
-                                <span class="text-[10px] uppercase font-extrabold text-kreatum-purple tracking-wider mb-1 block">Observaciones de Contexto</span>
-                                <p class="text-sm text-slate-700 leading-relaxed font-semibold">
-                                    ${meta.contextObservations}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Bottom Part: Horizontal Grid -->
-                    <div class="grid grid-cols-5 gap-4 w-full border-t border-slate-100 pt-5">
-                        <div class="bg-slate-50 border border-slate-100/80 p-4 rounded-xl flex flex-col justify-center">
-                            <span class="text-[10px] uppercase font-extrabold text-slate-400 block mb-1">Cliente</span>
-                            <p class="text-sm font-bold text-slate-800">${meta.client}</p>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100/80 p-4 rounded-xl flex flex-col justify-center">
-                            <span class="text-[10px] uppercase font-extrabold text-slate-400 block mb-1">Fecha de Sesión</span>
-                            <p class="text-sm font-bold text-slate-850">${meta.date}</p>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100/80 p-4 rounded-xl flex flex-col justify-center">
-                            <span class="text-[10px] uppercase font-extrabold text-slate-400 block mb-1">Número de Participantes</span>
-                            <p class="text-sm font-bold text-slate-850">${meta.participants} personas</p>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100/80 p-4 rounded-xl flex flex-col justify-center">
-                            <span class="text-[10px] uppercase font-extrabold text-slate-400 block mb-1">Equipos / Grupos</span>
-                            <p class="text-sm font-bold text-slate-850">Fuego, Agua, Tierra, Aire</p>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100/80 p-4 rounded-xl flex flex-col justify-center">
-                            <span class="text-[10px] uppercase font-extrabold text-slate-400 block mb-1">Responsable de la Sesión</span>
-                            <p class="text-sm font-bold text-slate-850">${meta.sessionResponsible}</p>
-                        </div>
-                    </div>
-                </div>
-                ${getFooterHTML(pageCounter)}
-            `;
-            wrapper.appendChild(s2);
-            pageCounter++;
+    if (optionalValues.length) {
+      addSlide(`
+        ${teamHeader(team, 'Desarrollo adicional registrado', 'Datos complementarios')}
+        <div class="grid grid-cols-2 gap-5 my-auto">
+          ${optionalValues.map(([label, value]) => `
+            <div class="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+              <span class="text-[9px] uppercase font-black text-slate-400 tracking-wider">${escapeHTML(label)}</span>
+              <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-700">${displayReportText(value)}</p>
+            </div>
+          `).join('')}
+        </div>
+      `, `slide-container border-l-[8px] ${style.border} justify-between`);
+    }
 
-            // ─────────────────── SLIDE 3: ÍNDICE ───────────────────
-            const s3 = document.createElement('div');
-            s3.className = 'slide-container justify-between';
-            s3.innerHTML = `
-                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h2 class="text-lg font-serif font-extrabold text-slate-900 flex items-center gap-2">
-                        <i data-lucide="list" class="w-5 h-5 text-kreatum-purple"></i>
-                        Índice del Informe de Resultados
-                    </h2>
-                    <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Índice</span>
-                </div>
-                <div class="grid grid-cols-2 gap-x-16 gap-y-5 my-auto max-w-4xl mx-auto w-full">
-                    <div class="space-y-4">
-                        <div class="flex items-baseline gap-2.5 border-b border-slate-100 pb-2">
-                            <span class="font-serif font-bold text-kreatum-purple text-base">01</span>
-                            <span class="text-base font-bold text-slate-800">Reto y Datos Generales (Ficha Técnica)</span>
-                        </div>
-                        <div class="flex items-baseline gap-2.5 border-b border-slate-100 pb-2">
-                            <span class="font-serif font-bold text-kreatum-purple text-base">02</span>
-                            <span class="text-base font-bold text-slate-800">Volumen de Contenido (Métricas)</span>
-                        </div>
-                        <div class="flex items-baseline gap-2.5 border-b border-slate-100 pb-2">
-                            <span class="font-serif font-bold text-kreatum-purple text-base">03</span>
-                            <span class="text-base font-bold text-slate-800">Nuevas perspectivas del reto</span>
-                        </div>
-                    </div>
-                    <div class="space-y-4">
-                        <div class="flex items-baseline gap-2.5 border-b border-slate-100 pb-2">
-                            <span class="font-serif font-bold text-kreatum-purple text-base">04</span>
-                            <span class="text-base font-bold text-slate-800">Enfoques Priorizados (Perspectivas)</span>
-                        </div>
-                        <div class="flex items-baseline gap-2.5 border-b border-slate-100 pb-2">
-                            <span class="font-serif font-bold text-kreatum-purple text-base">05</span>
-                            <span class="text-base font-bold text-slate-800">Soluciones generadas</span>
-                        </div>
-                        <div class="flex items-baseline gap-2.5 border-b border-slate-100 pb-2">
-                            <span class="font-serif font-bold text-kreatum-purple text-base">06</span>
-                            <span class="text-base font-bold text-slate-800">Soluciones desarrolladas (Fichas & Pitch)</span>
-                        </div>
-                    </div>
-                </div>
-                ${getFooterHTML(pageCounter)}
-            `;
-            wrapper.appendChild(s3);
-            pageCounter++;
+    const pitchValues = [team.pitchStart, team.pitchProblem, team.pitchSolution, team.pitchAction];
+    if (pitchValues.some(cleanValue)) {
+      const pitchLabels = ['Gancho', 'Problema', 'Solución', 'Conclusión / acción'];
+      addSlide(`
+        ${teamHeader(team, 'Narrativa de presentación', 'Pitch registrado')}
+        <div class="grid grid-cols-4 gap-4 my-auto">
+          ${pitchValues.map((value, index) => `
+            <div class="rounded-xl border border-slate-100 bg-slate-50 p-4 min-h-52">
+              <span class="w-7 h-7 rounded-lg bg-slate-200 flex items-center justify-center font-bold text-xs">${index + 1}</span>
+              <p class="mt-3 text-[9px] uppercase font-black text-slate-400">${pitchLabels[index]}</p>
+              <p class="mt-2 text-xs font-semibold leading-relaxed text-slate-700">${displayReportText(value)}</p>
+            </div>
+          `).join('')}
+        </div>
+      `, `slide-container border-l-[8px] ${style.border} justify-between`);
+    }
+  });
 
-            // ─────────────────── SEPARATOR 1: RETO Y DATOS GENERALES ───────────────────
-            const sep1 = document.createElement('div');
-            sep1.className = 'slide-container bg-slate-900 text-white separator-slide';
-            sep1.innerHTML = `
-                <div class="flex flex-col items-center justify-center space-y-4">
-                    <span class="text-8xl font-sans font-black text-kreatum-purple leading-none">01</span>
-                    <h2 class="text-5xl font-serif italic font-semibold text-white leading-tight">Reto y Datos Generales</h2>
-                    <p class="text-lg text-slate-400 mt-4 max-w-2xl mx-auto leading-relaxed">Contextualización del taller de co-creación, objetivos de negocio y ficha técnica.</p>
-                </div>
-                <div class="absolute bottom-6 text-[10px] uppercase tracking-widest text-slate-500 font-bold font-sans">KREATUM™</div>
-            `;
-            wrapper.appendChild(sep1);
-            pageCounter++;
+  addSlide(`
+    <div class="flex flex-col items-center justify-center">
+      <img src="./public/logo.png" alt="KREATUM™ Logo" class="h-20 object-contain onerror-fallback" data-element="kreatum">
+    </div>
+  `, 'slide-container bg-[#edd8fb] text-violet-950 separator-slide', false);
 
-            // ─────────────────── SLIDE 4: METRICAS Y VOLUMEN ───────────────────
-            const s4 = document.createElement('div');
-            s4.className = 'slide-container justify-between';
-            s4.innerHTML = `
-                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h2 class="text-lg font-serif font-extrabold text-slate-900 flex items-center gap-2">
-                        ${getPhaseIconHTML('diluir', 'bar-chart-2')}
-                        Volumen de Contenido & Co-creación
-                    </h2>
-                    <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">02 · Métricas del Workshop</span>
-                </div>
-                <div class="grid grid-cols-4 gap-6 my-auto w-full">
-                    <div class="bg-violet-50/60 border border-violet-100 rounded-2xl p-6 text-center flex flex-col justify-center h-56">
-                        <span class="text-6xl font-serif font-black text-kreatum-purple block mb-2">4</span>
-                        <span class="text-sm font-extrabold text-slate-700 tracking-wider uppercase">Equipos Activos</span>
-                        <p class="text-xs text-slate-500 mt-2.5">Fuego, Agua, Tierra, Aire trabajando en paralelo</p>
-                    </div>
-                    <div class="bg-cyan-50/60 border border-cyan-100 rounded-2xl p-6 text-center flex flex-col justify-center h-56">
-                        <span class="text-6xl font-serif font-black text-kreatum-turquoise block mb-2">${sessionData.metrics.totalContributions}</span>
-                        <span class="text-sm font-extrabold text-slate-700 tracking-wider uppercase">Nuevas perspectivas del reto</span>
-                        <p class="text-xs text-slate-500 mt-2.5">Ángulos y perspectivas estratégicas planteadas</p>
-                    </div>
-                    <div class="bg-red-50/60 border border-red-100 rounded-2xl p-6 text-center flex flex-col justify-center h-56">
-                        <span class="text-6xl font-serif font-black text-kreatum-red block mb-2">${sessionData.metrics.ideasCount}</span>
-                        <span class="text-sm font-extrabold text-slate-700 tracking-wider uppercase">Soluciones planteadas</span>
-                        <p class="text-xs text-slate-500 mt-2.5">Propuestas iniciales formuladas por los equipos</p>
-                    </div>
-                    <div class="bg-green-50/60 border border-green-100 rounded-2xl p-6 text-center flex flex-col justify-center h-56">
-                        <span class="text-6xl font-serif font-black text-kreatum-green block mb-2">4</span>
-                        <span class="text-sm font-extrabold text-slate-700 tracking-wider uppercase">Soluciones desarrolladas</span>
-                        <p class="text-xs text-slate-500 mt-2.5">Propuestas finales redactadas y validadas</p>
-                    </div>
-                </div>
-                ${getFooterHTML(pageCounter)}
-            `;
-            wrapper.appendChild(s4);
-            pageCounter++;
+  initIcons();
+}
 
-            // ─────────────────── SEPARATOR 2: APORTACIONES INICIALES ───────────────────
-            const sep2 = document.createElement('div');
-            sep2.className = 'slide-container bg-slate-900 text-white separator-slide';
-            sep2.innerHTML = `
-                <div class="flex flex-col items-center justify-center space-y-4">
-                    <span class="text-8xl font-sans font-black text-kreatum-purple leading-none">02</span>
-                    <h2 class="text-5xl font-serif italic font-semibold text-white leading-tight">Nuevas perspectivas del reto</h2>
-                    <p class="text-lg text-slate-400 mt-4 max-w-2xl mx-auto leading-relaxed">Detalle de las primeras ideas y contribuciones de cada equipo.</p>
-                </div>
-                <div class="absolute bottom-6 text-[10px] uppercase tracking-widest text-slate-500 font-bold font-sans">KREATUM™</div>
-            `;
-            wrapper.appendChild(sep2);
-            pageCounter++;
-
-            // ─────────────────── SLIDES 7-10: APORTACIONES POR EQUIPO ───────────────────
-            teamsList.forEach(t => {
-                let colorClass, elementColor, accentBg;
-                if (t.name === 'Fuego') { colorClass = 'text-kreatum-red'; elementColor = '#ef4444'; accentBg = 'bg-red-50/50'; }
-                else if (t.name === 'Agua') { colorClass = 'text-kreatum-blue'; elementColor = '#3b82f6'; accentBg = 'bg-blue-50/50'; }
-                else if (t.name === 'Tierra') { colorClass = 'text-kreatum-green'; elementColor = '#10b981'; accentBg = 'bg-green-50/50'; }
-                else { colorClass = 'text-kreatum-turquoise'; elementColor = '#06b6d4'; accentBg = 'bg-cyan-50/50'; }
-
-                const inputs = sessionData.rawInputs[t.name] || ["Sin aportaciones registradas."];
-
-                const sTeam = document.createElement('div');
-                sTeam.className = 'slide-container justify-between';
-                sTeam.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${t.name.toLowerCase()}">
-                            <div>
-                                <h2 class="text-base font-serif font-bold text-slate-800">
-                                    Nuevas perspectivas del reto
-                                </h2>
-                                <p class="text-[10px] uppercase font-bold ${colorClass} tracking-widest">Equipo ${t.name}</p>
-                            </div>
-                        </div>
-                        <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Fase Selección</span>
-                    </div>
-                    <div class="my-auto space-y-4 max-w-4xl mx-auto w-full">
-                        <div class="bg-slate-50 border border-slate-150 p-4 rounded-xl flex items-start gap-4">
-                            <div class="space-y-1">
-                                <span class="text-[9px] uppercase font-black ${colorClass} tracking-wider">Reto original</span>
-                                <p class="text-sm text-slate-800 leading-relaxed font-bold font-serif italic">
-                                    "${meta.challenge}"
-                                </p>
-                            </div>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold text-slate-400 block uppercase mb-2">Registro de Aportaciones:</span>
-                            <div class="space-y-2.5">
-                                ${inputs.map((inp, idx) => `
-                                    <div class="flex gap-5 p-3 rounded-xl border border-slate-150 ${accentBg}">
-                                        <span class="font-serif font-bold ${colorClass} text-sm shrink-0">${idx + 1}</span>
-                                        <p class="text-sm text-slate-705 font-semibold leading-relaxed">"${inp}"</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                    ${getFooterHTML(pageCounter)}
-                `;
-                wrapper.appendChild(sTeam);
-                pageCounter++;
-            });
-
-            // ─────────────────── SEPARATOR 3: ENFOQUES PRIORIZADOS ───────────────────
-            const sep3 = document.createElement('div');
-            sep3.className = 'slide-container bg-slate-900 text-white separator-slide';
-            sep3.innerHTML = `
-                <div class="flex flex-col items-center justify-center space-y-4">
-                    <span class="text-8xl font-sans font-black text-kreatum-purple leading-none">03</span>
-                    <h2 class="text-5xl font-serif italic font-semibold text-white leading-tight">Enfoques Priorizados</h2>
-                    <p class="text-lg text-slate-400 mt-4 max-w-2xl mx-auto leading-relaxed">Registro de los enfoques y perspectivas definitivas elegidas para avanzar en el taller.</p>
-                </div>
-                <div class="absolute bottom-6 text-[10px] uppercase tracking-widest text-slate-500 font-bold font-sans">KREATUM™</div>
-            `;
-            wrapper.appendChild(sep3);
-            pageCounter++;
-
-            // ─────────────────── SLIDE 12: RESUMEN DE ENFOQUES ───────────────────
-            const sEnf = document.createElement('div');
-            sEnf.className = 'slide-container justify-between';
-            sEnf.innerHTML = `
-                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h2 class="text-lg font-serif font-extrabold text-slate-900 flex items-center gap-2.5">
-                        ${getPhaseIconHTML('conjugar', 'target')}
-                        Registro de Enfoques Elegidos por Grupo
-                    </h2>
-                    <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">03 · Enfoques Priorizados</span>
-                </div>
-                <div class="grid grid-cols-2 gap-6 my-auto w-full">
-                    ${teamsList.map(t => {
-                        let color, bg, border;
-                        if (t.name === 'Fuego') { color = 'text-kreatum-red'; bg = 'bg-red-50/40'; border = 'border-red-100'; }
-                        else if (t.name === 'Agua') { color = 'text-kreatum-blue'; bg = 'bg-blue-50/40'; border = 'border-blue-100'; }
-                        else if (t.name === 'Tierra') { color = 'text-kreatum-green'; bg = 'bg-green-50/40'; border = 'border-green-100'; }
-                        else { color = 'text-kreatum-turquoise'; bg = 'bg-cyan-50/40'; border = 'border-cyan-100'; }
-                        
-                        return `
-                            <div class="${bg} border ${border} p-5 rounded-2xl flex gap-4">
-                                <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="w-10 h-10 object-contain shrink-0 onerror-fallback" data-element="${t.name.toLowerCase()}">
-                                <div class="space-y-1">
-                                    <span class="text-[9px] uppercase font-black ${color} tracking-wider">Equipo ${t.name}</span>
-                                    <p class="text-xs font-bold text-slate-500 leading-tight">Perspectiva definitiva:</p>
-                                    <p class="text-sm text-slate-800 leading-relaxed font-bold">
-                                        "${t.perspective || 'Sin perspectiva cargada.'}"
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-                ${getFooterHTML(pageCounter)}
-            `;
-            wrapper.appendChild(sEnf);
-            pageCounter++;
-
-            // ─────────────────── SLIDES 13-16: DETALLE DE ENFOQUES INDIVIDUALES ───────────────────
-            teamsList.forEach(t => {
-                let colorClass, borderClass, accentBg;
-                if (t.name === 'Fuego') { colorClass = 'text-kreatum-red'; borderClass = 'border-kreatum-red'; accentBg = 'bg-red-50/30'; }
-                else if (t.name === 'Agua') { colorClass = 'text-kreatum-blue'; borderClass = 'border-kreatum-blue'; accentBg = 'bg-blue-50/30'; }
-                else if (t.name === 'Tierra') { colorClass = 'text-kreatum-green'; borderClass = 'border-kreatum-green'; accentBg = 'bg-green-50/30'; }
-                else { colorClass = 'text-kreatum-turquoise'; borderClass = 'border-kreatum-turquoise'; accentBg = 'bg-cyan-50/30'; }
-
-                const sEnfInd = document.createElement('div');
-                sEnfInd.className = `slide-container border-l-[8px] ${borderClass} justify-between`;
-                sEnfInd.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${t.name.toLowerCase()}">
-                            <div>
-                                <h2 class="text-base font-serif font-bold text-slate-800">
-                                    Aportación Elegida & Enfoque
-                                </h2>
-                                <p class="text-[10px] uppercase font-bold ${colorClass} tracking-widest">Equipo ${t.name}</p>
-                            </div>
-                        </div>
-                        <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Fase Diluir</span>
-                    </div>
-                    <div class="my-auto space-y-5 max-w-3xl mx-auto w-full flex flex-col justify-between">
-                        <div class="${accentBg} border border-slate-100 p-8 rounded-2xl text-center">
-                            <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider block mb-2">Enfoque Priorizado</span>
-                            <p class="text-xl font-serif italic font-semibold text-slate-800 leading-relaxed">
-                                "${t.perspective || 'Sin enfoque registrado.'}"
-                            </p>
-                        </div>
-                        <div class="flex justify-center">
-                            <div class="bg-slate-50 py-6 px-12 rounded-2xl text-center border border-slate-100 flex flex-col justify-center max-w-xs w-full">
-                                <span class="text-xs font-bold text-slate-400 block uppercase mb-1.5">Votación Inicial</span>
-                                <span class="text-2xl font-serif font-black text-slate-700">${sessionData.votaciones[t.name]} votos</span>
-                            </div>
-                        </div>
-                    </div>
-                    ${getFooterHTML(pageCounter)}
-                `;
-                wrapper.appendChild(sEnfInd);
-                pageCounter++;
-            });
-
-            // ─────────────────── SEPARATOR 4: IDEAS GENERADAS ───────────────────
-            const sep4 = document.createElement('div');
-            sep4.className = 'slide-container bg-slate-900 text-white separator-slide';
-            sep4.innerHTML = `
-                <div class="flex flex-col items-center justify-center space-y-4">
-                    <span class="text-8xl font-sans font-black text-kreatum-purple leading-none">04</span>
-                    <h2 class="text-5xl font-serif italic font-semibold text-white leading-tight">Soluciones generadas</h2>
-                    <p class="text-lg text-slate-400 mt-4 max-w-2xl mx-auto leading-relaxed">Propuestas y soluciones creativas formuladas en la fase de co-creación.</p>
-                </div>
-                <div class="absolute bottom-6 text-[10px] uppercase tracking-widest text-slate-500 font-bold font-sans">KREATUM™</div>
-            `;
-            wrapper.appendChild(sep4);
-            pageCounter++;
-
-            // ─────────────────── SLIDES 18-21: IDEAS GENERADAS POR EQUIPO ───────────────────
-            teamsList.forEach(t => {
-                let colorClass, elementColor, accentBg;
-                if (t.name === 'Fuego') { colorClass = 'text-kreatum-red'; elementColor = '#ef4444'; accentBg = 'bg-red-50/50'; }
-                else if (t.name === 'Agua') { colorClass = 'text-kreatum-blue'; elementColor = '#3b82f6'; accentBg = 'bg-blue-50/50'; }
-                else if (t.name === 'Tierra') { colorClass = 'text-kreatum-green'; elementColor = '#10b981'; accentBg = 'bg-green-50/50'; }
-                else { colorClass = 'text-kreatum-turquoise'; elementColor = '#06b6d4'; accentBg = 'bg-cyan-50/50'; }
-
-                const rawIdeas = sessionData.rawIdeas[t.name] || ["Sin ideas cargadas."];
-
-                const sIde = document.createElement('div');
-                sIde.className = 'slide-container justify-between';
-                sIde.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${t.name.toLowerCase()}">
-                            <div>
-                                <h2 class="text-base font-serif font-bold text-slate-800">
-                                    Soluciones generadas
-                                </h2>
-                                <p class="text-[10px] uppercase font-bold ${colorClass} tracking-widest">Equipo ${t.name}</p>
-                            </div>
-                        </div>
-                        <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Fase Conjugar</span>
-                    </div>
-                    <div class="my-auto space-y-4 max-w-4xl mx-auto w-full">
-                        <div class="bg-slate-50 border border-slate-150 p-4 rounded-xl flex items-start gap-4">
-                            <div class="space-y-1">
-                                <span class="text-[9px] uppercase font-black ${colorClass} tracking-wider">Perspectiva planteada</span>
-                                <p class="text-sm text-slate-800 leading-relaxed font-bold font-serif italic">
-                                    "${t.perspective || 'Sin perspectiva planteada.'}"
-                                </p>
-                            </div>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold text-slate-400 block uppercase mb-2">Registro de soluciones formuladas:</span>
-                            <div class="space-y-2.5">
-                                ${rawIdeas.map((idea, idx) => `
-                                    <div class="flex gap-5 p-3 rounded-xl border border-slate-150 ${accentBg}">
-                                        <span class="font-serif font-bold ${colorClass} text-sm shrink-0">${idx + 1}</span>
-                                        <p class="text-sm text-slate-705 font-semibold leading-relaxed">"${idea}"</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                    ${getFooterHTML(pageCounter)}
-                `;
-                wrapper.appendChild(sIde);
-                pageCounter++;
-            });
-
-            // ─────────────────── SEPARATOR 5: CONCEPTOS FINALISTAS ───────────────────
-            const sep5 = document.createElement('div');
-            sep5.className = 'slide-container bg-slate-900 text-white separator-slide';
-            sep5.innerHTML = `
-                <div class="flex flex-col items-center justify-center space-y-4">
-                    <span class="text-8xl font-sans font-black text-kreatum-purple leading-none">05</span>
-                    <h2 class="text-5xl font-serif italic font-semibold text-white leading-tight">Soluciones desarrolladas</h2>
-                    <p class="text-lg text-slate-400 mt-4 max-w-2xl mx-auto leading-relaxed">Definición estructurada de los conceptos refinados, análisis de contrastes y storytelling (Pitch).</p>
-                </div>
-                <div class="absolute bottom-6 text-[10px] uppercase tracking-widest text-slate-500 font-bold font-sans">KREATUM™</div>
-            `;
-            wrapper.appendChild(sep5);
-            pageCounter++;
-
-            // ─────────────────── SLIDES 23-38: CONCEPTOS FINALISTAS DETALLADOS (4 POR EQUIPO) ───────────────────
-            teamsList.forEach(t => {
-                let colorClass, borderClass, accentBg, barColor;
-                if (t.name === 'Fuego') { colorClass = 'text-kreatum-red'; borderClass = 'border-kreatum-red'; accentBg = 'bg-red-50/30'; barColor = 'border-kreatum-red'; }
-                else if (t.name === 'Agua') { colorClass = 'text-kreatum-blue'; borderClass = 'border-kreatum-blue'; accentBg = 'bg-blue-50/30'; barColor = 'border-kreatum-blue'; }
-                else if (t.name === 'Tierra') { colorClass = 'text-kreatum-green'; borderClass = 'border-kreatum-green'; accentBg = 'bg-green-50/30'; barColor = 'border-kreatum-green'; }
-                else { colorClass = 'text-kreatum-turquoise'; borderClass = 'border-kreatum-turquoise'; accentBg = 'bg-cyan-50/30'; barColor = 'border-kreatum-turquoise'; }
-
-                const ctrl = sessionData.contraste[t.name] || { cuestionado: "Sin contrastes cargados.", ajuste: "Sin ajustes cargados." };
-
-                // 23a. DIAPOSITIVA DE FICHA DE CONTENIDO (Concepto Finalista)
-                const sFicha = document.createElement('div');
-                sFicha.className = `slide-container border-l-[8px] ${barColor} justify-between`;
-                sFicha.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${t.name.toLowerCase()}">
-                            <div>
-                                <h2 class="text-base font-serif font-bold text-slate-800">
-                                    Concepto: "${t.solution || 'Sin solución cargada'}"
-                                </h2>
-                                <p class="text-[10px] uppercase font-bold ${colorClass} tracking-widest">Equipo ${t.name}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            ${getPhaseIconHTML('fermentar', 'file-text')}
-                            <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Ficha de Contenido</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-12 gap-8 my-auto">
-                        <div class="col-span-7 space-y-4">
-                            <div class="bg-slate-50 border border-slate-100 p-5 rounded-2xl">
-                                <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">Formulación del Concepto</span>
-                                <p class="text-sm text-slate-700 leading-relaxed font-semibold">
-                                    ${t.reformulatedSolution || 'No se detalló formulación final para este equipo.'}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="col-span-5 space-y-4 border-l border-slate-150 pl-6 flex flex-col justify-center">
-                            <div>
-                                <span class="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Destinatario / Público</span>
-                                <p class="text-sm font-bold text-slate-800">${t.audience || 'Emprendedores rurales.'}</p>
-                            </div>
-                            <div>
-                                <span class="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Fortalezas Clave</span>
-                                <p class="text-sm text-slate-650 font-semibold leading-relaxed">${t.strengths || 'Conexión local, autenticidad.'}</p>
-                            </div>
-                            <div>
-                                <span class="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Debilidades a mitigar</span>
-                                <p class="text-sm text-slate-650 font-semibold leading-relaxed">${t.weaknesses || 'Digitalización y logística.'}</p>
-                            </div>
-                        </div>
-                    </div>
-                    ${getFooterHTML(pageCounter)}
-                `;
-                wrapper.appendChild(sFicha);
-                pageCounter++;
-
-                // 23b. DIAPOSITIVA DE CONTRASTE (Sublimar)
-                const sContr = document.createElement('div');
-                sContr.className = `slide-container border-l-[8px] ${barColor} justify-between`;
-                sContr.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${t.name.toLowerCase()}">
-                            <div>
-                                <h2 class="text-base font-serif font-bold text-slate-800">
-                                    Contraste de Concepto (Feedback de Mesa)
-                                </h2>
-                                <p class="text-[10px] uppercase font-bold ${colorClass} tracking-widest">Equipo ${t.name}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            ${getPhaseIconHTML('sublimar', 'shield-alert')}
-                            <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Fase Sublimar</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-8 my-auto max-w-4xl mx-auto w-full">
-                        <div class="bg-red-50/30 border border-red-100 p-6 rounded-2xl flex flex-col justify-between h-52">
-                            <div>
-                                <span class="text-[9px] uppercase font-bold text-red-500 tracking-wider block mb-2.5">Aspectos Cuestionados (Ataques)</span>
-                                <p class="text-sm text-slate-800 leading-relaxed font-bold">
-                                    "${ctrl.cuestionado}"
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">¿Qué obstáculos ven los otros equipos?</span>
-                        </div>
-                        <div class="bg-green-50/30 border border-green-100 p-6 rounded-2xl flex flex-col justify-between h-52">
-                            <div>
-                                <span class="text-[9px] uppercase font-bold text-green-600 tracking-wider block mb-2.5">Ajuste Propuesto (Defensa)</span>
-                                <p class="text-sm text-slate-800 leading-relaxed font-bold">
-                                    "${ctrl.ajuste}"
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">¿Cómo responderemos y mitigaremos?</span>
-                        </div>
-                    </div>
-                    ${getFooterHTML(pageCounter)}
-                `;
-                wrapper.appendChild(sContr);
-                pageCounter++;
-
-                // 23c. DIAPOSITIVA DE DESARROLLO DETALLADO (Resultados y Recursos)
-                const sDes = document.createElement('div');
-                sDes.className = `slide-container border-l-[8px] ${barColor} justify-between`;
-                sDes.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${t.name.toLowerCase()}">
-                            <div>
-                                <h2 class="text-base font-serif font-bold text-slate-800">
-                                    Desarrollo Detallado & Viabilidad
-                                </h2>
-                                <p class="text-[10px] uppercase font-bold ${colorClass} tracking-widest">Equipo ${t.name}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            ${getPhaseIconHTML('proyectar', 'cog')}
-                            <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Fase Proyectar</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-8 my-auto w-full">
-                        <div class="bg-slate-50 border border-slate-100 p-6 rounded-2xl flex flex-col justify-between h-52">
-                            <div>
-                                <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider block mb-2.5">Resultados Esperados (Éxito)</span>
-                                <p class="text-sm text-slate-800 leading-relaxed font-bold">
-                                    "${t.expectedResults || 'Fijar e impulsar los objetivos clave de co-creación a corto plazo.'}"
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">Métricas e impacto del concepto</span>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100 p-6 rounded-2xl flex flex-col justify-between h-52">
-                            <div>
-                                <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider block mb-2.5">Recursos Necesarios & Prueba Piloto</span>
-                                <p class="text-sm text-slate-800 leading-relaxed font-bold">
-                                    <b>Prueba Piloto:</b> ${t.pilot || 'Testeo básico'}<br>
-                                    <b>Recursos:</b> ${t.resources || 'Infraestructura básica'}
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">Prueba rápida para validar en el mercado</span>
-                        </div>
-                    </div>
-                    ${getFooterHTML(pageCounter)}
-                `;
-                wrapper.appendChild(sDes);
-                pageCounter++;
-
-                // 23d. DIAPOSITIVA DE PRESENTACIÓN (PITCH STORYBOARD)
-                const sPitch = document.createElement('div');
-                sPitch.className = `slide-container border-l-[8px] ${barColor} justify-between`;
-                sPitch.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="./public/assets/logos/${t.name.toLowerCase()}.png" class="h-8 object-contain onerror-fallback" data-element="${t.name.toLowerCase()}">
-                            <div>
-                                <h2 class="text-base font-serif font-bold text-slate-800">
-                                    Narrativa de Presentación (Pitch Storyboard)
-                                </h2>
-                                <p class="text-[10px] uppercase font-bold ${colorClass} tracking-widest">Equipo ${t.name}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            ${getPhaseIconHTML('proyectar', 'megaphone')}
-                            <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold font-sans">Narrativa de Pitch</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-4 gap-5 my-auto w-full">
-                        <div class="bg-slate-50 border border-slate-100 p-4.5 rounded-xl flex flex-col justify-between h-52">
-                            <div>
-                                <div class="flex items-center gap-2 mb-2.5 border-b border-slate-200 pb-1.5">
-                                    <span class="w-6 h-6 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">1</span>
-                                    <span class="text-[9px] uppercase font-black text-slate-500 tracking-wider">Gancho</span>
-                                </div>
-                                <p class="text-xs text-slate-700 font-bold leading-relaxed">
-                                    "${t.pitchStart || 'Llamar la atención con un gancho potente.'}"
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">¿Cómo empezar?</span>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100 p-4.5 rounded-xl flex flex-col justify-between h-52">
-                            <div>
-                                <div class="flex items-center gap-2 mb-2.5 border-b border-slate-200 pb-1.5">
-                                    <span class="w-6 h-6 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">2</span>
-                                    <span class="text-[9px] uppercase font-black text-slate-500 tracking-wider">El Problema</span>
-                                </div>
-                                <p class="text-xs text-slate-700 font-bold leading-relaxed">
-                                    "${t.pitchProblem || 'Visibilizar el dolor crítico de la audiencia.'}"
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">¿Qué duele?</span>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100 p-4.5 rounded-xl flex flex-col justify-between h-52">
-                            <div>
-                                <div class="flex items-center gap-2 mb-2.5 border-b border-slate-200 pb-1.5">
-                                    <span class="w-6 h-6 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">3</span>
-                                    <span class="text-[9px] uppercase font-black text-slate-500 tracking-wider">La Solución</span>
-                                </div>
-                                <p class="text-xs text-slate-700 font-bold leading-relaxed">
-                                    "${t.pitchSolution || 'Explicar cómo aliviamos el reto principal.'}"
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">¿Qué proponemos?</span>
-                        </div>
-                        <div class="bg-slate-50 border border-slate-100 p-4.5 rounded-xl flex flex-col justify-between h-52">
-                            <div>
-                                <div class="flex items-center gap-2 mb-2.5 border-b border-slate-200 pb-1.5">
-                                    <span class="w-6 h-6 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">4</span>
-                                    <span class="text-[9px] uppercase font-black text-slate-500 tracking-wider">Cierre</span>
-                                </div>
-                                <p class="text-xs text-slate-700 font-bold leading-relaxed">
-                                    "${t.pitchAction || 'Concluir invitando a la co-creación.'}"
-                                </p>
-                            </div>
-                            <span class="text-[9px] font-bold text-slate-400">¿Cuál es la llamada?</span>
-                        </div>
-                    </div>
-                    ${getFooterHTML(pageCounter)}
-                `;
-                wrapper.appendChild(sPitch);
-                pageCounter++;
-            });
-
-
-
-            // ─────────────────── SLIDE 43: CIERRE DEL INFORME ───────────────────
-            const sCie = document.createElement('div');
-            sCie.className = 'slide-container bg-slate-900 text-white separator-slide';
-            sCie.innerHTML = `
-                <div class="flex flex-col items-center justify-center space-y-4">
-                    <img src="./public/logo.png" alt="Kreatum Logo" class="h-16 object-contain mx-auto mb-6 onerror-fallback" data-element="kreatum">
-                    <h2 class="text-5xl font-serif font-black tracking-tight text-white">¡Fin del Ritual de Co-creación!</h2>
-                </div>
-                <div class="absolute bottom-6 text-[10px] uppercase tracking-widest text-slate-500 font-bold font-sans">KREATUM™</div>
-            `;
-            wrapper.appendChild(sCie);
-
-            // Re-bind Lucide icons & error fallback images
-            initIcons();
-        }
+window.addEventListener('DOMContentLoaded', () => {
+  initCSVReader();
+  syncSidebarFromData();
+  renderNextStepsEditor();
+  selectEditorTeam('Agua');
+  renderSlides();
+});
     </script>
 </body>
 </html>

@@ -1,0 +1,101 @@
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_load_test:
+        description: Run the 100-workshop emulator load baseline
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm --prefix functions ci
+      - run: npm install --global firebase-tools@15.2.0
+      - run: npm run verify
+      - run: npm run audit:security
+
+  integration:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm --prefix functions ci
+      - run: npm install --global firebase-tools@15.2.0
+      - run: npm run test:integration
+      - run: npm run test:migration
+
+  browser:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm --prefix functions ci
+      - run: npm install --global firebase-tools@15.2.0
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:e2e
+      - run: npm run test:e2e:access
+      - run: npm run test:e2e:report
+
+  load:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_load_test }}
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm --prefix functions ci
+      - run: npm install --global firebase-tools@15.2.0
+      - run: npm run test:load
+        env:
+          KREATUM_LOAD_WORKSHOPS: 100
+          KREATUM_LOAD_ADMINS: 100
+          KREATUM_LOAD_AUDIT_EVENTS: 5000
