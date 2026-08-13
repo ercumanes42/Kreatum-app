@@ -17,7 +17,7 @@ test('owner generates, downloads and publishes an immutable report version', asy
   await page.getByRole('button', { name: 'Entrar al Panel' }).click();
 
   await expect(page.getByRole('heading', { name: 'Panel del Alquimista' }))
-    .toBeVisible({ timeout: 30_000 });
+    .toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Ver Historial' }).click();
   await expect(page.getByRole('heading', { name: 'Historial de Partidas' })).toBeVisible();
   await page.getByRole('button', { name: 'Abrir partida E2E123' }).click();

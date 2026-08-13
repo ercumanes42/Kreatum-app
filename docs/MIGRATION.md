@@ -73,3 +73,29 @@ La precedencia comercial es `commercial`, después `commercialPlan` y finalmente
 `facilitatorUid` solo se añade cuando `facilitatorAssignment.facilitatorUid` o, en su ausencia, `createdBy` identifica un miembro `facilitator` activo de la misma empresa. Un UID inactivo, desconocido, contradictorio o perteneciente a otro tenant bloquea toda la aplicación. Los resultados solo muestran hashes, nunca correos, códigos o respuestas.
 
 No desplegar las reglas nuevas antes del `--verify`: las organizaciones sin `commercial` canónico y las partidas sin `facilitatorUid` quedan bloqueadas de forma intencionada.
+## Resolución comercial controlada
+
+`migrate:resolve-commercial` materializa únicamente los términos comerciales de una organización ya existente. No modifica, reasigna ni elimina partidas. Antes de escribir valida que `--used` coincide exactamente con el número actual de partidas de la empresa.
+
+Ejecutar primero el dry-run y conservar el valor `analysisHash` de su salida:
+
+```powershell
+$env:KREATUM_MIGRATION_ALLOWED_PROJECTS='<project-id>'
+npm --prefix functions run migrate:resolve-commercial -- --project <project-id> --organization <org-id> --contracted 5 --used 5
+```
+
+Revisar que la salida indique cinco partidas, `available: 0`, ningún error y el proyecto/organización esperados mediante sus hashes. La aplicación exige el mismo proyecto, el hash exacto del dry-run y un motivo auditable:
+
+```powershell
+npm --prefix functions run migrate:resolve-commercial -- --apply --project <project-id> --confirm-project <project-id> --organization <org-id> --contracted 5 --used 5 --confirm-analysis-hash <analysis-hash> --reason "Alta comercial aprobada"
+```
+
+Si la organización no tiene una fecha de inicio reutilizable, añadir el mismo `--valid-from <fecha-ISO>` al dry-run, apply y verify. No usar fechas distintas entre pasos.
+
+Finalizar con verificación:
+
+```powershell
+npm --prefix functions run migrate:resolve-commercial -- --verify --project <project-id> --organization <org-id> --contracted 5 --used 5
+```
+
+Debe devolver `verified: true`. Un cambio en la organización o en el conjunto de partidas altera el hash y bloquea `--apply`. La operación escribe solo `organizations/<org-id>` y el evento determinista `migration-platform-commercial-resolution-v1`; no escribe documentos `workshops` ni datos introducidos por participantes.

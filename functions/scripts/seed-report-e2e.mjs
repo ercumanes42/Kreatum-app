@@ -103,3 +103,40 @@ await Promise.all([
 ]);
 
 console.log(JSON.stringify({ workshopId, organizationId }));
+const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
+const functionsEmulatorHost = process.env.FUNCTIONS_EMULATOR_HOST || '127.0.0.1:5001';
+const signInResponse = await globalThis.fetch(
+  `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-api-key`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  },
+);
+if (!signInResponse.ok) {
+  throw new Error(`Could not authenticate the report E2E owner (${signInResponse.status}).`);
+}
+const { idToken } = await signInResponse.json();
+const warmupResponse = await globalThis.fetch(
+  `http://${functionsEmulatorHost}/${projectId}/europe-west1/listMyOrganizations`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ data: { fallbackOrganizationId: organizationId } }),
+    signal: AbortSignal.timeout(90_000),
+  },
+);
+if (!warmupResponse.ok) {
+  throw new Error(`Could not warm listMyOrganizations (${warmupResponse.status}).`);
+}
+const warmupPayload = await warmupResponse.json();
+const organizations = warmupPayload?.result?.data?.organizations
+  ?? warmupPayload?.result?.organizations
+  ?? warmupPayload?.data?.organizations
+  ?? [];
+if (!organizations.some((organization) => organization?.id === organizationId)) {
+  throw new Error('listMyOrganizations warmup did not return the seeded organization.');
+}

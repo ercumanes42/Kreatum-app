@@ -16,9 +16,10 @@
         "migrate:legacy": "node scripts/migrate-legacy.mjs",
         "migrate:access": "node scripts/migrate-access.mjs",
         "migrate:platform-access": "node scripts/migrate-platform-access.mjs",
+        "migrate:resolve-commercial": "node scripts/resolve-platform-commercial.mjs",
         "migrate:organizations": "node scripts/migrate-organization-memberships.mjs",
         "bootstrap:membership": "node scripts/bootstrap-membership.mjs",
-        "test:migration:worker": "node --test --test-concurrency=1 tests/migration.integration.test.mjs tests/access-migration.integration.test.mjs tests/organization-memberships.integration.test.mjs tests/platform-access-migration.integration.test.mjs"
+        "test:migration:worker": "node --test --test-concurrency=1 tests/migration.integration.test.mjs tests/access-migration.integration.test.mjs tests/organization-memberships.integration.test.mjs tests/platform-access-migration.integration.test.mjs tests/platform-commercial-resolution.integration.test.mjs"
     },
     "dependencies": {
         "@firebase/app": "0.16.0",
