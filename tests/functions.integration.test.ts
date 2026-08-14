@@ -2,9 +2,11 @@ import { strict as assert } from 'node:assert';
 import { after, test } from 'node:test';
 import { deleteApp, initializeApp, type FirebaseApp } from 'firebase/app';
 import {
+  applyActionCode,
   connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
+  sendEmailVerification,
   signInAnonymously,
 } from 'firebase/auth';
 
@@ -101,6 +103,110 @@ test('runs the protected workshop lifecycle without changing the game contract',
         status: 'active',
       },
     );
+  });
+  const verifyEmulatedEmail = async (
+    auth: typeof ownerClient.auth,
+    user: typeof ownerCredential.user,
+  ) => {
+    const email = user.email;
+    assert.ok(email);
+    await sendEmailVerification(user);
+    const response = await fetch(
+      'http://127.0.0.1:9099/emulator/v1/projects/' + projectId + '/oobCodes',
+    );
+    assert.equal(response.ok, true);
+    const payload = await response.json() as {
+      oobCodes?: Array<{
+        email?: string;
+        requestType?: string;
+        oobCode?: string;
+      }>;
+    };
+    const verification = payload.oobCodes
+      ?.filter((item) => item.email === email && item.requestType === 'VERIFY_EMAIL')
+      .at(-1);
+    assert.ok(verification?.oobCode);
+    await applyActionCode(auth, verification.oobCode);
+    await user.reload();
+    await user.getIdToken(true);
+    assert.equal(user.emailVerified, true);
+  };
+
+  const internalNonce = Date.now().toString(36);
+  const internalOrganizationId = 'gfs-internal-' + internalNonce;
+  const externalOrganizationId = 'external-metered-' + internalNonce;
+  const gfsClient = createClient('gfs-internal-' + internalNonce);
+  const gfsCredential = await createUserWithEmailAndPassword(
+    gfsClient.auth,
+    'facilitator-' + internalNonce + '@gfs.es',
+    'Kreatum-Test-123!',
+  );
+  await verifyEmulatedEmail(gfsClient.auth, gfsCredential.user);
+  await verifyEmulatedEmail(ownerClient.auth, ownerCredential.user);
+
+  const zeroCommercial = {
+    plan: 'pilot',
+    status: 'active',
+    validFrom: Timestamp.fromMillis(Date.now() - 60_000),
+    validUntil: null,
+    includedWorkshops: 0,
+    additionalWorkshops: 0,
+    consumedWorkshops: 0,
+  };
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await Promise.all([
+      setDoc(doc(firestore, 'organizations', internalOrganizationId), {
+        name: 'GFS internal privilege',
+        status: 'active',
+        commercial: zeroCommercial,
+      }),
+      setDoc(
+        doc(firestore, 'organizations', internalOrganizationId, 'members', gfsCredential.user.uid),
+        { role: 'facilitator', status: 'active' },
+      ),
+      setDoc(doc(firestore, 'organizations', externalOrganizationId), {
+        name: 'External metered organization',
+        status: 'active',
+        commercial: zeroCommercial,
+      }),
+      setDoc(
+        doc(firestore, 'organizations', externalOrganizationId, 'members', ownerCredential.user.uid),
+        { role: 'owner', status: 'active' },
+      ),
+    ]);
+  });
+
+  const internalCreated = await call<
+    Record<string, unknown>,
+    { workshopId: string; creditsRemaining: number | null }
+  >(gfsClient.functions, 'createWorkshop', {
+    organizationId: internalOrganizationId,
+    client: 'Partida interna GFS',
+    facilitator: 'Facilitador GFS',
+    challenge: 'Crear sin consumir credito comercial',
+    idempotencyKey: 'gfs-internal-zero-credit',
+  });
+  assert.equal(internalCreated.creditsRemaining, null);
+
+  await assert.rejects(call(ownerClient.functions, 'createWorkshop', {
+    organizationId: externalOrganizationId,
+    client: 'Empresa externa',
+    facilitator: 'Owner externo',
+    challenge: 'No debe crear sin credito',
+    idempotencyKey: 'external-zero-credit',
+  }), (error: { code?: string }) => error.code === 'functions/resource-exhausted');
+
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    const [internalOrganization, externalOrganization, workshop] = await Promise.all([
+      getDoc(doc(firestore, 'organizations', internalOrganizationId)),
+      getDoc(doc(firestore, 'organizations', externalOrganizationId)),
+      getDoc(doc(firestore, 'workshops', internalCreated.workshopId)),
+    ]);
+    assert.equal(internalOrganization.data()?.commercial?.consumedWorkshops, 0);
+    assert.equal(externalOrganization.data()?.commercial?.consumedWorkshops, 0);
+    assert.equal(workshop.data()?.organizationId, internalOrganizationId);
   });
 
   const analystClient = createClient('analyst-' + Date.now());

@@ -103,6 +103,7 @@ import {
   renderReportPptx,
 } from './reporting/renderReportArtifacts.js';
 import { assertOrganizationOperational } from './security/organizationAccess.js';
+import { hasInternalGfsWorkshopPrivilege } from './security/internalGfsAccess.js';
 import { revalidateWorkshopAdminInTransaction } from './security/workshopAdminAuthorization.js';
 import { revalidateOrganizationOwnerInTransaction } from './security/organizationOwnerAuthorization.js';
 import { RUNTIME_SERVICE_ACCOUNT } from './runtimeOptions.js';
@@ -518,10 +519,11 @@ const callable = <Input, Output>(
   },
 );
 const createWorkshopWithCode = async (
-  uid: string,
+  auth: AuthContext,
   input: CreateWorkshopInput,
   roomCode: string,
 ): Promise<CreateWorkshopOutput> => {
+  const uid = auth.uid;
   const workshopRef = db.collection('workshops').doc();
   const roomCodeRef = db.doc('activeRoomCodes/' + roomCode);
   const organizationRef = db.doc('organizations/' + input.organizationId);
@@ -539,12 +541,6 @@ const createWorkshopWithCode = async (
       transaction.get(membershipRef),
     ]);
 
-    if (commandSnapshot.exists) {
-      return commandSnapshot.data()?.result as CreateWorkshopOutput;
-    }
-    if (roomCodeSnapshot.exists) {
-      throw new HttpsError('already-exists', 'El código de sala ya está en uso.');
-    }
     if (!organizationSnapshot.exists) {
       throw new HttpsError('failed-precondition', 'La organizacion no esta configurada.');
     }
@@ -556,7 +552,15 @@ const createWorkshopWithCode = async (
     }
     assertOrganizationOperational(organizationSnapshot);
 
+    if (commandSnapshot.exists) {
+      return commandSnapshot.data()?.result as CreateWorkshopOutput;
+    }
+    if (roomCodeSnapshot.exists) {
+      throw new HttpsError('already-exists', 'El código de sala ya está en uso.');
+    }
+
     const organization = organizationSnapshot.data() ?? {};
+    const hasInternalPrivilege = hasInternalGfsWorkshopPrivilege(auth.token);
     const configuredRetention = Number(organization.retentionMonths);
     const retentionMonths = Number.isInteger(configuredRetention)
       && configuredRetention >= 1
@@ -588,14 +592,18 @@ const createWorkshopWithCode = async (
         throw new HttpsError('failed-precondition', 'Los créditos contratados no están configurados correctamente.');
       }
       creditsRemaining = included + additional - consumed;
-      if (creditsRemaining <= 0) {
-        throw new HttpsError('resource-exhausted', 'La organización no dispone de partidas contratadas.');
+      if (hasInternalPrivilege) {
+        creditsRemaining = null;
+      } else {
+        if (creditsRemaining <= 0) {
+          throw new HttpsError('resource-exhausted', 'La organización no dispone de partidas contratadas.');
+        }
+        creditsRemaining -= 1;
+        transaction.update(organizationRef, {
+          'commercial.consumedWorkshops': consumed + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       }
-      creditsRemaining -= 1;
-      transaction.update(organizationRef, {
-        'commercial.consumedWorkshops': consumed + 1,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
     }
 
     const result: CreateWorkshopOutput = {
@@ -675,12 +683,12 @@ export const createWorkshop = callable<CreateWorkshopInput, CreateWorkshopOutput
     }
 
     if (input.customCode) {
-      return createWorkshopWithCode(auth.uid, input, input.customCode);
+      return createWorkshopWithCode(auth, input, input.customCode);
     }
 
     for (let attempt = 0; attempt < 12; attempt += 1) {
       try {
-        return await createWorkshopWithCode(auth.uid, input, generateRoomCode());
+        return await createWorkshopWithCode(auth, input, generateRoomCode());
       } catch (error) {
         if (!(error instanceof HttpsError) || error.code !== 'already-exists') throw error;
       }

@@ -305,7 +305,9 @@ export default function AdminApp() {
             </p>
             <p className="mb-8 text-xs font-semibold text-kreatum-gray/70 dark:text-white/60">
               {activeOrganization.branding.displayName}
-              {activeOrganization.creditsRemaining !== null && ` · ${activeOrganization.creditsRemaining} partidas disponibles`}
+              {activeOrganization.creditsRemaining === null
+                ? ' · Partidas gestionadas por GFS'
+                : ` · ${activeOrganization.creditsRemaining} partidas disponibles`}
             </p>
 
             <p className="mx-auto mb-8 max-w-xl text-base font-medium leading-relaxed text-kreatum-gray/70 dark:text-white/60">

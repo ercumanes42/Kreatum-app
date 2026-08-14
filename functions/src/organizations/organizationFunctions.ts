@@ -8,6 +8,10 @@ import {
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { resolvePlatformOrganizationStatus } from '../platform/platformSecurity.js';
+import {
+  hasInternalGfsWorkshopPrivilege,
+  visibleWorkshopCredits,
+} from '../security/internalGfsAccess.js';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import {
   DEFAULT_RETENTION_MONTHS,
@@ -337,7 +341,18 @@ export const listMyOrganizations = callable<ListMyOrganizationsInput, ListMyOrga
     const organizations = organizationSnapshots.flatMap((snapshot) => {
       const role = memberships.get(snapshot.id);
       if (!snapshot.exists || !role) return [];
-      return [summaryFromDocuments(snapshot.id, snapshot.data() as OrganizationDocument, role)];
+      const summary = summaryFromDocuments(
+        snapshot.id,
+        snapshot.data() as OrganizationDocument,
+        role,
+      );
+      return [{
+        ...summary,
+        creditsRemaining: visibleWorkshopCredits(
+          summary.creditsRemaining,
+          hasInternalGfsWorkshopPrivilege(auth.token),
+        ),
+      }];
     }).sort((left, right) => left.name.localeCompare(right.name));
     return { organizations, legacyFallbackUsed };
   },
