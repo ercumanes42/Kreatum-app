@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { auth, db } from '../../lib/firebase';
 import { collection, getDocs, doc, limit, orderBy, query, setDoc, startAfter, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
-import { defaultOrganizationId, isV2DataModel, workshopCollectionName } from '../../lib/dataModel';
+import { isV2DataModel, workshopCollectionName } from '../../lib/dataModel';
 import { createIdempotencyKey, workshopApi } from '../../lib/workshopApi';
 import { getErrorCode, getUserFacingError } from '../../lib/errors';
+import { canAccessTenantReports } from '../../lib/organizationAccess';
 import type { OrganizationRole } from '../../../shared/contracts';
 import { ReportManager } from './ReportManager';
 import { Card, CardContent } from '../ui/Card';
@@ -42,8 +43,10 @@ interface GameRecord extends GameCsvRecord {
   lifecycleStatus: GameLifecycleStatus;
 }
 interface GameHistoryProps {
+  organizationId: string;
+  role: OrganizationRole;
+  verifiedGfsIdentity: boolean;
   onResumeActiveGame?: (roomCode: string) => Promise<void>;
-  role?: OrganizationRole;
 }
 
 
@@ -70,7 +73,8 @@ const TEAM_CONFIG: Record<Team, { icon: string; color: string; bg: string; barCo
   Aire: { icon: '/assets/logos/aire.png', color: 'text-kreatum-turquoise', bg: 'bg-kreatum-turquoise/10', barColor: 'bg-kreatum-turquoise' },
 };
 
-export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {}) {
+export function GameHistory({ organizationId, onResumeActiveGame, role, verifiedGfsIdentity }: GameHistoryProps) {
+  const canAccessReports = canAccessTenantReports(role, verifiedGfsIdentity);
   const [games, setGames] = useState<GameRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,7 +98,7 @@ export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {})
     setActionError('');
 
     try {
-      if (isV2DataModel && !defaultOrganizationId) {
+      if (isV2DataModel && !organizationId) {
         throw new Error('Falta configurar la organización para consultar el historial.');
       }
 
@@ -105,7 +109,7 @@ export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {})
       const workshopsRef = collection(db, workshopCollectionName);
       const baseConstraints = isV2DataModel
         ? [
-          where('organizationId', '==', defaultOrganizationId),
+          where('organizationId', '==', organizationId),
           ...(role === 'facilitator' && currentUser ? [where('facilitatorUid', '==', currentUser.uid)] : []),
           orderBy('createdAt', 'desc'),
         ]
@@ -152,7 +156,7 @@ export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {})
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [role]);
+  }, [organizationId, role]);
 
   useEffect(() => {
     void loadGames(true);
@@ -298,11 +302,11 @@ export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {})
     setActionError('');
     setExportMessage('');
     try {
-      if (!isV2DataModel || !defaultOrganizationId) {
+      if (!isV2DataModel || !organizationId) {
         throw new Error('No hay una organización seleccionada para exportar.');
       }
       const result = await workshopApi.exportOrganizationWorkshopHistory({
-        organizationId: defaultOrganizationId,
+        organizationId,
         filters: { search: searchTerm, status: statusFilter },
       });
       const blob = new Blob(['\uFEFF' + result.csv], { type: 'text/csv;charset=utf-8;' });
@@ -381,10 +385,12 @@ export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {})
                 Restaurar partida
               </Button>
             )}
-            <Button variant="outline" className="h-11 w-full justify-center gap-2 rounded-xl lg:w-auto" onClick={() => exportToCSV(selectedGame)}>
-              <FileSpreadsheet className="w-4 h-4" />
-              Exportar CSV
-            </Button>
+            {canAccessReports && (
+              <Button variant="outline" className="h-11 w-full justify-center gap-2 rounded-xl lg:w-auto" onClick={() => exportToCSV(selectedGame)}>
+                <FileSpreadsheet className="w-4 h-4" />
+                Exportar CSV
+              </Button>
+            )}
           </div>
         </div>
 
@@ -416,8 +422,14 @@ export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {})
           </div>
         </div>
 
-        {isV2DataModel && selectedGame.lifecycleStatus === 'completed' && (
-          <ReportManager workshopId={selectedGame.id} roomCode={selectedGame.roomCode} />
+        {canAccessReports && isV2DataModel && selectedGame.lifecycleStatus === 'completed' && (
+          <ReportManager
+            organizationId={organizationId}
+            role={role}
+            verifiedGfsIdentity={verifiedGfsIdentity}
+            workshopId={selectedGame.id}
+            roomCode={selectedGame.roomCode}
+          />
         )}
 
         {/* Teams detail */}
@@ -533,16 +545,18 @@ export function GameHistory({ onResumeActiveGame, role }: GameHistoryProps = {})
             <p className="text-sm font-medium text-kreatum-gray/55 dark:text-white/45">{games.length} partidas cargadas</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          className="h-11 w-full gap-2 rounded-xl sm:w-auto"
-          onClick={() => void exportAllToCSV()}
-          disabled={isExporting || (games.length === 0 && !hasMore)}
-          aria-busy={isExporting}
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          {isExporting ? 'Exportando...' : 'Exportar Todo a CSV'}
-        </Button>
+        {canAccessReports && (
+          <Button
+            variant="outline"
+            className="h-11 w-full gap-2 rounded-xl sm:w-auto"
+            onClick={() => void exportAllToCSV()}
+            disabled={isExporting || (games.length === 0 && !hasMore)}
+            aria-busy={isExporting}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            {isExporting ? 'Exportando...' : 'Exportar Todo a CSV'}
+          </Button>
+        )}
       </div>
       {exportMessage && <p className="text-sm font-semibold text-green-700" role="status">{exportMessage}</p>}
 

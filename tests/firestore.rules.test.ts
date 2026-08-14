@@ -175,6 +175,9 @@ beforeEach(async () => {
     await setDoc(doc(firestore, 'workshops', workshopId, 'reports', 'published-report'), {
       status: 'published',
     });
+    await setDoc(doc(firestore, 'workshops', workshopId, 'reportJobs', 'report-job'), {
+      status: 'completed',
+    });
     await setDoc(doc(firestore, 'workshops', workshopA2Id, 'teams', 'Agua'), {
       team: 'Agua',
       schemaVersion: 2,
@@ -405,12 +408,34 @@ test('keeps attack writes server-only and hides unrelated attacks', async () => 
 
 test('isolates workshops and report inputs between organizations and facilitators', async () => {
   const facilitatorA1 = environment.authenticatedContext(facilitatorId).firestore();
+  const verifiedGfsFacilitatorA1 = environment.authenticatedContext(facilitatorId, {
+    email: 'facilitator@gfs.es',
+    email_verified: true,
+  }).firestore();
+  const unverifiedGfsFacilitatorA1 = environment.authenticatedContext(facilitatorId, {
+    email: 'facilitator@gfs.es',
+    email_verified: false,
+  }).firestore();
   const facilitatorA2 = environment.authenticatedContext(facilitatorA2Id).firestore();
   const facilitatorB = environment.authenticatedContext(facilitatorBId).firestore();
   const ownerA = environment.authenticatedContext(ownerId).firestore();
 
   await assertSucceeds(getDoc(doc(facilitatorA1, 'workshops', workshopId)));
-  await assertSucceeds(getDoc(doc(facilitatorA1, 'workshops', workshopId, 'reports', 'published-report')));
+  await assertFails(getDoc(doc(facilitatorA1, 'workshops', workshopId, 'reports', 'published-report')));
+  await assertFails(getDoc(doc(facilitatorA1, 'workshops', workshopId, 'reportJobs', 'report-job')));
+  await assertFails(getDoc(doc(facilitatorA1, 'workshops', workshopId, 'auditEvents', 'event-1')));
+  await assertFails(getDocs(collection(facilitatorA1, 'workshops', workshopId, 'reports')));
+  await assertFails(getDocs(collection(facilitatorA1, 'workshops', workshopId, 'reportJobs')));
+  await assertFails(getDocs(collection(facilitatorA1, 'workshops', workshopId, 'auditEvents')));
+  await assertSucceeds(getDoc(doc(verifiedGfsFacilitatorA1, 'workshops', workshopId, 'reports', 'published-report')));
+  await assertSucceeds(getDoc(doc(verifiedGfsFacilitatorA1, 'workshops', workshopId, 'reportJobs', 'report-job')));
+  await assertSucceeds(getDoc(doc(verifiedGfsFacilitatorA1, 'workshops', workshopId, 'auditEvents', 'event-1')));
+  await assertSucceeds(getDocs(collection(verifiedGfsFacilitatorA1, 'workshops', workshopId, 'reports')));
+  await assertSucceeds(getDocs(collection(verifiedGfsFacilitatorA1, 'workshops', workshopId, 'reportJobs')));
+  await assertSucceeds(getDocs(collection(verifiedGfsFacilitatorA1, 'workshops', workshopId, 'auditEvents')));
+  await assertFails(getDoc(doc(verifiedGfsFacilitatorA1, 'workshops', workshopA2Id, 'reports', 'a2-report')));
+  await assertFails(getDoc(doc(verifiedGfsFacilitatorA1, 'workshops', workshopBId, 'reports', 'b-report')));
+  await assertFails(getDoc(doc(unverifiedGfsFacilitatorA1, 'workshops', workshopId, 'reports', 'published-report')));
   await assertFails(getDoc(doc(facilitatorA1, 'workshops', workshopA2Id)));
   await assertFails(getDoc(doc(facilitatorA1, 'workshops', workshopA2Id, 'teams', 'Agua')));
   await assertFails(getDoc(doc(facilitatorA1, 'workshops', workshopA2Id, 'reports', 'a2-report')));
@@ -423,6 +448,12 @@ test('isolates workshops and report inputs between organizations and facilitator
   await assertSucceeds(getDoc(doc(facilitatorB, 'workshops', workshopBId)));
   await assertFails(getDoc(doc(facilitatorB, 'workshops', workshopId)));
   await assertSucceeds(getDoc(doc(ownerA, 'workshops', workshopId)));
+  await assertSucceeds(getDoc(doc(ownerA, 'workshops', workshopId, 'reports', 'published-report')));
+  await assertSucceeds(getDoc(doc(ownerA, 'workshops', workshopId, 'reportJobs', 'report-job')));
+  await assertSucceeds(getDoc(doc(ownerA, 'workshops', workshopId, 'auditEvents', 'event-1')));
+  await assertSucceeds(getDocs(collection(ownerA, 'workshops', workshopId, 'reports')));
+  await assertSucceeds(getDocs(collection(ownerA, 'workshops', workshopId, 'reportJobs')));
+  await assertSucceeds(getDocs(collection(ownerA, 'workshops', workshopId, 'auditEvents')));
   await assertSucceeds(getDoc(doc(ownerA, 'workshops', workshopA2Id)));
   await assertFails(getDoc(doc(ownerA, 'workshops', workshopBId)));
 });

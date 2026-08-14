@@ -4,10 +4,32 @@ import type { OrganizationSummary, PlatformOrganizationStatus } from '../../shar
 import {
   ADMIN_ACCESS_LOADING_TIMEOUT_MS,
   ORGANIZATION_STATUS_LABELS,
+  canAccessTenantReports,
+  hasVerifiedGfsIdentity,
   organizationAccessMessage,
   selectOrganizationForAdmin,
   withAdminAccessDeadline,
 } from './organizationAccess.js';
+
+test('recognizes only verified identities from the exact gfs.es domain', () => {
+  assert.equal(hasVerifiedGfsIdentity({ email: 'facilitator@gfs.es', email_verified: true }), true);
+  for (const token of [
+    { email: 'facilitator@gfs.es', email_verified: false },
+    { email: 'facilitator@sub.gfs.es', email_verified: true },
+    { email: 'facilitator@gfs.es.example', email_verified: true },
+    { email: 'facilitator@external.example', email_verified: true },
+    { email_verified: true },
+  ]) {
+    assert.equal(hasVerifiedGfsIdentity(token), false);
+  }
+});
+
+test('exposes tenant reports to owners and verified internal facilitators only', () => {
+  assert.equal(canAccessTenantReports('owner', false), true);
+  assert.equal(canAccessTenantReports('facilitator', true), true);
+  assert.equal(canAccessTenantReports('facilitator', false), false);
+  assert.equal(canAccessTenantReports(undefined, true), false);
+});
 
 const organization = (
   id: string,

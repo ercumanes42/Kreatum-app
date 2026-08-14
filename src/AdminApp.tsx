@@ -18,6 +18,7 @@ import { configuredDefaultOrganizationId, getSelectedOrganizationId, setSelected
 import { workshopApi } from './lib/workshopApi';
 import {
   ORGANIZATION_STATUS_LABELS,
+  hasVerifiedGfsIdentity,
   organizationAccessMessage,
   selectOrganizationForAdmin,
   withAdminAccessDeadline,
@@ -54,6 +55,7 @@ export default function AdminApp() {
     setActiveSection(section);
   };
   const [membershipRole, setMembershipRole] = useState<OrganizationRole | null>(null);
+  const [verifiedGfsIdentity, setVerifiedGfsIdentity] = useState(false);
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
   const [activeOrganization, setActiveOrganization] = useState<OrganizationSummary | null>(null);
   const [isCheckingMembership, setIsCheckingMembership] = useState(false);
@@ -68,6 +70,7 @@ export default function AdminApp() {
       if (!active) return;
       setUser(firebaseUser);
       setIsPlatformAdmin(false);
+      setVerifiedGfsIdentity(false);
       if (!firebaseUser || firebaseUser.isAnonymous) {
         setIsCheckingAuth(false);
         return;
@@ -76,7 +79,10 @@ export default function AdminApp() {
       setIsCheckingAuth(true);
       void firebaseUser.getIdTokenResult(true)
         .then((tokenResult) => {
-          if (active) setIsPlatformAdmin(tokenResult.claims.platformAdmin === true);
+          if (active) {
+            setIsPlatformAdmin(tokenResult.claims.platformAdmin === true);
+            setVerifiedGfsIdentity(hasVerifiedGfsIdentity(tokenResult.claims));
+          }
         })
         .catch((error: unknown) => {
           reportClientError('Platform admin claim verification failed', error);
@@ -282,7 +288,9 @@ export default function AdminApp() {
           {activeSection === 'history' ? (
             <GameHistory
               key={activeOrganization.id}
+              organizationId={activeOrganization.id}
               role={membershipRole}
+              verifiedGfsIdentity={verifiedGfsIdentity}
               onResumeActiveGame={(roomCode) => joinGame(roomCode, 'Alchemist')}
             />
           ) : (
@@ -393,7 +401,13 @@ export default function AdminApp() {
         onLogout={handleLogout}
       />
       <div className="pt-20">
-        <AlchemistPanel gameId={gameId} onResetPlatform={() => setShowResetModal(true)} />
+        <AlchemistPanel
+          gameId={gameId}
+          organizationId={activeOrganization.id}
+          role={membershipRole}
+          verifiedGfsIdentity={verifiedGfsIdentity}
+          onResetPlatform={() => setShowResetModal(true)}
+        />
       </div>
       {showResetModal && (
         <ResetModal

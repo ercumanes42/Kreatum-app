@@ -165,6 +165,10 @@ test('runs the protected workshop lifecycle without changing the game contract',
         doc(firestore, 'organizations', internalOrganizationId, 'members', gfsCredential.user.uid),
         { role: 'facilitator', status: 'active' },
       ),
+      setDoc(
+        doc(firestore, 'organizations', organizationId, 'members', gfsCredential.user.uid),
+        { role: 'facilitator', status: 'active' },
+      ),
       setDoc(doc(firestore, 'organizations', externalOrganizationId), {
         name: 'External metered organization',
         status: 'active',
@@ -199,6 +203,10 @@ test('runs the protected workshop lifecycle without changing the game contract',
 
   await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
     const firestore = context.firestore();
+    await updateDoc(
+      doc(firestore, 'workshops', internalCreated.workshopId),
+      { status: 'completed' },
+    );
     const [internalOrganization, externalOrganization, workshop] = await Promise.all([
       getDoc(doc(firestore, 'organizations', internalOrganizationId)),
       getDoc(doc(firestore, 'organizations', externalOrganizationId)),
@@ -208,6 +216,14 @@ test('runs the protected workshop lifecycle without changing the game contract',
     assert.equal(externalOrganization.data()?.commercial?.consumedWorkshops, 0);
     assert.equal(workshop.data()?.organizationId, internalOrganizationId);
   });
+  const internalReport = await call<
+    { workshopId: string; idempotencyKey: string },
+    { status: string }
+  >(gfsClient.functions, 'generateReportSnapshot', {
+    workshopId: internalCreated.workshopId,
+    idempotencyKey: 'gfs-assigned-report-snapshot',
+  });
+  assert.equal(internalReport.status, 'draft');
 
   const analystClient = createClient('analyst-' + Date.now());
   const analystCredential = await createUserWithEmailAndPassword(
@@ -219,6 +235,18 @@ test('runs the protected workshop lifecycle without changing the game contract',
     await setDoc(
       doc(context.firestore(), 'organizations', organizationId, 'members', analystCredential.user.uid),
       { role: 'analyst', status: 'active' },
+    );
+  });
+  const facilitatorClient = createClient('facilitator-' + Date.now());
+  const facilitatorCredential = await createUserWithEmailAndPassword(
+    facilitatorClient.auth,
+    'facilitator-' + Date.now() + '@kreatum.test',
+    'Kreatum-Test-123!',
+  );
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), 'organizations', organizationId, 'members', facilitatorCredential.user.uid),
+      { role: 'facilitator', status: 'active' },
     );
   });
 
@@ -290,6 +318,12 @@ test('runs the protected workshop lifecycle without changing the game contract',
   assert.equal(created.schemaVersion, 2);
 
   assert.equal(created.creditsRemaining, 2);
+  await rulesEnvironment.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'workshops', created.workshopId),
+      { facilitatorUid: facilitatorCredential.user.uid },
+    );
+  });
   const resumed = await call<
     { roomCode: string; idempotencyKey: string },
     { workshopId: string; roomCode: string; status: string }
@@ -437,6 +471,80 @@ test('runs the protected workshop lifecycle without changing the game contract',
   });
   assert.equal(report.status, 'draft');
   assert.match(report.sourceSnapshotHash, /^[a-f0-9]{64}$/);
+  await assert.rejects(
+    call(gfsClient.functions, 'generateReportSnapshot', {
+      workshopId: created.workshopId,
+      idempotencyKey: 'gfs-cross-workshop-report-denied',
+    }),
+    (error: { code?: string }) => error.code === 'functions/not-found',
+  );
+
+  const facilitatorDeniedReportCalls: Array<{
+    name: string;
+    input: Record<string, unknown>;
+  }> = [
+    {
+      name: 'generateReportSnapshot',
+      input: {
+        workshopId: created.workshopId,
+        idempotencyKey: 'facilitator-report-snapshot-denied-001',
+      },
+    },
+    {
+      name: 'generateReportArtifacts',
+      input: {
+        workshopId: created.workshopId,
+        reportId: report.reportId,
+        idempotencyKey: 'facilitator-report-artifacts-denied-001',
+      },
+    },
+    {
+      name: 'queueReportGeneration',
+      input: {
+        workshopId: created.workshopId,
+        reportId: report.reportId,
+        idempotencyKey: 'facilitator-report-queue-denied-001',
+      },
+    },
+    {
+      name: 'getReportJob',
+      input: { workshopId: created.workshopId, jobId: 'job-not-created' },
+    },
+    {
+      name: 'updateReportEditorial',
+      input: {
+        workshopId: created.workshopId,
+        reportId: report.reportId,
+        executiveSummary: '',
+        observations: '',
+        nextSteps: '',
+        idempotencyKey: 'facilitator-report-editorial-denied-001',
+      },
+    },
+    {
+      name: 'publishReport',
+      input: {
+        workshopId: created.workshopId,
+        reportId: report.reportId,
+        idempotencyKey: 'facilitator-report-publish-denied-001',
+      },
+    },
+  ];
+  for (const deniedCall of facilitatorDeniedReportCalls) {
+    await assert.rejects(
+      call(facilitatorClient.functions, deniedCall.name, deniedCall.input),
+      (error: { code?: string }) => error.code === 'functions/not-found',
+    );
+  }
+  await assert.rejects(
+    call(facilitatorClient.functions, 'createReportDownload', {
+      workshopId: created.workshopId,
+      reportId: report.reportId,
+      format: 'json',
+      idempotencyKey: 'facilitator-report-download-denied-001',
+    }),
+    (error: { code?: string }) => error.code === 'functions/permission-denied',
+  );
   const storageUrl = 'http://127.0.0.1:9199/v0/b/'
     + encodeURIComponent(projectId + '.appspot.com')
     + '/o/' + encodeURIComponent(report.storagePath) + '?alt=media';

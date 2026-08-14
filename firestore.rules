@@ -120,6 +120,30 @@ service cloud.firestore {
       return canManageWorkshopData(workshop(workshopId).data);
     }
 
+    function isVerifiedGfsIdentity() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('^[^@]+@[gG][fF][sS][.][eE][sS]$');
+    }
+
+    function canReadWorkshopReports(workshopId) {
+      let workshopData = workshop(workshopId).data;
+      return signedIn()
+        && workshopData.keys().hasAll(['organizationId'])
+        && workshopData.organizationId is string
+        && isOrganizationOperational(workshopData.organizationId)
+        && (
+          hasOrganizationRole(workshopData.organizationId, ['owner'])
+          || (
+            isVerifiedGfsIdentity()
+            && hasCanonicalFacilitator(workshopData)
+            && workshopData.facilitatorUid == request.auth.uid
+            && hasOrganizationRole(workshopData.organizationId, ['facilitator'])
+          )
+        );
+    }
+
     function participantSession(workshopId) {
       return get(
         /databases/$(database)/documents/workshops/$(workshopId)/participantSessions/$(request.auth.uid)
@@ -436,12 +460,12 @@ service cloud.firestore {
       }
 
       match /reports/{reportId} {
-        allow read: if isWorkshopAdmin(workshopId);
+        allow read: if canReadWorkshopReports(workshopId);
         allow create, update, delete: if false;
       }
 
       match /reportJobs/{jobId} {
-        allow read: if isWorkshopAdmin(workshopId);
+        allow read: if canReadWorkshopReports(workshopId);
         allow create, update, delete: if false;
       }
 
@@ -450,7 +474,7 @@ service cloud.firestore {
       }
 
       match /auditEvents/{eventId} {
-        allow read: if isWorkshopAdmin(workshopId);
+        allow read: if canReadWorkshopReports(workshopId);
         allow create, update, delete: if false;
       }
 

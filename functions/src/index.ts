@@ -104,6 +104,7 @@ import {
 } from './reporting/renderReportArtifacts.js';
 import { assertOrganizationOperational } from './security/organizationAccess.js';
 import { hasInternalGfsWorkshopPrivilege } from './security/internalGfsAccess.js';
+import { tenantReportRolesForToken } from './security/reportTenantAuthorization.js';
 import { revalidateWorkshopAdminInTransaction } from './security/workshopAdminAuthorization.js';
 import { revalidateOrganizationOwnerInTransaction } from './security/organizationOwnerAuthorization.js';
 import { RUNTIME_SERVICE_ACCOUNT } from './runtimeOptions.js';
@@ -343,6 +344,15 @@ const loadWorkshopForAdmin = async (
   }
   return { workshopRef, workshop, organizationId, role };
 };
+
+const loadWorkshopForTenantReport = (
+  auth: AuthContext,
+  workshopId: string,
+) => loadWorkshopForAdmin(
+  auth.uid,
+  workshopId,
+  tenantReportRolesForToken(auth.token),
+);
 
 const generateRoomCode = () => {
   let result = '';
@@ -2227,7 +2237,10 @@ export const generateReportSnapshot = callable<
   const auth = requireAdminAuth(request as CallableRequest<unknown>);
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
-  const { workshopRef, organizationId, workshop } = await loadWorkshopForAdmin(auth.uid, workshopId);
+  const { workshopRef, organizationId, workshop } = await loadWorkshopForTenantReport(
+    auth,
+    workshopId,
+  );
   if (workshop.status !== 'completed') {
     throw new HttpsError(
       'failed-precondition',
@@ -2249,7 +2262,7 @@ export const generateReportSnapshot = callable<
       transaction.get(reportRef),
     ]);
     await revalidateWorkshopAdminInTransaction(
-      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+      transaction, db, auth.uid, workshopSnapshot, tenantReportRolesForToken(auth.token),
     );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as GenerateReportSnapshotOutput;
@@ -2320,7 +2333,7 @@ export const generateReportSnapshot = callable<
         transaction.get(commandRef),
       ]);
       await revalidateWorkshopAdminInTransaction(
-        transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+        transaction, db, auth.uid, workshopSnapshot, tenantReportRolesForToken(auth.token),
       );
       if (commandSnapshot.exists) {
         return commandSnapshot.data()?.result as GenerateReportSnapshotOutput;
@@ -2423,6 +2436,7 @@ const generateReportArtifactsForAdmin = async (
   let workshopRef: DocumentReference<DocumentData>;
   let organizationId: string;
   let workshop: WorkshopRecord;
+  let tenantReportRoles: readonly OrganizationRole[] | null = null;
   if (options.platformOrganizationId) {
     const requestedOrganizationId = validateIdentifier(
       options.platformOrganizationId,
@@ -2444,7 +2458,19 @@ const generateReportArtifactsForAdmin = async (
     organizationId = requestedOrganizationId;
     workshop = workshopSnapshot.data() as WorkshopRecord;
   } else {
-    ({ workshopRef, organizationId, workshop } = await loadWorkshopForAdmin(authUid, workshopId));
+    const currentUser = await getAuth().getUser(authUid).catch(() => null);
+    if (!currentUser || currentUser.disabled) {
+      throw new HttpsError('permission-denied', 'La autorización de informes ya no está vigente.');
+    }
+    tenantReportRoles = tenantReportRolesForToken({
+      email: currentUser.email,
+      email_verified: currentUser.emailVerified,
+    });
+    ({ workshopRef, organizationId, workshop } = await loadWorkshopForAdmin(
+      authUid,
+      workshopId,
+      tenantReportRoles,
+    ));
   }
   if (workshop.status !== 'completed') {
     throw new HttpsError(
@@ -2469,9 +2495,9 @@ const generateReportArtifactsForAdmin = async (
       transaction.get(commandRef),
       transaction.get(reportRef),
     ]);
-    if (workshopSnapshot) {
+    if (workshopSnapshot && tenantReportRoles) {
       await revalidateWorkshopAdminInTransaction(
-        transaction, db, authUid, workshopSnapshot, ADMIN_ROLES,
+        transaction, db, authUid, workshopSnapshot, tenantReportRoles,
       );
     }
     if (commandSnapshot.exists) {
@@ -2641,9 +2667,9 @@ const generateReportArtifactsForAdmin = async (
         transaction.get(commandRef),
         transaction.get(reportRef),
       ]);
-      if (workshopSnapshot) {
+      if (workshopSnapshot && tenantReportRoles) {
         await revalidateWorkshopAdminInTransaction(
-          transaction, db, authUid, workshopSnapshot, ADMIN_ROLES,
+          transaction, db, authUid, workshopSnapshot, tenantReportRoles,
         );
       }
       if (commandSnapshot.exists) {
@@ -2706,7 +2732,9 @@ export const generateReportArtifacts = callable<
   GenerateReportArtifactsInput,
   GenerateReportArtifactsOutput
 >('generateReportArtifacts', async (request) => {
-  requireAdminAuth(request as CallableRequest<unknown>);
+  const auth = requireAdminAuth(request as CallableRequest<unknown>);
+  const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
+  await loadWorkshopForTenantReport(auth, workshopId);
   throw new HttpsError(
     'failed-precondition',
     'La generacion directa esta desactivada. Usa la cola de informes.',
@@ -2721,7 +2749,10 @@ export const queueReportGeneration = callable<
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const reportId = validateIdentifier(request.data?.reportId, 'reportId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
-  const { workshopRef, workshop } = await loadWorkshopForAdmin(auth.uid, workshopId);
+  const { workshopRef, workshop } = await loadWorkshopForTenantReport(
+    auth,
+    workshopId,
+  );
   if (workshop.status !== 'completed') {
     throw new HttpsError('failed-precondition', 'La partida debe estar finalizada.');
   }
@@ -2740,7 +2771,7 @@ export const queueReportGeneration = callable<
       transaction.get(commandRef),
     ]);
     await revalidateWorkshopAdminInTransaction(
-      transaction, db, auth.uid, latestWorkshop, ADMIN_ROLES,
+      transaction, db, auth.uid, latestWorkshop, tenantReportRolesForToken(auth.token),
     );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as QueueReportGenerationOutput;
@@ -2855,7 +2886,10 @@ export const getReportJob = callable<GetReportJobInput, GetReportJobOutput>(
     const auth = requireAdminAuth(request as CallableRequest<unknown>);
     const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
     const jobId = validateIdentifier(request.data?.jobId, 'jobId');
-    const { workshopRef } = await loadWorkshopForAdmin(auth.uid, workshopId);
+    const { workshopRef } = await loadWorkshopForTenantReport(
+      auth,
+      workshopId,
+    );
     const snapshot = await workshopRef.collection('reportJobs').doc(jobId).get();
     if (!snapshot.exists) throw new HttpsError('not-found', 'El trabajo de informe no existe.');
     const data = snapshot.data() ?? {};
@@ -3029,7 +3063,10 @@ export const updateReportEditorial = callable<
       { maxLength: MAX_CONTENT_LENGTH },
     ),
   };
-  const { workshopRef } = await loadWorkshopForAdmin(auth.uid, workshopId);
+  const { workshopRef } = await loadWorkshopForTenantReport(
+    auth,
+    workshopId,
+  );
   const reportRef = workshopRef.collection('reports').doc(reportId);
   const commandRef = workshopRef.collection('commandKeys').doc(
     commandDocumentId(auth.uid, idempotencyKey),
@@ -3042,7 +3079,7 @@ export const updateReportEditorial = callable<
       transaction.get(reportRef),
     ]);
     await revalidateWorkshopAdminInTransaction(
-      transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+      transaction, db, auth.uid, workshopSnapshot, tenantReportRolesForToken(auth.token),
     );
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as UpdateReportEditorialOutput;
@@ -3094,7 +3131,10 @@ export const publishReport = callable<PublishReportInput, PublishReportOutput>(
     const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
     const reportId = validateIdentifier(request.data?.reportId, 'reportId');
     const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
-    const { workshopRef, organizationId } = await loadWorkshopForAdmin(auth.uid, workshopId);
+    const { workshopRef, organizationId } = await loadWorkshopForTenantReport(
+      auth,
+      workshopId,
+    );
     const reportRef = workshopRef.collection('reports').doc(reportId);
     const commandRef = workshopRef.collection('commandKeys').doc(
       commandDocumentId(auth.uid, idempotencyKey),
@@ -3181,7 +3221,7 @@ export const publishReport = callable<PublishReportInput, PublishReportOutput>(
           transaction.get(reportRef),
         ]);
         await revalidateWorkshopAdminInTransaction(
-          transaction, db, auth.uid, workshopSnapshot, ADMIN_ROLES,
+          transaction, db, auth.uid, workshopSnapshot, tenantReportRolesForToken(auth.token),
         );
         if (commandSnapshot.exists) {
           return commandSnapshot.data()?.result as PublishReportOutput;

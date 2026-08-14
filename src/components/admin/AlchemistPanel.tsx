@@ -30,7 +30,7 @@ import { GameHistory } from './GameHistory';
 import { WorkshopClosure } from '../phases/WorkshopClosure';
 import { Sparkles } from 'lucide-react';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
-import { isPhaseChangeAllowed } from '../../../shared/contracts';
+import { isPhaseChangeAllowed, type OrganizationRole } from '../../../shared/contracts';
 import { createIdempotencyKey, workshopApi } from '../../lib/workshopApi';
 // Fixed color mapping to avoid dynamic Tailwind class issues
 const TEAM_BAR_COLORS: Record<Team, string> = {
@@ -51,10 +51,13 @@ const TEAM_NAMES: Team[] = ['Agua', 'Aire', 'Fuego', 'Tierra'];
 
 interface Props {
   gameId: string;
+  organizationId: string;
+  role: OrganizationRole;
+  verifiedGfsIdentity: boolean;
   onResetPlatform?: () => void;
 }
 
-export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
+export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdentity, onResetPlatform }: Props) {
   const { roomCode, leaveGame, reassignTeamMember } = useGame();
   const { globalState, updateGlobalState, isLoading: isGlobalLoading, error: globalError } = useGameGlobal(gameId);
   const { teams } = useAllTeams(gameId);
@@ -543,7 +546,11 @@ export function AlchemistPanel({ gameId, onResetPlatform }: Props) {
 
         {/* Tab Content */}
         {activeTab === 'history' ? (
-          <GameHistory />
+          <GameHistory
+            organizationId={organizationId}
+            role={role}
+            verifiedGfsIdentity={verifiedGfsIdentity}
+          />
         ) : (
           <>
         <div className="grid lg:grid-cols-3 gap-6">

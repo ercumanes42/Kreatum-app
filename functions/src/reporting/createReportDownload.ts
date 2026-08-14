@@ -12,17 +12,16 @@ import {
   SCHEMA_VERSION,
   type CreateReportDownloadInput,
   type CreateReportDownloadOutput,
-  type OrganizationRole,
   type PlatformReportFormat,
 } from '../../../shared/contracts.js';
 import { createShortLivedReportUrl } from './reportDownloadUrl.js';
 import { assertOrganizationOperational } from '../security/organizationAccess.js';
+import { hasTenantReportAccess } from '../security/reportTenantAuthorization.js';
 import { RUNTIME_SERVICE_ACCOUNT } from '../runtimeOptions.js';
 
 const REGION = process.env.KREATUM_FUNCTIONS_REGION?.trim() || 'europe-west1';
 const ENFORCE_APP_CHECK = process.env.KREATUM_ENFORCE_APP_CHECK === 'true';
 const DOWNLOAD_TTL_MS = 2 * 60 * 1000;
-const ADMIN_ROLES: OrganizationRole[] = ['owner', 'facilitator'];
 const FORMATS: PlatformReportFormat[] = ['json', 'pdf', 'pptx'];
 const firestore = () => getFirestore();
 
@@ -57,7 +56,7 @@ const requireAdminAuth = (request: CallableRequest<unknown>): AuthContext => {
   return request.auth;
 };
 
-const assertTenantWorkshopAccess = (
+const assertTenantReportOwnerAccess = (
   auth: AuthContext,
   workshop: DocumentData,
   membership: DocumentSnapshot,
@@ -66,12 +65,8 @@ const assertTenantWorkshopAccess = (
   if (!membership.exists) {
     throw new HttpsError('not-found', 'El informe no esta disponible.');
   }
-  if (membershipData.status !== 'active'
-    || !ADMIN_ROLES.includes(membershipData.role as OrganizationRole)) {
+  if (!hasTenantReportAccess(auth.uid, auth.token, membershipData, workshop)) {
     throw new HttpsError('permission-denied', 'No tienes acceso a este informe.');
-  }
-  if (membershipData.role === 'facilitator' && workshop.facilitatorUid !== auth.uid) {
-    throw new HttpsError('permission-denied', 'Solo puedes descargar informes de tus partidas.');
   }
 };
 
@@ -112,7 +107,7 @@ export const createReportDownload = onCall<CreateReportDownloadInput>({
       organizationRef.get(),
       reportRef.get(),
     ]);
-    assertTenantWorkshopAccess(auth, initialWorkshop.data() ?? {}, initialMembership);
+    assertTenantReportOwnerAccess(auth, initialWorkshop.data() ?? {}, initialMembership);
     assertOrganizationOperational(initialOrganization);
     const expectedPath = artifactPath(organizationId, workshopId, reportId, format);
     const initialArtifact = initialReport.data()?.artifacts?.[format];
@@ -154,7 +149,7 @@ export const createReportDownload = onCall<CreateReportDownloadInput>({
       if (!workshopSnapshot.exists || workshopSnapshot.data()?.organizationId !== organizationId) {
         throw new HttpsError('not-found', 'El informe no esta disponible.');
       }
-      assertTenantWorkshopAccess(auth, workshopSnapshot.data() ?? {}, membershipSnapshot);
+      assertTenantReportOwnerAccess(auth, workshopSnapshot.data() ?? {}, membershipSnapshot);
       assertOrganizationOperational(organizationSnapshot);
       const artifact = reportSnapshot.data()?.artifacts?.[format];
       if (!reportSnapshot.exists

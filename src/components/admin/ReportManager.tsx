@@ -26,11 +26,15 @@ import type {
   ReportStatus,
 } from '../../../shared/contracts';
 import { auth, db } from '../../lib/firebase';
-import { defaultOrganizationId, workshopCollectionName } from '../../lib/dataModel';
+import { workshopCollectionName } from '../../lib/dataModel';
 import { reportClientError } from '../../lib/clientLogger';
 import { downloadProtectedReport } from '../../lib/reportDownloads';
 import { createIdempotencyKey, workshopApi } from '../../lib/workshopApi';
 import { getUserFacingError } from '../../lib/errors';
+import {
+  canAccessTenantReports,
+  hasVerifiedGfsIdentity,
+} from '../../lib/organizationAccess';
 import {
   canRetryReportArtifacts,
   getReportStatusLabel,
@@ -41,9 +45,14 @@ import { ActionDialog } from '../ui/ActionDialog';
 import { Button } from '../ui/Button';
 
 interface ReportManagerProps {
+  organizationId: string;
+  role: OrganizationRole;
+  verifiedGfsIdentity: boolean;
   workshopId: string;
   roomCode: string;
 }
+
+type AuthorizedReportManagerProps = Omit<ReportManagerProps, 'role' | 'verifiedGfsIdentity'>;
 
 interface ReportView extends ReportRecord {
   createdAt?: number;
@@ -132,9 +141,21 @@ const formatBytes = (value?: number) => {
   return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 };
 
-export function ReportManager({ workshopId, roomCode }: ReportManagerProps) {
+export function ReportManager(props: ReportManagerProps) {
+  if (!canAccessTenantReports(props.role, props.verifiedGfsIdentity)) return null;
+  return (
+    <AuthorizedReportManager
+      organizationId={props.organizationId}
+      workshopId={props.workshopId}
+      roomCode={props.roomCode}
+    />
+  );
+}
+
+function AuthorizedReportManager({ organizationId, workshopId, roomCode }: AuthorizedReportManagerProps) {
   const [reports, setReports] = useState<ReportView[]>([]);
   const [role, setRole] = useState<OrganizationRole | null>(null);
+  const [verifiedGfsIdentity, setVerifiedGfsIdentity] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState('');
   const [publishCandidate, setPublishCandidate] = useState<ReportView | null>(null);
@@ -153,22 +174,30 @@ export function ReportManager({ workshopId, roomCode }: ReportManagerProps) {
     setError('');
     try {
       const user = auth.currentUser;
-      if (!user || !defaultOrganizationId) throw new Error('No hay una organización autenticada.');
-      const membershipSnapshot = await getDoc(doc(
-        db,
-        'organizations',
-        defaultOrganizationId,
-        'members',
-        user.uid,
-      ));
+      if (!user || !organizationId) throw new Error('No hay una organización autenticada.');
+      const [membershipSnapshot, tokenResult] = await Promise.all([
+        getDoc(doc(db, 'organizations', organizationId, 'members', user.uid)),
+        user.getIdTokenResult(),
+      ]);
       const membershipRole = membershipSnapshot.data()?.role;
-      if (!['owner', 'facilitator'].includes(String(membershipRole))) {
+      const hasInternalIdentity = hasVerifiedGfsIdentity(tokenResult.claims);
+      if (!canAccessTenantReports(
+        membershipRole as OrganizationRole | undefined,
+        hasInternalIdentity,
+      )) {
         throw new Error('Tu membresía no permite consultar informes.');
       }
       const currentRole = membershipRole as OrganizationRole;
       setRole(currentRole);
+      setVerifiedGfsIdentity(hasInternalIdentity);
       const workshopSnapshot = await getDoc(doc(db, workshopCollectionName, workshopId));
       const workshopData = workshopSnapshot.data();
+      if (!workshopSnapshot.exists() || workshopData?.organizationId !== organizationId) {
+        throw new Error('La partida no pertenece a la organización seleccionada.');
+      }
+      if (currentRole === 'facilitator' && workshopData?.facilitatorUid !== user.uid) {
+        throw new Error('Solo puedes consultar informes de tus partidas asignadas.');
+      }
       const storedJobId = typeof workshopData?.activeReportJobId === 'string'
         ? workshopData.activeReportJobId
         : '';
@@ -189,7 +218,7 @@ export function ReportManager({ workshopId, roomCode }: ReportManagerProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [workshopId]);
+  }, [organizationId, workshopId]);
 
   useEffect(() => {
     void loadReports();
@@ -356,7 +385,7 @@ export function ReportManager({ workshopId, roomCode }: ReportManagerProps) {
     }
   };
 
-  const canManage = role === 'owner' || role === 'facilitator';
+  const canManage = canAccessTenantReports(role, verifiedGfsIdentity);
 
   return (
     <section className="rounded-2xl border border-kreatum-purple/15 bg-white/90 p-6 dark:bg-white/[0.04]" aria-labelledby="reports-heading">
