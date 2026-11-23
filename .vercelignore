@@ -6,6 +6,16 @@ playwright-report/
 test-results/
 output/
 .codex_tmp/
+.codex-*/
+.npm-cache/
+.firebase/
+.agents/
+.playwright-mcp/
+.playwright-cli/
+tmp/
+public/
+public-kreatum/
+Logo Kreatum/
 scratch/
 docs/
 e2e/
