@@ -9,7 +9,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { lstat, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URLSearchParams } from 'node:url';
 
 export const SOURCE = 'projects/kreatum-dinamic-staging/databases/security-restore-20260911/documents';
 export const TARGET = 'projects/demo-kreatum/databases/(default)/documents';
@@ -102,6 +102,26 @@ export function validateArtifact(bytes, artifact) {
   if (artifact.format === 'json') { try { JSON.parse(bytes.toString('utf8')); } catch { fail('artifact-format-mismatch'); } }
 }
 
+export function artifactUpload(bytes, artifact, boundary = `recovery-${randomBytes(16).toString('hex')}`) {
+  if (!/^recovery-[a-f0-9]{32}$/.test(boundary) || bytes.includes(Buffer.from(boundary))) fail('invalid-multipart-boundary');
+  const contentType = { pdf: 'application/pdf', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', json: 'application/json' }[artifact.format];
+  if (!contentType) fail('artifact-format-mismatch');
+  const metadata = { name: artifact.storagePath, contentType, cacheControl: 'private, no-store', metadata: {} };
+  const start = Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/octet-stream\r\n\r\n`);
+  return { body: Buffer.concat([start, bytes, Buffer.from(`\r\n--${boundary}--\r\n`)]), contentType: `multipart/related; boundary=${boundary}`, dataOffset: start.length };
+}
+
+export function requestOperation(rawUrl) {
+  const url = new URL(rawUrl);
+  if (url.hostname === '127.0.0.1') {
+    if (url.port === '9199') return url.pathname.startsWith('/upload/') ? 'local-storage-upload' : 'local-storage-read';
+    if (url.port === '9099') return url.pathname.includes('signUp') ? 'local-auth-create' : 'local-auth-read';
+    if (url.port === '8080') return url.pathname.endsWith(':commit') ? 'local-firestore-commit' : 'local-firestore-read';
+    return 'local-service';
+  }
+  return url.hostname === 'storage.googleapis.com' ? 'cloud-restored-object-read' : 'cloud-restored-database-read';
+}
+
 export function isPrivateTemp(temp, cwd, environment) {
   if (!path.isAbsolute(temp ?? '') || !/^recovery-runtime-[a-f0-9]{32}$/.test(path.basename(temp))) return false;
   const expectedParent = path.resolve(cwd, 'tmp');
@@ -110,7 +130,15 @@ export function isPrivateTemp(temp, cwd, environment) {
     && environment.KREATUM_RECOVERY_PRIVATE_TEMP_VERIFIED === 'true';
 }
 
+export function assertUserCredentialEnvironment(environment) {
+  for (const key of [
+    'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE', 'CLOUDSDK_AUTH_ACCESS_TOKEN',
+    'CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT', 'CLOUDSDK_AUTH_LOGIN_CONFIG_FILE',
+  ]) if (typeof environment[key] === 'string' && environment[key].trim()) fail('alternate-cloud-identity-forbidden');
+}
+
 function configuredUserToken() {
+  assertUserCredentialEnvironment(process.env);
   try {
     const options = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, timeout: 30_000 };
     const run = (argumentsText) => process.platform === 'win32'
@@ -130,6 +158,7 @@ function requester(bucket, token) {
   let calls = 0;
   return async (url, method = 'GET', body, binary = false, headers = {}, maximum = 16 * 1024 * 1024) => {
     const scope = validateRequest(url, method, bucket);
+    const operation = requestOperation(url);
     if (++calls > 10_000) fail('request-limit');
     const requestHeaders = { ...headers };
     if (scope === 'cloud') {
@@ -139,10 +168,10 @@ function requester(bucket, token) {
     if (body !== undefined && !Buffer.isBuffer(body)) requestHeaders['Content-Type'] = 'application/json';
     let response;
     try {
-      response = await fetch(url, { method, headers: requestHeaders, redirect: 'error', signal: AbortSignal.timeout(90_000),
+      response = await globalThis.fetch(url, { method, headers: requestHeaders, redirect: 'error', signal: AbortSignal.timeout(90_000),
         body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : JSON.stringify(body) });
-    } catch { fail(scope === 'cloud' ? 'cloud-request-failed' : 'local-request-failed'); }
-    if (!response.ok) fail(`${scope}-http-${response.status}`);
+    } catch { fail(`${operation}-request-failed`); }
+    if (!response.ok) fail(`${operation}-http-${response.status}`);
     if (Number(response.headers.get('content-length')) > maximum) fail('response-too-large');
     const chunks = []; let length = 0;
     for await (const chunk of response.body) {
@@ -201,7 +230,7 @@ async function localCommit(request, documents, createOnly = true) {
 }
 
 async function servicePresent(port) {
-  try { await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(1000), redirect: 'error' }); return true; }
+  try { await globalThis.fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(1000), redirect: 'error' }); return true; }
   catch { return false; }
 }
 
@@ -290,6 +319,7 @@ export async function main(args = process.argv.slice(2)) {
   if (checkOnly) args = args.slice(1);
   if (args.length !== 2 || args[0] !== '--restore-bucket') fail('explicit-restore-bucket-required');
   const bucket = validateBucket(args[1]);
+  assertUserCredentialEnvironment(process.env);
   const privateTemp = process.env.KREATUM_RECOVERY_PRIVATE_TEMP;
   if (!isPrivateTemp(privateTemp, process.cwd(), process.env)) fail('private-temporary-directory-required');
   if ((await lstat(privateTemp)).isSymbolicLink() || path.resolve(await realpath(privateTemp)).toLowerCase() !== path.resolve(privateTemp).toLowerCase()) fail('private-directory-link-forbidden');
@@ -301,10 +331,10 @@ export async function main(args = process.argv.slice(2)) {
   const request = requester(bucket, configuredUserToken());
   const [localDocuments, accounts, storage] = await Promise.all([
     allDocuments(request, 'http://127.0.0.1:8080', TARGET),
-    request('http://127.0.0.1:9099/emulator/v1/projects/demo-kreatum/accounts'),
+    request('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-kreatum/accounts:batchGet?maxResults=1', 'GET', undefined, false, { Authorization: 'Bearer owner' }),
     request(`http://127.0.0.1:9199/storage/v1/b/${LOCAL_BUCKET}/o?maxResults=1`, 'GET', undefined, false, { Authorization: 'Bearer owner' }),
   ]);
-  if (localDocuments.length || accounts.users?.length || storage.items?.length) fail('emulators-must-be-empty');
+  if (localDocuments.length || accounts.users?.length || accounts.nextPageToken || storage.items?.length || storage.nextPageToken) fail('emulators-must-be-empty');
   const documents = await allDocuments(request, 'https://firestore.googleapis.com', SOURCE);
   if (!documents.length) fail('restored-database-empty');
   const artifacts = reportArtifacts(documents);
@@ -318,8 +348,10 @@ export async function main(args = process.argv.slice(2)) {
     if (!/^\d+$/.test(metadata.generation ?? '') || Number(metadata.size) !== artifact.size) fail('restored-object-metadata-mismatch');
     const bytes = await request(`${objectUrl}?alt=media&generation=${metadata.generation}`, 'GET', undefined, true, {}, LIMITS.fileBytes);
     validateArtifact(bytes, artifact);
-    const contentType = { pdf: 'application/pdf', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', json: 'application/json' }[artifact.format];
-    await request(`http://127.0.0.1:9199/upload/storage/v1/b/${LOCAL_BUCKET}/o?uploadType=media&name=${encodeURIComponent(artifact.storagePath)}`, 'POST', bytes, false, { Authorization: 'Bearer owner', 'Content-Type': contentType });
+    // Files are multipart bytes, never an application/json API request body.
+    // This avoids Express JSON parsing/re-serialization and preserves exact hashes.
+    const upload = artifactUpload(bytes, artifact);
+    await request(`http://127.0.0.1:9199/upload/storage/v1/b/${LOCAL_BUCKET}/o?uploadType=multipart&name=${encodeURIComponent(artifact.storagePath)}`, 'POST', upload.body, false, { Authorization: 'Bearer owner', 'Content-Type': upload.contentType });
     const localBytes = await request(`http://127.0.0.1:9199/storage/v1/b/${LOCAL_BUCKET}/o/${encodeURIComponent(artifact.storagePath)}?alt=media`, 'GET', undefined, true, { Authorization: 'Bearer owner' }, LIMITS.fileBytes);
     validateArtifact(localBytes, artifact);
   }

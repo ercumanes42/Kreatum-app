@@ -92,7 +92,10 @@ globalThis.__kreatumSecurityQA = {
       const result = await getToken(appCheck, false);
       if (!result.token || auth.currentUser) throw new Error('Unattested or authenticated preflight.');
       return { ok: true, value: { attested: true, signedOut: true } };
-    } catch (error) { return { ok: false, code: safeCode(error) }; }
+    } catch (error) {
+      const httpStatus = error?.customData?.httpStatus;
+      return { ok: false, code: safeCode(error), ...(Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? { httpStatus } : {}) };
+    }
   },
   async execute({ operation, input }) {
     try {
@@ -150,7 +153,7 @@ export async function preflightBrowserContexts(browser, bundle, parameters) {
         new Promise((_, reject) => { timer = setTimeout(() => reject(stagingDiagnosticError('appcheck', 'timeout', { contextName: name })), 30_000); }),
       ]), { contextName: name });
     } finally { clearTimeout(timer); }
-    if (!result?.ok || result.value?.attested !== true || result.value?.signedOut !== true) throw stagingDiagnosticError('appcheck', 'appcheck-rejected', { contextName: name, sdkCode: result?.code });
+    if (!result?.ok || result.value?.attested !== true || result.value?.signedOut !== true) throw stagingDiagnosticError('appcheck', 'appcheck-rejected', { contextName: name, sdkCode: result?.code, httpStatus: result?.httpStatus });
     clients.set(name, { page });
   }
   return clients;

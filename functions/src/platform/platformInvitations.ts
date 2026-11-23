@@ -5,6 +5,7 @@ import { logger } from 'firebase-functions';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import {
   DEFAULT_RETENTION_MONTHS,
+  SCHEMA_VERSION,
   type InvitationCommandOutput,
   type PlatformInvitationCommandInput,
   type PlatformInvitationSummary,
@@ -189,6 +190,7 @@ export const provisionOrganizationAndInviteFacilitator = callable<
   };
   const organizationData: UnknownRecord = {
     name,
+    schemaVersion: SCHEMA_VERSION,
     status: 'pending',
     allowedEmailDomains,
     retentionMonths,

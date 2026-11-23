@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { SOURCE, TARGET, LIMITS, validateBucket, validateRequest, rewriteTypedValue, documentDigest, reportArtifacts, validateArtifact, isPrivateTemp } from './staging-application-recovery.mjs';
+import { SOURCE, TARGET, LIMITS, validateBucket, validateRequest, rewriteTypedValue, documentDigest, reportArtifacts, validateArtifact, isPrivateTemp, assertUserCredentialEnvironment, artifactUpload, requestOperation } from './staging-application-recovery.mjs';
 
 const bucket = `kreatum-stg-restore-20260911-${'a'.repeat(24)}`;
 const object = 'organizations/org-test/workshops/workshop-test/reports/report-test.pdf';
@@ -15,6 +15,13 @@ const report = (overrides = {}) => ({ name: `${SOURCE}/workshops/workshop-test/r
   } } } } } },
 } });
 const rejected = (fn, code) => assert.throws(fn, (error) => error.safeCode === code);
+
+test('alternate Cloud SDK credentials, access tokens and impersonation are refused', () => {
+  assertUserCredentialEnvironment({});
+  for (const key of ['CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE', 'CLOUDSDK_AUTH_ACCESS_TOKEN', 'CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT', 'CLOUDSDK_AUTH_LOGIN_CONFIG_FILE']) {
+    rejected(() => assertUserCredentialEnvironment({ [key]: 'redacted-test-value' }), 'alternate-cloud-identity-forbidden');
+  }
+});
 
 test('fixed restore bucket accepts only the dedicated staging date and 24 hex suffix', () => {
   assert.equal(validateBucket(bucket), bucket);
@@ -90,6 +97,23 @@ test('artifact bytes must match SHA256, size and format', () => {
   rejected(() => validateArtifact(badBytes, { ...artifact, size: badBytes.length, sha256: createHash('sha256').update(badBytes).digest('hex') }), 'artifact-format-mismatch');
 });
 
+test('JSON report above 100 KiB uses multipart binary bytes without reserializing content', () => {
+  const jsonBytes = Buffer.from('{  "fixture": "' + 'x'.repeat(200_000) + '"  }\n');
+  const upload = artifactUpload(jsonBytes, { format: 'json', storagePath: 'organizations/synthetic/report.json' }, `recovery-${'c'.repeat(32)}`);
+  assert.match(upload.contentType, /^multipart\/related; boundary=recovery-/);
+  assert.deepEqual(upload.body.subarray(upload.dataOffset, upload.dataOffset + jsonBytes.length), jsonBytes);
+  assert.match(upload.body.subarray(0, upload.dataOffset).toString('utf8'), /"contentType":"application\/json"/);
+  assert.match(upload.body.subarray(0, upload.dataOffset).toString('utf8'), /Content-Type: application\/octet-stream/);
+  rejected(() => artifactUpload(jsonBytes, { format: 'json' }, 'invalid'), 'invalid-multipart-boundary');
+});
+
+test('safe operation labels identify failing subsystem without document names or URLs', () => {
+  assert.equal(requestOperation('http://127.0.0.1:9199/upload/storage/v1/b/demo-kreatum.appspot.com/o?name=private'), 'local-storage-upload');
+  assert.equal(requestOperation(`http://127.0.0.1:8080/v1/${TARGET}:commit`), 'local-firestore-commit');
+  assert.equal(requestOperation(`https://storage.googleapis.com/storage/v1/b/${bucket}/o/private`), 'cloud-restored-object-read');
+  assert.equal(requestOperation(`https://firestore.googleapis.com/v1/${SOURCE}/private`), 'cloud-restored-database-read');
+});
+
 test('private temporary directory requires expected subtree and explicit ACL confirmation', () => {
   const cwd = path.resolve('candidate');
   const temp = path.join(cwd, 'tmp', `recovery-runtime-${'a'.repeat(32)}`);
@@ -105,6 +129,9 @@ test('runner keeps cloud writes, production access, traces and logged customer c
   assert.match(code, /redirect: 'error'/);
   assert.match(code, /stop-functions-before-seeding/);
   assert.match(code, /emulators-must-be-empty/);
+  assert.match(code, /identitytoolkit\.googleapis\.com\/v1\/projects\/demo-kreatum\/accounts:batchGet\?maxResults=1/);
+  assert.doesNotMatch(code, /\/emulator\/v1\/projects\/demo-kreatum\/accounts/);
+  assert.match(code, /accounts\.nextPageToken/);
   assert.match(code, /currentDocument: \{ exists: false \}/);
   assert.match(code, /download\.createReadStream/);
   assert.match(code, /await download\.delete\(\)/);

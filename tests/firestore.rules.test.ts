@@ -15,6 +15,9 @@ import {
   Timestamp,
   updateDoc,
   where,
+  deleteField,
+  orderBy,
+  limit,
 } from 'firebase/firestore';
 import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -556,6 +559,27 @@ test('requires facilitator-scoped queries instead of treating rules as filters',
   assert.equal(ownSnapshot.docs[0]?.id, workshopId);
   await assertFails(getDocs(unsafeTenantQuery));
   await assertFails(getDocs(otherTenantQuery));
+});
+
+test('history requires canonical organization schema and preserves disabled tenant isolation', async () => {
+  const shared = environment.authenticatedContext(facilitatorId).firestore();
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await updateDoc(doc(db, 'organizations', organizationId, 'members', facilitatorId), { status: 'disabled' });
+    await setDoc(doc(db, 'organizations', organizationBId, 'members', facilitatorId), { role: 'facilitator', status: 'active' });
+    await updateDoc(doc(db, 'organizations', organizationBId), { schemaVersion: deleteField() });
+  });
+  const history = (org: string) => query(collection(shared, 'workshops'),
+    where('organizationId', '==', org), where('facilitatorUid', '==', facilitatorId),
+    orderBy('createdAt', 'desc'), limit(20));
+  await assertFails(getDocs(history(organizationBId)));
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'organizations', organizationBId), { schemaVersion: 2 });
+  });
+  const result = await assertSucceeds(getDocs(history(organizationBId)));
+  assert.equal(result.empty, true);
+  await assertFails(getDocs(history(organizationId)));
+  await assertFails(getDocs(query(collection(shared, 'workshops'), where('organizationId', '==', organizationBId))));
 });
 
 test('allows only tenant-scoped owner workshop queries', async () => {

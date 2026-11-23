@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   collection,
   doc,
+  getDocFromServer,
   onSnapshot,
   query,
   serverTimestamp,
@@ -10,6 +11,7 @@ import {
   updateDoc,
   where,
   type DocumentData,
+  type DocumentSnapshot,
   type FirestoreError,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -17,6 +19,7 @@ import { isV2DataModel, workshopCollectionName } from '../lib/dataModel';
 import { reportClientError } from '../lib/clientLogger';
 import { createIdempotencyKey, workshopApi } from '../lib/workshopApi';
 import { PHASES, type GameState, type Phase, type Team } from '../types';
+import { createWorkshopRevalidator } from '../lib/workshopRevalidation';
 
 const SAVE_DEBOUNCE_MS = 750;
 
@@ -164,10 +167,12 @@ export interface GlobalGameState {
   transition?: WorkshopTransition | null;
   [key: string]: unknown;
 }
-export function useGameGlobal(gameId: string | null) {
+export function useGameGlobal(gameId: string | null, recoverConnection = false) {
   const [globalState, setGlobalState] = useState<GlobalGameState>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const refreshRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const refreshGlobalState = useCallback(() => refreshRef.current(), []);
 
   useEffect(() => {
     setError(null);
@@ -179,9 +184,11 @@ export function useGameGlobal(gameId: string | null) {
 
     setIsLoading(true);
     const documentRef = doc(db, workshopCollectionName, gameId);
-    return onSnapshot(
-      documentRef,
-      (snapshot) => {
+    let disposed = false;
+    let unsubscribe = () => {};
+    const applySnapshot = (snapshot: DocumentSnapshot) => {
+        if (disposed) return;
+        setError(null);
         if (snapshot.exists()) {
           const data = snapshot.data();
           setGlobalState({
@@ -207,15 +214,49 @@ export function useGameGlobal(gameId: string | null) {
           setError(new Error('La partida ya no existe.'));
         }
         setIsLoading(false);
-      },
-      (snapshotError) => reportSubscriptionError(
+    };
+    const subscribe = () => {
+      unsubscribe();
+      unsubscribe = onSnapshot(documentRef, (snapshot) => {
+        if (!snapshot.metadata.fromCache) revalidator.observeServerSnapshot();
+        applySnapshot(snapshot);
+      }, (snapshotError) => {
+        if (disposed) return;
+        reportSubscriptionError(
         'Error subscribing to workshop state:',
         snapshotError,
         setError,
         setIsLoading,
-      ),
+        );
+        if (recoverConnection) void refreshRef.current();
+      });
+    };
+    const revalidator = createWorkshopRevalidator(
+      () => getDocFromServer(documentRef),
+      (snapshot) => {
+        applySnapshot(snapshot);
+        if (snapshot.exists() && snapshot.data().status === 'active') subscribe();
+      },
+      () => navigator.onLine && document.visibilityState === 'visible',
     );
-  }, [gameId]);
+    refreshRef.current = revalidator.refresh;
+    subscribe();
+    // Independent of participant TTL: former participants retain restricted
+    // access to terminal workshop state under the existing Rules.
+    const onResume = () => { void revalidator.refresh(); };
+    if (recoverConnection) {
+      window.addEventListener('online', onResume);
+      document.addEventListener('visibilitychange', onResume);
+    }
+    return () => {
+      disposed = true;
+      revalidator.dispose();
+      refreshRef.current = () => Promise.resolve();
+      unsubscribe();
+      window.removeEventListener('online', onResume);
+      document.removeEventListener('visibilitychange', onResume);
+    };
+  }, [gameId, recoverConnection]);
 
   const updateGlobalState = useCallback(async (updates: Partial<GlobalGameState>) => {
     if (!gameId) return;
@@ -272,7 +313,7 @@ export function useGameGlobal(gameId: string | null) {
     }
   }, [gameId]);
 
-  return { globalState, updateGlobalState, isLoading, error };
+  return { globalState, updateGlobalState, refreshGlobalState, isLoading, error };
 }
 
 export function useAllTeams(gameId: string | null) {

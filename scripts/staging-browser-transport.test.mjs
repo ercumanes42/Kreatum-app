@@ -78,6 +78,16 @@ test('normal attestation rejection or an authenticated context fails closed at e
   assert.equal(browser.calls.some(call => call.operation === 'attestation'), false);
 });
 
+test('App Check rejection preserves HTTP status without exposing provider payloads', async () => {
+  const browser = fakeBrowser(0, { ok: false, code: 'appCheck/initial-throttle', httpStatus: 403, message: 'private provider payload', token: 'never report' });
+  await assert.rejects(preflightBrowserContexts(browser, 'synthetic bundle', {}), error => {
+    assert.deepEqual(safeStagingDiagnostic(error), { stage: 'appcheck', category: 'appcheck-rejected', contextName: 'owner', sdkCode: 'appCheck/initial-throttle', httpStatus: 403 });
+    assert.doesNotMatch(JSON.stringify(safeStagingDiagnostic(error)), /private|never report/);
+    return true;
+  });
+  assert.equal(browser.calls.filter(call => call.operation === 'attestation').length, 1);
+});
+
 test('runner waits for normal browser preflight before creating Auth fixtures and has no Node client fallback', () => {
   const source = readFileSync(new URL('./staging-security-smoke.mjs', import.meta.url), 'utf8');
   const preflight = source.indexOf('browserTransport = await createStagingBrowserTransport');

@@ -99,7 +99,8 @@ const joinAsWater = async (page: Page, roomCode: string) => {
   await page.goto('/');
   await page.getByLabel('Código de sala').fill(roomCode);
   await page.getByRole('button', { name: 'Entrar a la sala' }).click();
-  await expect(page.getByRole('heading', { name: 'Elige tu equipo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elige tu equipo' }))
+    .toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: /Equipo Agua/ }).click();
   await expect.poll(
     () => page.evaluate(() => localStorage.getItem('kreatum_team')),
@@ -233,6 +234,54 @@ test.describe('gameplay resilience and responsive matrix', () => {
       await context.close();
     }
   });
+
+  for (const recoveryMode of ['offline', 'denied-listener'] as const) {
+    test(`recovers closure after ${recoveryMode} without reload`, async ({ browser }) => {
+      const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const page = await context.newPage();
+      let listenerDenied = false;
+      page.on('console', (message) => {
+        if (message.text().includes('Error subscribing to workshop state:')
+          && message.text().includes('permission-denied')) listenerDenied = true;
+      });
+      try {
+        const prefix = recoveryMode === 'offline' ? 'OFFC' : 'DENY';
+        const workshop = await seedWorkshop(prefix + Date.now().toString().slice(-2));
+        await joinAsWater(page, workshop.roomCode);
+        await setPhase(workshop.workshopId, 'Diluir');
+        await expect(page.getByRole('heading', { name: 'Diluir', exact: true })).toBeVisible();
+        if (recoveryMode === 'offline') {
+          await context.setOffline(true);
+          await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+        } else {
+          await environment.withSecurityRulesDisabled(async (adminContext) => {
+            const firestore = adminContext.firestore();
+            const team = await getDoc(doc(firestore, 'workshops', workshop.workshopId, 'teams', 'Agua'));
+            const participantUid = String(team.data()?.activeParticipantId || '');
+            assert.ok(participantUid);
+            await updateDoc(doc(firestore, 'workshops', workshop.workshopId, 'participantSessions', participantUid), {
+              expiresAt: Timestamp.fromMillis(Date.now() - 60_000),
+            });
+            await updateDoc(doc(firestore, 'workshops', workshop.workshopId), { updatedAt: Timestamp.now() });
+          });
+          await expect.poll(() => listenerDenied, { timeout: 30_000 }).toBe(true);
+          // A denied active session alone must not be mistaken for completion.
+          await expect(page.getByRole('heading', { name: 'Bienvenido a Kreatum' })).not.toBeVisible();
+        }
+        await environment.withSecurityRulesDisabled(async (adminContext) => {
+          await updateDoc(doc(adminContext.firestore(), 'workshops', workshop.workshopId), {
+            status: 'completed', completedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+          });
+        });
+        if (recoveryMode === 'offline') await context.setOffline(false);
+        await expect(page.getByRole('heading', { name: 'Bienvenido a Kreatum' }))
+          .toBeVisible({ timeout: 75_000 });
+        await expect(page.getByLabel('Código de sala')).toHaveValue('');
+      } finally {
+        await context.close();
+      }
+    });
+  }
 
   test('preserves a sub-750ms write through offline transition recovery', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });

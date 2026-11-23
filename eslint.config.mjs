@@ -34,6 +34,8 @@ export default tseslint.config(
       '.codex_tmp/**',
       '.codex-*/**',
       'Logo Kreatum/**',
+      '.agents/**',
+      '.playwright-mcp/**',
       'kreatum_report_builder.html',
       'kreatum_report_builder_v2.js',
     ],

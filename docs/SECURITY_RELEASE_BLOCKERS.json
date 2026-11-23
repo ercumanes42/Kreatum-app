@@ -23,15 +23,15 @@
     },
     {
       "id": "staging-validation",
-      "status": "pending",
-      "evidence": "docs/SECURITY_STAGING_CANDIDATE_2026-09-11.md",
-      "reason": "The isolated candidate passes local checks. Automated App Check preflight was rejected; the user subsequently completed normal manual login and history navigation without reducing protections. Coordinated candidate publication and full staging gameplay/report validation remain pending."
+      "status": "passed",
+      "evidence": "docs/SECURITY_TEAM_RECOVERY_PROOF_2026-09-12.md",
+      "reason": "Agreed staging access validation is complete: prior guided disable-A/retain-B/reactivate-A evidence plus 17 live stale-team authorization checks on 2026-09-12. The latter used the explicitly approved temporary App Check debug credential, revoked with independent readback. All seven exercised Functions still enforce App Check and deployed Firestore Rules match local source. The ordinary automated reCAPTCHA rejection remains a separate provider limitation, not a passed normal-attestation test. No full-security certification or new production publication follows from this scoped result."
     },
     {
       "id": "full-recovery",
       "status": "pending",
-      "evidence": "docs/SECURITY_RECOVERY_FILE_READ_2026-09-11.md",
-      "reason": "Isolated Firestore restore and all six referenced artifact hashes/sizes/formats were verified. User-authorized exact-object read binding was removed and absence confirmed. Independent Storage backup restoration and full application recovery remain unverified; integrity of existing objects is not a complete disaster-recovery test."
+      "evidence": "docs/SECURITY_FINAL_CHECKS_2026-09-11.md",
+      "reason": "Independent staging object backup/restore now verifies all 9 objects byte-for-byte. Local isolated application recovery verifies 395 records and 6 PDF/PPTX/JSON downloads; temporary data and grants were cleaned. Evidence: docs/SECURITY_ISOLATED_RECOVERY_2026-09-11.md. This closes data/report recovery evidence only, not Cloud Auth/IAM restoration or a full cloud disaster-recovery certification; no production release follows automatically."
     }
   ]
 }

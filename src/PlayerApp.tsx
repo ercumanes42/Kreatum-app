@@ -45,7 +45,9 @@ export default function PlayerApp() {
     reconnectParticipantSession,
     roomCode,
   } = useGame();
-  const [state, setState] = useState<GameState>({ ...initialState, team: team || null });
+  const [storedState, setState] = useState<GameState>({ ...initialState, team: team || null });
+  // Context is authoritative: never render a departed workshop's cached phase.
+  const state = gameId ? storedState : initialState;
   const [isDark, setIsDark] = useState(() => localStorage.getItem('kreatum_theme') === 'dark');
   const [hasEditedCurrentPhase, setHasEditedCurrentPhase] = useState(false);
   const [showExitConfirmation, setShowExitConfirmation] = useState(false);
@@ -62,7 +64,7 @@ export default function PlayerApp() {
     lastSavedAt,
     error: syncError,
   } = useTeamSync(gameId, team || state.team);
-  const { globalState, isLoading: isGlobalLoading } = useGameGlobal(gameId);
+  const { globalState, refreshGlobalState, isLoading: isGlobalLoading } = useGameGlobal(gameId, true);
   const { session: participantSession, isLoading: isSessionLoading } = useParticipantSession(gameId, playerId);
 
   const challenge = globalState?.challenge || '';
@@ -73,7 +75,7 @@ export default function PlayerApp() {
   const [sessionClock, setSessionClock] = useState(() => Date.now());
   const acknowledgedTransitionRef = useRef<string | null>(null);
   const participantSessionRef = useRef(participantSession);
-  const transition = globalState.transition;
+  const transition = gameId ? globalState.transition : null;
   const transitionProgress = getWorkshopTransitionProgress(
     transition?.state === 'requested' ? transition : null,
     sessionClock,
@@ -124,21 +126,21 @@ export default function PlayerApp() {
 
   // Sync context team into local state
   useEffect(() => {
-    if (team) {
+    if (gameId && team) {
       setState(prev => ({ ...prev, team }));
     }
-    if (!team && !gameId && state.team) {
+    if (!gameId) {
       setState({ ...initialState });
     }
-  }, [team, gameId, state.team]);
+  }, [team, gameId]);
 
   // The Alchemist owns the canonical phase. Players mirror it automatically.
   useEffect(() => {
-    if (globalState?.currentPhase && !isAlchemist && globalState.currentPhase !== state.currentPhase) {
+    if (gameId && globalState?.currentPhase && !isAlchemist && globalState.currentPhase !== state.currentPhase) {
       setState((previous) => ({ ...previous, currentPhase: globalState.currentPhase as Phase }));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [globalState?.currentPhase, isAlchemist, state.currentPhase]);
+  }, [gameId, globalState?.currentPhase, isAlchemist, state.currentPhase]);
 
   // When the Alchemist closes the workshop, players return to the code screen.
   useEffect(() => {
@@ -155,10 +157,10 @@ export default function PlayerApp() {
 
   // Sync Firestore team state to local state
   useEffect(() => {
-    if (teamState && Object.keys(teamState).length > 0) {
+    if (gameId && team && teamState && Object.keys(teamState).length > 0) {
       setState(prev => ({ ...prev, ...teamState }));
     }
-  }, [teamState]);
+  }, [gameId, team, teamState]);
 
   // Follow an administrator-triggered reassignment without leaving the game.
   useEffect(() => {
@@ -234,6 +236,8 @@ export default function PlayerApp() {
       setSessionClock(Date.now());
       } catch (heartbeatError) {
         reportClientError('Participant heartbeat failed', heartbeatError);
+        // A callable error is not proof of closure: verify the workshop document.
+        void refreshGlobalState();
       }
     };
 
@@ -252,6 +256,7 @@ export default function PlayerApp() {
     isAlchemist,
     isSessionLoading,
     participantSessionStatus,
+    refreshGlobalState,
   ]);
 
   useEffect(() => {
@@ -558,7 +563,7 @@ export default function PlayerApp() {
                 <div className="w-6 h-6 bg-kreatum-purple rounded-lg flex items-center justify-center shrink-0">
                   <Hexagon className="w-3 h-3 text-white" />
                 </div>
-                <p className="text-xs font-semibold text-kreatum-dark dark:text-white leading-tight max-w-[180px] whitespace-pre-wrap [overflow-wrap:anywhere]">
+                <p className="text-xs font-semibold text-kreatum-dark dark:text-white leading-tight max-w-[180px] line-clamp-1">
                   "{challenge}"
                 </p>
               </div>
@@ -569,7 +574,7 @@ export default function PlayerApp() {
                   <span className="text-xs font-bold text-kreatum-purple/80 mb-1">
                     Reto Activo
                   </span>
-                  <p className="text-sm font-semibold text-kreatum-dark dark:text-white leading-snug text-right max-w-[360px] whitespace-pre-wrap [overflow-wrap:anywhere]">
+                  <p className="text-sm font-semibold text-kreatum-dark dark:text-white leading-snug text-right max-w-[360px] line-clamp-2">
                     "{challenge}"
                   </p>
                 </div>
@@ -628,7 +633,7 @@ export default function PlayerApp() {
             </p>
           </section>
         ) : (
-          <fieldset disabled={transitionBlocking} className="min-w-0 border-0 p-0">        <AnimatePresence mode="wait">
+          <fieldset disabled={transitionBlocking} className="min-w-0 border-0 p-0">        <AnimatePresence key={gameId || 'no-workshop'} mode="wait">
           <motion.div
             key={state.currentPhase}
             initial={{ opacity: 0, y: 14 }}
@@ -698,7 +703,7 @@ export default function PlayerApp() {
       )}
 
       <ActionDialog
-        open={showExitConfirmation}
+        open={Boolean(gameId) && showExitConfirmation}
         title="¿Seguro que quieres salir?"
         description="Tus respuestas guardadas no se perderán. Volverás a la pantalla del código de sala y el equipo quedará reservado temporalmente para este dispositivo."
         confirmLabel="Salir de la partida"
