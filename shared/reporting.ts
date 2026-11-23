@@ -1,7 +1,15 @@
 import type { ReportEditorial } from './contracts.js';
+import {
+  isMeaningfulReportEntry,
+  proofreadReportDisplay,
+  sanitizeReportEntry,
+  sanitizeReportList,
+} from './reportText.js';
 
 export const REPORT_TEAM_ORDER = ['Agua', 'Aire', 'Fuego', 'Tierra'] as const;
 export type ReportTeamName = (typeof REPORT_TEAM_ORDER)[number];
+
+const REPORT_TIME_ZONE = 'Europe/Madrid';
 
 export const REPORT_CSV_HEADERS = [
   'ID Partida',
@@ -113,6 +121,45 @@ const TECHNICAL_TEAM_FIELDS = new Set([
   'defenses',
   'reassignments',
   'schemaVersion',
+]);
+
+const REPORT_ENTRY_FIELDS = new Set([
+  'challenge',
+  'perspectives',
+  'top3Perspectives',
+  'selectedPerspective',
+  'solutions',
+  'top3Solutions',
+  'selectedSolution',
+  'receivedSolutionToAttack',
+  'attacksOnOthers',
+  'receivedAttacks',
+  'defenses',
+  'reformulatedSolution',
+  'expectedResults',
+  'audience',
+  'strengths',
+  'weaknesses',
+  'pilot',
+  'resources',
+  'pitch',
+  'pitchStart',
+  'pitchProblem',
+  'pitchSolution',
+  'pitchAction',
+]);
+
+const REPORT_LIST_ENTRY_FIELDS = new Set([
+  'perspectives',
+  'top3Perspectives',
+  'solutions',
+  'top3Solutions',
+  'attacksOnOthers',
+  'receivedAttacks',
+  'defenses',
+  'strengths',
+  'weaknesses',
+  'resources',
 ]);
 
 export interface ReportSourceDocument {
@@ -310,6 +357,15 @@ export const reportValueToString = (value: unknown): string => {
   }
 };
 
+const reportEntryToString = (value: unknown): string =>
+  sanitizeReportEntry(reportValueToString(value));
+
+const sanitizeReportFieldValue = (field: string, value: unknown): unknown => {
+  if (!REPORT_LIST_ENTRY_FIELDS.has(field)) return reportEntryToString(value);
+  const values = Array.isArray(value) ? value : [value];
+  return sanitizeReportList(values.map(reportValueToString));
+};
+
 export const isMeaningfulReportValue = (value: unknown): boolean => {
   if (value === null || value === undefined) return false;
   if (typeof value === 'string') return value.trim().length > 0;
@@ -319,9 +375,38 @@ export const isMeaningfulReportValue = (value: unknown): boolean => {
   return true;
 };
 
+const parseSpanishReportTimestamp = (value: string): {
+  millis: number;
+  formatted: string;
+} | null => {
+  const match = value.trim().match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,\s*|\s+)(\d{1,2}):(\d{2})(?::(\d{2}))?$/u,
+  );
+  if (!match) return null;
+  const [, dayValue, monthValue, yearValue, hourValue, minuteValue, secondValue] = match;
+  const day = Number(dayValue);
+  const month = Number(monthValue);
+  const year = Number(yearValue);
+  const hour = Number(hourValue);
+  const minute = Number(minuteValue);
+  const second = secondValue === undefined ? 0 : Number(secondValue);
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day || date.getUTCHours() !== hour
+    || date.getUTCMinutes() !== minute || date.getUTCSeconds() !== second) return null;
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return {
+    millis: date.getTime(),
+    formatted: `${pad(day)}/${pad(month)}/${year}, ${pad(hour)}:${pad(minute)}`
+      + (secondValue === undefined ? '' : `:${pad(second)}`),
+  };
+};
+
 export const reportTimestampToMillis = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
+    const spanishTimestamp = parseSpanishReportTimestamp(value);
+    if (spanishTimestamp) return spanishTimestamp.millis;
     const parsed = Date.parse(value);
     return Number.isNaN(parsed) ? null : parsed;
   }
@@ -336,6 +421,10 @@ export const reportTimestampToMillis = (value: unknown): number | null => {
 };
 
 export const formatReportTimestamp = (value: unknown): string => {
+  if (typeof value === 'string') {
+    const spanishTimestamp = parseSpanishReportTimestamp(value);
+    if (spanishTimestamp) return spanishTimestamp.formatted;
+  }
   const timestamp = reportTimestampToMillis(value);
   if (timestamp === null || timestamp <= 0) return '';
   return new Intl.DateTimeFormat('es-ES', {
@@ -346,7 +435,22 @@ export const formatReportTimestamp = (value: unknown): string => {
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
+    timeZone: REPORT_TIME_ZONE,
   }).format(new Date(timestamp));
+};
+
+const resolveReportCompletionTimestamp = (workshop: Record<string, unknown>): string => {
+  const completedAt = formatReportTimestamp(workshop.completedAt);
+  if (completedAt) return completedAt;
+  const transition = asRecord(workshop.transition);
+  const validCompletionTransition = reportValueToString(workshop.status) === 'completed'
+    && reportValueToString(transition.kind) === 'complete'
+    && reportValueToString(transition.state) === 'committed';
+  if (validCompletionTransition) {
+    const committedAt = formatReportTimestamp(transition.committedAt);
+    if (committedAt) return committedAt;
+  }
+  return reportValueToString(workshop.status) === 'completed' ? 'No registrada' : '';
 };
 
 const sanitizeRecord = (value: Record<string, unknown>) => Object.fromEntries(
@@ -354,9 +458,13 @@ const sanitizeRecord = (value: Record<string, unknown>) => Object.fromEntries(
 );
 
 const toTextArray = (value: unknown): string[] => {
-  if (Array.isArray(value)) return value.map(reportValueToString).filter(Boolean);
-  const text = reportValueToString(value);
-  return text ? [text] : [];
+  const values = Array.isArray(value) ? value : [value];
+  return sanitizeReportList(values.map(reportValueToString));
+};
+
+const toIndexedTextArray = (value: unknown): string[] => {
+  const values = Array.isArray(value) ? value : [value];
+  return values.map(reportEntryToString);
 };
 
 const toVotes = (value: unknown, options: string[]): ReportVote[] => {
@@ -369,16 +477,16 @@ const toVotes = (value: unknown, options: string[]): ReportVote[] => {
       const record = asRecord(item);
       const votesValue = record.votes ?? record.count ?? record.value;
       return {
-        option: reportValueToString(record.option ?? record.label ?? options[index] ?? ''),
+        option: reportEntryToString(record.option ?? record.label ?? options[index] ?? ''),
         votes: typeof votesValue === 'number' && Number.isFinite(votesValue) ? votesValue : null,
       };
     }).filter((item) => item.option);
   }
   const record = asRecord(value);
   return Object.entries(record).map(([option, votes]) => ({
-    option,
+    option: reportEntryToString(option),
     votes: typeof votes === 'number' && Number.isFinite(votes) ? votes : null,
-  }));
+  })).filter((item) => item.option);
 };
 
 const normalizeDocuments = (value: unknown): ReportSourceDocument[] =>
@@ -414,7 +522,7 @@ const normalizeSource = (source: ReportGameSource) => {
       completedAt: source.completedAt ?? workshop.completedAt,
       client: source.client || reportValueToString(workshop.client),
       facilitator: source.facilitator || reportValueToString(workshop.facilitator),
-      challenge: reportValueToString(workshop.challenge),
+      challenge: reportEntryToString(workshop.challenge),
     },
     teams: normalizeTeams(source.teams),
     attacks: normalizeDocuments(source.attacks),
@@ -423,7 +531,28 @@ const normalizeSource = (source: ReportGameSource) => {
   };
 };
 
-const emptyEditorial = (): ReportEditorial => ({ executiveSummary: '', observations: '', nextSteps: '' });
+const emptyEditorial = (): ReportEditorial => ({
+  executiveSummary: '',
+  observations: '',
+  nextSteps: '',
+  teamOverrides: {},
+});
+
+const normalizeTeamEditorialOverrides = (
+  value: ReportEditorial['teamOverrides'],
+): NonNullable<ReportEditorial['teamOverrides']> => Object.fromEntries(
+  REPORT_TEAM_ORDER.flatMap((team) => {
+    const override = value?.[team];
+    if (!override) return [];
+    const selectedPerspective = reportEntryToString(override.selectedPerspective);
+    const selectedSolution = reportEntryToString(override.selectedSolution);
+    if (!selectedPerspective && !selectedSolution) return [];
+    return [[team, {
+      ...(selectedPerspective ? { selectedPerspective } : {}),
+      ...(selectedSolution ? { selectedSolution } : {}),
+    }]];
+  }),
+);
 
 const createBaseRow = (workshop: Record<string, unknown>): Omit<ReportDataRow,
   'team' | 'phase' | 'category' | 'field' | 'index' | 'fromTeam' | 'toTeam' |
@@ -432,7 +561,7 @@ const createBaseRow = (workshop: Record<string, unknown>): Omit<ReportDataRow,
   roomCode: reportValueToString(workshop.roomCode),
   status: workshop.status === 'completed' ? 'Completada' : reportValueToString(workshop.status),
   createdAt: formatReportTimestamp(workshop.createdAt),
-  completedAt: formatReportTimestamp(workshop.completedAt),
+  completedAt: resolveReportCompletionTimestamp(workshop),
   client: reportValueToString(workshop.client),
   facilitator: reportValueToString(workshop.facilitator),
   challenge: reportValueToString(workshop.challenge),
@@ -491,11 +620,15 @@ const buildRows = (
     const teamData = teams[team];
     if (!teamData) return;
     Object.entries(teamData).forEach(([field, value]) => {
-      if (TECHNICAL_TEAM_FIELDS.has(field) || REPORT_PRIVATE_FIELDS.has(field) || !isMeaningfulReportValue(value)) return;
+      const reportValue = REPORT_ENTRY_FIELDS.has(field)
+        ? sanitizeReportFieldValue(field, value)
+        : value;
+      if (TECHNICAL_TEAM_FIELDS.has(field) || REPORT_PRIVATE_FIELDS.has(field)
+        || !isMeaningfulReportValue(reportValue)) return;
       const config = REPORT_FIELD_DEFINITIONS[field] || {
         phase: 'General', category: 'Otros datos del equipo', label: field,
       };
-      pushRows(rows, base, value, {
+      pushRows(rows, base, reportValue, {
         team, phase: config.phase, category: config.category, field: config.label,
       });
     });
@@ -503,7 +636,7 @@ const buildRows = (
 
   attacks.slice().sort((left, right) =>
     (reportTimestampToMillis(left.timestamp) || 0) - (reportTimestampToMillis(right.timestamp) || 0))
-    .forEach((attack) => pushRows(rows, base, attack.content, {
+    .forEach((attack) => pushRows(rows, base, reportEntryToString(attack.content), {
       team: reportValueToString(attack.fromTeam),
       phase: 'Sublimar',
       category: 'Ataques registrados',
@@ -516,7 +649,7 @@ const buildRows = (
 
   defenses.slice().sort((left, right) =>
     (reportTimestampToMillis(left.timestamp) || 0) - (reportTimestampToMillis(right.timestamp) || 0))
-    .forEach((defense) => pushRows(rows, base, defense.content, {
+    .forEach((defense) => pushRows(rows, base, reportEntryToString(defense.content), {
       team: reportValueToString(defense.team),
       phase: 'Sublimar',
       category: 'Defensas registradas',
@@ -528,7 +661,7 @@ const buildRows = (
 
   solutions.slice().sort((left, right) =>
     (reportTimestampToMillis(left.timestamp) || 0) - (reportTimestampToMillis(right.timestamp) || 0))
-    .forEach((solution) => pushRows(rows, base, solution.content, {
+    .forEach((solution) => pushRows(rows, base, reportEntryToString(solution.content), {
       team: reportValueToString(solution.team),
       phase: 'Conjugar',
       category: 'Soluciones compartidas',
@@ -572,7 +705,7 @@ export const buildReportDataset = (
     id: reportValueToString(attack.id),
     fromTeam: reportValueToString(attack.fromTeam),
     toTeam: reportValueToString(attack.toTeam),
-    content: reportValueToString(attack.content),
+    content: reportEntryToString(attack.content),
     recordedAt: formatReportTimestamp(attack.timestamp),
   })).filter((attack) => attack.content);
   const attackById = new Map(attacks.map((attack) => [attack.id, attack]));
@@ -582,7 +715,8 @@ export const buildReportDataset = (
     const attackId = reportValueToString(defense.attackId);
     const team = reportValueToString(defense.team);
     const attack = attackById.get(attackId);
-    if (!id || !attack || team !== attack.toTeam || !isMeaningfulReportValue(defense.content)) return;
+    if (!id || !attack || team !== attack.toTeam
+      || !isMeaningfulReportEntry(reportValueToString(defense.content))) return;
 
     const current = canonicalDefenseByAttackId.get(attackId);
     const candidateTimestamp = reportTimestampToMillis(defense.editedAt ?? defense.timestamp) || 0;
@@ -601,7 +735,7 @@ export const buildReportDataset = (
     id: reportValueToString(defense.id),
     attackId: reportValueToString(defense.attackId),
     team: reportValueToString(defense.team),
-    content: reportValueToString(defense.content),
+    content: reportEntryToString(defense.content),
     recordedAt: formatReportTimestamp(defense.timestamp),
   })).filter((defense) => defense.content);
   const defenseByAttack = new Map(defenses.map((defense) => [defense.attackId, defense]));
@@ -610,9 +744,11 @@ export const buildReportDataset = (
     const data = normalized.teams[name];
     if (!data) return null;
     const perspectives = toTextArray(data.perspectives);
-    const topPerspectives = toTextArray(data.top3Perspectives);
+    const indexedTopPerspectives = toIndexedTextArray(data.top3Perspectives);
+    const topPerspectives = indexedTopPerspectives.filter(Boolean);
     const solutions = toTextArray(data.solutions);
-    const topSolutions = toTextArray(data.top3Solutions);
+    const indexedTopSolutions = toIndexedTextArray(data.top3Solutions);
+    const topSolutions = indexedTopSolutions.filter(Boolean);
     const additionalFields = Object.entries(data)
       .filter(([field, value]) => !TECHNICAL_TEAM_FIELDS.has(field)
         && !REPORT_PRIVATE_FIELDS.has(field)
@@ -635,31 +771,31 @@ export const buildReportDataset = (
     return {
       name,
       currentPhase: reportValueToString(data.currentPhase),
-      challenge: reportValueToString(data.challenge),
+      challenge: reportEntryToString(data.challenge),
       perspectives,
       topPerspectives,
-      perspectiveVotes: toVotes(data.perspectiveVotes, topPerspectives),
-      selectedPerspective: reportValueToString(data.selectedPerspective),
+      perspectiveVotes: toVotes(data.perspectiveVotes, indexedTopPerspectives),
+      selectedPerspective: reportEntryToString(data.selectedPerspective),
       solutions,
       topSolutions,
-      solutionVotes: toVotes(data.solutionVotes, topSolutions),
-      selectedSolution: reportValueToString(data.selectedSolution),
+      solutionVotes: toVotes(data.solutionVotes, indexedTopSolutions),
+      selectedSolution: reportEntryToString(data.selectedSolution),
       contrasts,
-      reformulatedSolution: reportValueToString(data.reformulatedSolution),
-      expectedResults: reportValueToString(data.expectedResults),
+      reformulatedSolution: reportEntryToString(data.reformulatedSolution),
+      expectedResults: reportEntryToString(data.expectedResults),
       ferment: {
-        audience: reportValueToString(data.audience),
+        audience: reportEntryToString(data.audience),
         strengths: toTextArray(data.strengths),
         weaknesses: toTextArray(data.weaknesses),
-        pilot: reportValueToString(data.pilot),
+        pilot: reportEntryToString(data.pilot),
         resources: toTextArray(data.resources),
       },
       pitch: {
-        complete: reportValueToString(data.pitch),
-        start: reportValueToString(data.pitchStart),
-        problem: reportValueToString(data.pitchProblem),
-        solution: reportValueToString(data.pitchSolution),
-        action: reportValueToString(data.pitchAction),
+        complete: reportEntryToString(data.pitch),
+        start: reportEntryToString(data.pitchStart),
+        problem: reportEntryToString(data.pitchProblem),
+        solution: reportEntryToString(data.pitchSolution),
+        action: reportEntryToString(data.pitchAction),
       },
       finished: typeof data.isFinished === 'boolean' ? data.isFinished : null,
       additionalFields,
@@ -686,10 +822,10 @@ export const buildReportDataset = (
       roomCode: reportValueToString(workshop.roomCode),
       status: reportValueToString(workshop.status),
       createdAt: formatReportTimestamp(workshop.createdAt),
-      completedAt: formatReportTimestamp(workshop.completedAt),
+      completedAt: resolveReportCompletionTimestamp(workshop),
       client: reportValueToString(workshop.client),
       facilitator: reportValueToString(workshop.facilitator),
-      challenge: reportValueToString(workshop.challenge),
+      challenge: reportEntryToString(workshop.challenge),
       configuration,
     },
     metrics: {
@@ -707,9 +843,10 @@ export const buildReportDataset = (
     defenses,
     editorial: {
       ...emptyEditorial(),
-      executiveSummary: reportValueToString(editorial.executiveSummary),
-      observations: reportValueToString(editorial.observations),
-      nextSteps: reportValueToString(editorial.nextSteps),
+      executiveSummary: reportEntryToString(editorial.executiveSummary),
+      observations: reportEntryToString(editorial.observations),
+      nextSteps: reportEntryToString(editorial.nextSteps),
+      teamOverrides: normalizeTeamEditorialOverrides(editorial.teamOverrides),
     },
     rows,
   };
@@ -731,8 +868,12 @@ const splitLongText = (text: string, maxCharacters = 440): string[] => {
   return parts;
 };
 
-const estimateListLines = (item: string, charactersPerLine = 92): number =>
-  Math.max(1, Math.ceil(item.length / charactersPerLine));
+const estimateWrappedLines = (text: string, charactersPerLine = 80): number => text
+  .split(/\r?\n/u)
+  .reduce((total, line) => total + Math.max(1, Math.ceil(line.trim().length / charactersPerLine)), 0);
+
+const estimateListLines = (item: string, charactersPerLine = 80): number =>
+  estimateWrappedLines(item, charactersPerLine);
 
 const paginateItems = (
   items: string[],
@@ -802,6 +943,169 @@ const paginateContrasts = (
 const compactBlocks = (...blocks: Array<ReportBlock | null | false>): ReportBlock[] =>
   blocks.filter((block): block is ReportBlock => Boolean(block));
 
+export const capitalizeFirstAlphabeticCharacter = (value: string): string => value.replace(
+  /\p{L}/u,
+  (letter) => letter.toLocaleUpperCase('es-ES'),
+);
+
+const REPORT_DISPLAY_TERMS: Record<string, string> = {
+  API: 'API',
+  CAIXA: 'Caixa',
+  CAIXABANK: 'CaixaBank',
+  CASTILLA: 'Castilla',
+  CRM: 'CRM',
+  CYL: 'CyL',
+  DT: 'DT',
+  FP: 'FP',
+  GFS: 'GFS',
+  HOLABANK: 'HolaBank',
+  IA: 'IA',
+  KPI: 'KPI',
+  KPIS: 'KPIs',
+  KREATUM: 'KREATUM',
+  LEON: 'León',
+  'LEÓN': 'León',
+  NPS: 'NPS',
+  PDF: 'PDF',
+  PPTX: 'PPTX',
+  REVOLUT: 'Revolut',
+  ROI: 'ROI',
+  RRSS: 'RRSS',
+  TIKTOK: 'TikTok',
+  UI: 'UI',
+  UX: 'UX',
+  YOUTUBE: 'YouTube',
+};
+
+const restoreReportDisplayTerms = (value: string): string => value.replace(
+  /(?<![\p{L}\p{N}])(api|caixa(?:bank)?|castilla|crm|cyl|dt|fp|gfs|holabank|ia|kpis?|kreatum|le[oó]n|nps|pdf|pptx|revolut|roi|rrss|tiktok|ui|ux|youtube)(?![\p{L}\p{N}])/giu,
+  (term) => REPORT_DISPLAY_TERMS[term.toLocaleUpperCase('es-ES')] || term,
+);
+
+export const sentenceCaseReportDisplay = (value: string): string => {
+  const normalized = proofreadReportDisplay(value);
+  if (!normalized) return '';
+  const letters = normalized.match(/\p{L}/gu) || [];
+  const uppercaseLetters = letters.filter((letter) => (
+    letter === letter.toLocaleUpperCase('es-ES')
+    && letter !== letter.toLocaleLowerCase('es-ES')
+  )).length;
+  const isMostlyUppercase = letters.length > 3 && uppercaseLetters / letters.length >= 0.75;
+  const sentence = isMostlyUppercase ? normalized.toLocaleLowerCase('es-ES') : normalized;
+  const capitalizedLines = sentence
+    .split(/(\r?\n)/u)
+    .map((segment, index) => (
+      index % 2 === 0 && segment.trim()
+        ? capitalizeFirstAlphabeticCharacter(segment)
+        : segment
+    ))
+    .join('');
+  const capitalizedSentences = capitalizedLines.replace(
+    /([.!?]\s+)([¿¡\s"'“”‘’(]*)(\p{L})/gu,
+    (_match, punctuation: string, prefix: string, letter: string) => (
+      punctuation + prefix + letter.toLocaleUpperCase('es-ES')
+    ),
+  );
+  return restoreReportDisplayTerms(capitalizedSentences);
+};
+
+const lowercaseFirstAlphabeticCharacter = (value: string): string => value.replace(
+  /\p{L}/u,
+  (letter) => letter.toLocaleLowerCase('es-ES'),
+);
+
+export const formatPerspectiveAsQuestion = (value: string): string => {
+  let perspective = sentenceCaseReportDisplay(value)
+    .replace(/^\s*[¿?]\s*/u, '')
+    .replace(/[.?!…\s]+$/u, '')
+    .trim();
+  if (!perspective) return '';
+
+  perspective = perspective
+    .replace(/^c[oó]mo\s+podr[ií]amos\s+/iu, '')
+    .replace(/^c[oó]mo\s+podemos\s+/iu, '')
+    .replace(/^c[oó]mo\s+/iu, '');
+  if (/^que\s+/iu.test(perspective)) {
+    perspective = 'conseguir ' + lowercaseFirstAlphabeticCharacter(perspective);
+  }
+  perspective = perspective.replace(/^podemos\s+/iu, '');
+
+  return sentenceCaseReportDisplay(
+    '¿Cómo podríamos ' + lowercaseFirstAlphabeticCharacter(perspective) + '?',
+  );
+};
+
+export const reportBlockEstimatedHeight = (block: ReportBlock): number => {
+  if (block.kind === 'text') {
+    const lines = estimateWrappedLines(block.text, block.prominent ? 68 : 80);
+    return Math.max(block.prominent ? 120 : 76, 48 + lines * (block.prominent ? 26 : 18));
+  }
+  if (block.kind === 'list') {
+    const lines = block.items.reduce((total, item) => total + estimateListLines(item), 0);
+    return Math.max(76, 51 + lines * 18 + Math.max(0, block.items.length - 1) * 8);
+  }
+  if (block.kind === 'votes') return Math.max(76, 48 + block.items.length * 23);
+  return 76;
+};
+
+const splitBlockForLayout = (block: ReportBlock): ReportBlock[] => {
+  if (block.kind === 'text') {
+    return splitLongText(block.text, 680).map((text) => ({ ...block, text }));
+  }
+  if (block.kind === 'list') {
+    return paginateItems(block.items, 8, 900, 12).map((items) => ({ ...block, items }));
+  }
+  return [block];
+};
+
+const paginateContentBlocks = (
+  blocks: ReportBlock[],
+  maxEstimatedHeight = 370,
+  gap = 12,
+): ReportBlock[][] => {
+  const expanded = blocks.flatMap(splitBlockForLayout);
+  const pages: ReportBlock[][] = [];
+  let current: ReportBlock[] = [];
+  let currentHeight = 0;
+  expanded.forEach((block) => {
+    const height = reportBlockEstimatedHeight(block);
+    const nextHeight = currentHeight + height + (current.length > 0 ? gap : 0);
+    if (current.length > 0 && nextHeight > maxEstimatedHeight) {
+      pages.push(current);
+      current = [];
+      currentHeight = 0;
+    }
+    current.push(block);
+    currentHeight += height + (current.length > 1 ? gap : 0);
+  });
+  if (current.length > 0) pages.push(current);
+  return pages;
+};
+
+const addContentBlockPages = (
+  pages: Array<Omit<ReportDeckPage, 'pageNumber' | 'totalPages'>>,
+  input: {
+    kind?: ReportDeckPage['kind'];
+    sectionId: string;
+    section: string;
+    title: string;
+    subtitle?: string;
+    team?: ReportTeamName;
+    blocks: ReportBlock[];
+  },
+) => {
+  const chunks = paginateContentBlocks(input.blocks);
+  chunks.forEach((blocks, index) => pages.push({
+    kind: input.kind || 'content',
+    sectionId: input.sectionId,
+    section: input.section,
+    title: chunks.length > 1 ? `${input.title} · ${index + 1}/${chunks.length}` : input.title,
+    subtitle: input.subtitle,
+    team: input.team,
+    blocks,
+  }));
+};
+
 const hasEditorial = (editorial: ReportEditorial) =>
   Boolean(editorial.executiveSummary || editorial.observations || editorial.nextSteps);
 
@@ -828,22 +1132,7 @@ const addListPages = (
   }));
 };
 
-export const buildReportDeck = (dataset: ReportDataset, templateVersion = '2.2.0'): ReportDeck => {
-const capitalizeFirstLetter = (value: string): string => value.replace(
-  /^(\s*)(\p{L})/u,
-  (_match, spacing: string, letter: string) => `${spacing}${letter.toLocaleUpperCase('es-ES')}`,
-);
-
-const sentenceCaseTitle = (value: string): string => {
-  const normalized = value.trim();
-  if (!normalized) return '';
-  const letters = normalized.match(/\p{L}/gu)?.join('') || '';
-  const isAllUppercase = letters.length > 1
-    && letters === letters.toLocaleUpperCase('es-ES')
-    && letters !== letters.toLocaleLowerCase('es-ES');
-  return capitalizeFirstLetter(isAllUppercase ? normalized.toLocaleLowerCase('es-ES') : normalized);
-};
-
+export const buildReportDeck = (dataset: ReportDataset, templateVersion = '2.3.1'): ReportDeck => {
 const addSectionPage = (
   pages: Array<Omit<ReportDeckPage, 'pageNumber' | 'totalPages'>>,
   input: { sectionId: string; number: string; title: string; subtitle: string },
@@ -857,26 +1146,28 @@ const addSectionPage = (
 });
 
 const hasPerspectiveContent = (team: ReportTeamDataset) => team.perspectives.length > 0;
+const selectedPerspectiveFor = (team: ReportTeamDataset) => (
+  dataset.editorial.teamOverrides?.[team.name]?.selectedPerspective || team.selectedPerspective
+);
+const selectedSolutionFor = (team: ReportTeamDataset) => (
+  dataset.editorial.teamOverrides?.[team.name]?.selectedSolution || team.selectedSolution
+);
 const hasPerspectivePriorityContent = (team: ReportTeamDataset) => Boolean(
-  team.topPerspectives.length || team.selectedPerspective || team.perspectiveVotes.length,
+  team.topPerspectives.length || selectedPerspectiveFor(team) || team.perspectiveVotes.length,
 );
 const hasSolutionContent = (team: ReportTeamDataset) => team.solutions.length > 0;
 const hasSolutionPriorityContent = (team: ReportTeamDataset) => Boolean(
-  team.topSolutions.length || team.selectedSolution || team.solutionVotes.length,
+  team.topSolutions.length || selectedSolutionFor(team) || team.solutionVotes.length,
 );
 const hasFinalContent = (team: ReportTeamDataset) => Boolean(
-  team.selectedSolution || team.reformulatedSolution || team.expectedResults,
-);
-const hasFermentContent = (team: ReportTeamDataset) => Boolean(
-  team.ferment.audience || team.ferment.strengths.length || team.ferment.weaknesses.length
-  || team.ferment.pilot || team.ferment.resources.length,
+  selectedSolutionFor(team) || team.reformulatedSolution || team.expectedResults,
 );
 const hasPitchContent = (team: ReportTeamDataset) => Boolean(
   team.pitch.complete || team.pitch.start || team.pitch.problem || team.pitch.solution || team.pitch.action,
 );
 
   const pages: Array<Omit<ReportDeckPage, 'pageNumber' | 'totalPages'>> = [];
-  const coverTitle = sentenceCaseTitle(dataset.workshop.challenge) || 'Informe de resultados';
+  const coverTitle = sentenceCaseReportDisplay(dataset.workshop.challenge) || 'Informe de resultados';
   pages.push({
     kind: 'cover',
     sectionId: 'cover',
@@ -898,7 +1189,7 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
       { kind: 'text', label: 'Facilitador', text: dataset.workshop.facilitator },
       { kind: 'text', label: 'Empresa contratante', text: dataset.workshop.client },
       { kind: 'text', label: 'Inicio', text: dataset.workshop.createdAt },
-      { kind: 'text', label: 'Final', text: dataset.workshop.completedAt },
+      { kind: 'text', label: 'Final', text: dataset.workshop.completedAt || 'No registrada' },
     ].filter((block) => block.text) as ReportBlock[],
   });
   addSectionPage(pages, {
@@ -932,7 +1223,10 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
     dataset.teams.filter(hasPerspectiveContent).forEach((team) => {
       addListPages(pages, {
         sectionId: 'perspectives', section: 'Perspectivas', title: `Equipo ${team.name}: perspectivas completas`,
-        subtitle: team.challenge, team: team.name, items: team.perspectives, label: 'Perspectivas registradas',
+        subtitle: team.challenge,
+        team: team.name,
+        items: team.perspectives.map(formatPerspectiveAsQuestion),
+        label: 'Perspectivas registradas',
       });
     });
   }
@@ -947,9 +1241,9 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
         kind: 'content', sectionId: 'priority', section: 'Priorización y votos',
         title: `Equipo ${team.name}: perspectivas priorizadas`, team: team.name,
         blocks: [
-          ...(team.topPerspectives.length ? [{ kind: 'list' as const, label: 'Preselección', items: team.topPerspectives, ordered: true, accent: TEAM_COLORS[team.name] }] : []),
-          ...(team.perspectiveVotes.length ? [{ kind: 'votes' as const, label: 'Votación', items: team.perspectiveVotes, accent: TEAM_COLORS[team.name] }] : []),
-          ...(team.selectedPerspective ? [{ kind: 'text' as const, label: 'Perspectiva definitiva', text: team.selectedPerspective, accent: TEAM_COLORS[team.name], prominent: true }] : []),
+          ...(team.topPerspectives.length ? [{ kind: 'list' as const, label: 'Preselección', items: team.topPerspectives.map(formatPerspectiveAsQuestion), ordered: true, accent: TEAM_COLORS[team.name] }] : []),
+          ...(team.perspectiveVotes.length ? [{ kind: 'votes' as const, label: 'Votación', items: team.perspectiveVotes.map((vote) => ({ ...vote, option: formatPerspectiveAsQuestion(vote.option) })), accent: TEAM_COLORS[team.name] }] : []),
+          ...(selectedPerspectiveFor(team) ? [{ kind: 'text' as const, label: 'Perspectiva definitiva', text: formatPerspectiveAsQuestion(selectedPerspectiveFor(team)), accent: TEAM_COLORS[team.name], prominent: true }] : []),
         ],
       });
     });
@@ -963,7 +1257,7 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
     dataset.teams.filter(hasSolutionContent).forEach((team) => {
       addListPages(pages, {
         sectionId: 'solutions', section: 'Soluciones', title: `Equipo ${team.name}: soluciones completas`,
-        subtitle: team.selectedPerspective, team: team.name, items: team.solutions, label: 'Soluciones registradas',
+        subtitle: formatPerspectiveAsQuestion(selectedPerspectiveFor(team)), team: team.name, items: team.solutions, label: 'Soluciones registradas',
       });
     });
     dataset.teams.filter(hasSolutionPriorityContent).forEach((team) => {
@@ -973,7 +1267,7 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
         blocks: [
           ...(team.topSolutions.length ? [{ kind: 'list' as const, label: 'Preselección', items: team.topSolutions, ordered: true, accent: TEAM_COLORS[team.name] }] : []),
           ...(team.solutionVotes.length ? [{ kind: 'votes' as const, label: 'Votación', items: team.solutionVotes, accent: TEAM_COLORS[team.name] }] : []),
-          ...(team.selectedSolution ? [{ kind: 'text' as const, label: 'Solución definitiva', text: team.selectedSolution, accent: TEAM_COLORS[team.name], prominent: true }] : []),
+          ...(selectedSolutionFor(team) ? [{ kind: 'text' as const, label: 'Solución definitiva', text: selectedSolutionFor(team), accent: TEAM_COLORS[team.name], prominent: true }] : []),
         ],
       });
     });
@@ -1036,34 +1330,13 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
     });
     finalTeams.forEach((team) => {
       const finalBlocks = compactBlocks(
-        team.selectedSolution ? { kind: 'text', label: 'Solución definitiva', text: team.selectedSolution, accent: TEAM_COLORS[team.name], prominent: true } : null,
+        selectedSolutionFor(team) ? { kind: 'text', label: 'Solución definitiva', text: selectedSolutionFor(team), accent: TEAM_COLORS[team.name], prominent: true } : null,
         team.reformulatedSolution ? { kind: 'text', label: 'Solución reformulada', text: team.reformulatedSolution, accent: TEAM_COLORS[team.name] } : null,
         team.expectedResults ? { kind: 'text', label: 'Resultados esperados', text: team.expectedResults, accent: TEAM_COLORS[team.name] } : null,
       );
-      pages.push({
-        kind: 'content', sectionId: 'reformulation', section: 'Reformulación y resultados',
+      addContentBlockPages(pages, {
+        sectionId: 'reformulation', section: 'Reformulación y resultados',
         title: `Equipo ${team.name}: solución final`, team: team.name, blocks: finalBlocks,
-      });
-    });
-  }
-
-  const fermentTeams = dataset.teams.filter(hasFermentContent);
-  if (fermentTeams.length > 0) {
-    addSectionPage(pages, {
-      sectionId: 'ferment', number: 'A1', title: 'Aterrizaje de la propuesta',
-      subtitle: 'Campos de Fermentar registrados durante la partida.',
-    });
-    fermentTeams.forEach((team) => {
-      const fermentBlocks = compactBlocks(
-        team.ferment.audience ? { kind: 'text', label: 'Audiencia', text: team.ferment.audience } : null,
-        team.ferment.strengths.length ? { kind: 'list', label: 'Fortalezas', items: team.ferment.strengths } : null,
-        team.ferment.weaknesses.length ? { kind: 'list', label: 'Debilidades', items: team.ferment.weaknesses } : null,
-        team.ferment.pilot ? { kind: 'text', label: 'Prueba piloto / prototipo', text: team.ferment.pilot } : null,
-        team.ferment.resources.length ? { kind: 'list', label: 'Recursos necesarios', items: team.ferment.resources } : null,
-      );
-      pages.push({
-        kind: 'content', sectionId: 'ferment', section: 'Fermentar',
-        title: `Equipo ${team.name}: aterrizaje de la propuesta`, team: team.name, blocks: fermentBlocks,
       });
     });
   }
@@ -1071,7 +1344,7 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
   const pitchTeams = dataset.teams.filter(hasPitchContent);
   if (pitchTeams.length > 0) {
     addSectionPage(pages, {
-      sectionId: 'pitch', number: 'A2', title: 'Presentación final',
+      sectionId: 'pitch', number: 'A1', title: 'Presentación final',
       subtitle: 'Campos de pitch registrados durante la partida.',
     });
     pitchTeams.forEach((team) => {
@@ -1082,14 +1355,14 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
         team.pitch.solution ? { kind: 'text', label: '3. Testeo', text: team.pitch.solution } : null,
         team.pitch.action ? { kind: 'text', label: '4. Conclusiones', text: team.pitch.action } : null,
       );
-      pages.push({
-        kind: 'content', sectionId: 'pitch', section: 'Pitch', title: `Equipo ${team.name}: presentación final`,
+      addContentBlockPages(pages, {
+        sectionId: 'pitch', section: 'Pitch', title: `Equipo ${team.name}: presentación final`,
         team: team.name, blocks: pitchBlocks,
       });
     });
   }
 
-  if (hasEditorial(dataset.editorial)) pages.push({
+  if (hasEditorial(dataset.editorial)) addContentBlockPages(pages, {
     kind: 'editorial', sectionId: 'editorial', section: 'Anexo editorial',
     title: 'Anexo editorial opcional',
     subtitle: 'Contenido añadido por el facilitador. No forma parte de los datos registrados durante el workshop.',
@@ -1106,12 +1379,45 @@ const hasPitchContent = (team: ReportTeamDataset) => Boolean(
   });
 
 
+  const proofreadBlock = (block: ReportBlock): ReportBlock => {
+    switch (block.kind) {
+      case 'text':
+        return { ...block, text: sentenceCaseReportDisplay(block.text) };
+      case 'list':
+        return { ...block, items: block.items.map(sentenceCaseReportDisplay) };
+      case 'votes':
+        return {
+          ...block,
+          items: block.items.map((item) => ({
+            ...item,
+            option: sentenceCaseReportDisplay(item.option),
+          })),
+        };
+      case 'contrast':
+        return {
+          ...block,
+          attack: sentenceCaseReportDisplay(block.attack),
+          defense: sentenceCaseReportDisplay(block.defense),
+        };
+      case 'metrics':
+        return block;
+      default:
+        return block;
+    }
+  };
+
   const totalPages = pages.length;
   return {
     templateVersion,
     title: 'Informe de resultados KREATUM™',
     roomCode: dataset.workshop.roomCode,
-    pages: pages.map((page, index) => ({ ...page, pageNumber: index + 1, totalPages })),
+    pages: pages.map((page, index) => ({
+      ...page,
+      subtitle: page.subtitle ? sentenceCaseReportDisplay(page.subtitle) : page.subtitle,
+      blocks: page.blocks.map(proofreadBlock),
+      pageNumber: index + 1,
+      totalPages,
+    })),
   };
 };
 

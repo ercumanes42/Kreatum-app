@@ -2,12 +2,15 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import JSZip from 'jszip';
 import { PDFDocument as PdfLibDocument } from 'pdf-lib';
+import PDFDocument from 'pdfkit';
 import {
   buildReportDataset,
   buildReportDeck,
   type ReportGameSource,
 } from '../../../shared/reporting.js';
 import { loadReportAssets, renderReportPdf, renderReportPptx } from './renderReportArtifacts.js';
+
+const longChallenge = '¿cómo podemos conseguir que más personas elijan CaixaBank como su entidad financiera de referencia, atrayendo sobre todo a aquellos con alto potencial de vinculación y rentabilidad?';
 
 const source: ReportGameSource = {
   id: 'workshop-document-test',
@@ -18,7 +21,7 @@ const source: ReportGameSource = {
   client: 'Cliente de prueba',
   facilitator: 'Facilitador',
   workshop: {
-    challenge: 'Cómo hacer que el calentamiento global no acabe con el planeta',
+    challenge: longChallenge,
   },
   teams: {
     Agua: {
@@ -31,6 +34,11 @@ const source: ReportGameSource = {
       selectedSolution: 'Solución medible',
       reformulatedSolution: 'Solución medible reforzada',
       expectedResults: 'Resultado esperado verificable',
+      audience: 'DT',
+      strengths: ['Claridad para CaixaBank'],
+      weaknesses: ['Tiempo de adopción'],
+      pilot: 'HACER PILOTO CON DT, IA Y CAIXABANK',
+      resources: ['Equipo de facilitación'],
       activeParticipantId: 'private-participant',
       activeParticipantHash: 'private-hash',
       lastHeartbeatAt: 'private-heartbeat',
@@ -53,6 +61,31 @@ const source: ReportGameSource = {
   solutions: [],
 };
 
+test('technical page renders a long challenge at full width without a clipped text box', async () => {
+  const deck = buildReportDeck(buildReportDataset(source));
+  type PdfText = (
+    text: string,
+    x?: number,
+    y?: number,
+    options?: PDFKit.Mixins.TextOptions,
+  ) => PDFKit.PDFDocument;
+  const prototype = PDFDocument.prototype as unknown as { text: PdfText };
+  const originalText = prototype.text;
+  let challengeOptions: PDFKit.Mixins.TextOptions | undefined;
+  prototype.text = function captureTechnicalChallenge(text, x, y, options) {
+    if (text.endsWith('alto potencial de vinculación y rentabilidad?')) challengeOptions = options;
+    return Reflect.apply(originalText, this, [text, x, y, options]) as PDFKit.PDFDocument;
+  };
+  try {
+    await renderReportPdf(deck, { teams: {}, fonts: {} });
+  } finally {
+    prototype.text = originalText;
+  }
+  assert.ok(challengeOptions);
+  assert.ok(Number(challengeOptions.width) >= 700);
+  assert.ok(Number(challengeOptions.height) >= 80);
+});
+
 test('PDF and PPTX are valid documents with identical page/slide order', async () => {
   const dataset = buildReportDataset(source, {
     executiveSummary: 'Resumen editorial claramente identificado.',
@@ -60,8 +93,13 @@ test('PDF and PPTX are valid documents with identical page/slide order', async (
     nextSteps: 'Siguiente paso editorial.',
   });
   const deck = buildReportDeck(dataset);
-  const exactChallenge = 'Cómo hacer que el calentamiento global no acabe con el planeta';
+  const exactChallenge = '¿Cómo podemos conseguir que más personas elijan CaixaBank como su entidad financiera de referencia, atrayendo sobre todo a aquellos con alto potencial de vinculación y rentabilidad?';
+  assert.equal(longChallenge.length, 181);
   assert.equal(deck.pages[0]?.title, exactChallenge);
+  const technicalChallenge = deck.pages
+    .find((page) => page.kind === 'technical')
+    ?.blocks.find((block) => block.kind === 'text' && block.label === 'Reto');
+  assert.equal(technicalChallenge?.kind === 'text' ? technicalChallenge.text : '', exactChallenge);
   assert.equal(deck.pages.some((page) => page.sectionId === 'traceability'), false);
   const assets = await loadReportAssets();
   assert.ok(assets.logo);
@@ -94,6 +132,8 @@ test('PDF and PPTX are valid documents with identical page/slide order', async (
   const slideXml = await Promise.all(slideNames.map((name) => archive.file(name)?.async('string')));
   const joined = slideXml.join('\n');
   assert.match(joined, new RegExp(exactChallenge));
+  assert.equal(joined.includes('Hacer piloto con DT, IA y CaixaBank'), false);
+  assert.equal(joined.includes('Solución aterrizada'), false);
   for (const forbidden of [
     'Otros datos registrados',
     'Trazabilidad funcional',

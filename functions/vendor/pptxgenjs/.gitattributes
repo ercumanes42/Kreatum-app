@@ -1,0 +1,6 @@
+# Preserve upstream bytes and provenance hashes on Windows and Linux.
+dist/** -text
+types/** -text
+LICENSE -text
+README.md -text
+upstream.package.json -text

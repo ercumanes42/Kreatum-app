@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import type { ReportEditorial } from '../../shared/contracts.js';
 import {
   REPORT_FIELD_DEFINITIONS,
   REPORT_TEAM_ORDER,
@@ -153,16 +154,37 @@ const sourceFromCsv = (rows: string[][]): ReportGameSource => {
 };
 
 const main = async () => {
-  const [csvArgument, outputArgument] = process.argv.slice(2);
+  const [csvArgument, outputArgument, editorialArgument, workshopArgument] = process.argv.slice(2);
 if (!csvArgument || !outputArgument) {
-  throw new Error('Usage: render-report-fixture.ts <input.csv> <output-directory>');
+  throw new Error(
+    'Usage: render-report-fixture.ts <input.csv> <output-directory> '
+      + '[editorial-overrides.json] [workshop-overrides.json]',
+  );
 }
 
 const csvPath = resolve(csvArgument);
 const outputDirectory = resolve(outputArgument);
 const rows = parseCsv(await readFile(csvPath, 'utf8'));
 const source = sourceFromCsv(rows);
-const dataset = buildReportDataset(source);
+if (workshopArgument) {
+  const parsed = JSON.parse(await readFile(resolve(workshopArgument), 'utf8')) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('The workshop overrides file must contain a JSON object.');
+  }
+  const overrides = parsed as Record<string, unknown>;
+  for (const field of ['createdAt', 'completedAt'] as const) {
+    const value = overrides[field];
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new Error(`Workshop override ${field} must be a non-empty string.`);
+    }
+    source[field] = value.trim();
+  }
+}
+const editorial = editorialArgument
+  ? JSON.parse(await readFile(resolve(editorialArgument), 'utf8')) as Partial<ReportEditorial>
+  : {};
+const dataset = buildReportDataset(source, editorial);
 const deck = buildReportDeck(dataset);
 const assets = await loadReportAssets(resolve('assets/report'));
 const [pdf, pptx] = await Promise.all([

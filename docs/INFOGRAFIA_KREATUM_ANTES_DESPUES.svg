@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2100" viewBox="0 0 1600 2100" role="img" aria-labelledby="title desc">
+  <title id="title">KREATUM: antes y ahora</title>
+  <desc id="desc">Infografía sobre la evolución de KREATUM desde una aplicación de juego básica hasta una plataforma multiempresa segura, con roles, licencias, informes y operación auditada.</desc>
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102F3F"/>
+      <stop offset="1" stop-color="#254B58"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8E3E91"/>
+      <stop offset="1" stop-color="#B85AAE"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#102F3F" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .sans { font-family: Inter, "Segoe UI", Arial, sans-serif; }
+      .title { font-size: 74px; font-weight: 800; letter-spacing: -2px; }
+      .subtitle { font-size: 30px; font-weight: 400; }
+      .eyebrow { font-size: 22px; font-weight: 800; letter-spacing: 4px; }
+      .section { font-size: 43px; font-weight: 800; letter-spacing: -1px; }
+      .card-title { font-size: 29px; font-weight: 800; }
+      .body { font-size: 24px; font-weight: 400; }
+      .small { font-size: 19px; font-weight: 400; }
+      .stat { font-size: 44px; font-weight: 800; }
+      .stat-label { font-size: 20px; font-weight: 600; }
+      .white { fill: #FFFFFF; }
+      .navy { fill: #102F3F; }
+      .muted { fill: #607681; }
+      .purple { fill: #9D459E; }
+      .green { fill: #087F5B; }
+      .amber { fill: #A75B00; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="2100" fill="#F4F7F9"/>
+
+  <!-- Hero -->
+  <rect width="1600" height="390" fill="url(#hero)"/>
+  <circle cx="1390" cy="80" r="240" fill="#FFFFFF" opacity="0.035"/>
+  <circle cx="1460" cy="310" r="145" fill="#B85AAE" opacity="0.13"/>
+  <g transform="translate(96 62)">
+    <text class="sans eyebrow white" x="0" y="0" dominant-baseline="hanging">EVOLUCIÓN · 03–13 AGOSTO 2026</text>
+    <text class="sans title white" x="0" y="72">KREATUM</text>
+    <text class="sans title white" x="0" y="154">de juego digital a plataforma empresarial</text>
+    <text class="sans subtitle" fill="#D9E4E8" x="0" y="265">La misma metodología. Más control, seguridad, resiliencia e informes.</text>
+  </g>
+
+  <!-- Before / Now -->
+  <g transform="translate(78 435)">
+    <text class="sans section navy" x="0" y="0" dominant-baseline="hanging">El cambio, en una mirada</text>
+
+    <g transform="translate(0 90)" filter="url(#shadow)">
+      <rect width="690" height="370" rx="28" fill="#FFFFFF"/>
+      <rect width="690" height="72" rx="28" fill="#E9EEF1"/>
+      <rect y="44" width="690" height="28" fill="#E9EEF1"/>
+      <text class="sans eyebrow muted" x="34" y="22" dominant-baseline="hanging">ANTES</text>
+      <g class="sans body navy">
+        <circle cx="43" cy="116" r="7" fill="#9D459E"/><text x="68" y="124">Juego y panel administrativo básico</text>
+        <circle cx="43" cy="168" r="7" fill="#9D459E"/><text x="68" y="176">Un email equivalía casi a ser administrador</text>
+        <circle cx="43" cy="220" r="7" fill="#9D459E"/><text x="68" y="228">Datos globales, sin empresas aisladas</text>
+        <circle cx="43" cy="272" r="7" fill="#9D459E"/><text x="68" y="280">Informes separados del flujo principal</text>
+        <circle cx="43" cy="324" r="7" fill="#9D459E"/><text x="68" y="332">Sin gate integral ni smoke multiempresa</text>
+      </g>
+    </g>
+
+    <g transform="translate(754 90)" filter="url(#shadow)">
+      <rect width="690" height="370" rx="28" fill="#FFFFFF"/>
+      <rect width="690" height="72" rx="28" fill="#E9F8F1"/>
+      <rect y="44" width="690" height="28" fill="#E9F8F1"/>
+      <text class="sans eyebrow green" x="34" y="22" dominant-baseline="hanging">AHORA</text>
+      <g class="sans body navy">
+        <circle cx="43" cy="116" r="7" fill="#087F5B"/><text x="68" y="124">Empresas, licencias y roles reales</text>
+        <circle cx="43" cy="168" r="7" fill="#087F5B"/><text x="68" y="176">Email + membresía + autorización del servidor</text>
+        <circle cx="43" cy="220" r="7" fill="#087F5B"/><text x="68" y="228">A nunca puede acceder a los datos de B</text>
+        <circle cx="43" cy="272" r="7" fill="#087F5B"/><text x="68" y="280">PDF, PowerPoint y JSON protegidos</text>
+        <circle cx="43" cy="324" r="7" fill="#087F5B"/><text x="68" y="332">Release probado y auditado en producción</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Flow -->
+  <g transform="translate(78 970)">
+    <text class="sans section navy" x="0" y="0" dominant-baseline="hanging">Así funciona hoy</text>
+    <text class="sans body muted" x="0" y="60">Cada persona recibe solo el acceso que necesita.</text>
+
+    <g transform="translate(0 124)">
+      <g filter="url(#shadow)">
+        <rect width="315" height="244" rx="26" fill="#FFFFFF"/>
+        <circle cx="55" cy="54" r="29" fill="#F1E5F3"/>
+        <path d="M42 56h26M55 43v26" stroke="#9D459E" stroke-width="5" stroke-linecap="round"/>
+        <text class="sans card-title navy" x="30" y="108">GFS</text>
+        <text class="sans body muted" x="30" y="145">Crea empresas, controla</text>
+        <text class="sans body muted" x="30" y="178">licencias y supervisa</text>
+        <text class="sans body muted" x="30" y="211">con auditoría.</text>
+      </g>
+      <path d="M325 122h52" stroke="#9D459E" stroke-width="6" stroke-linecap="round"/>
+      <path d="M365 109l15 13-15 13" fill="none" stroke="#9D459E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <g transform="translate(390 0)" filter="url(#shadow)">
+        <rect width="315" height="244" rx="26" fill="#FFFFFF"/>
+        <circle cx="55" cy="54" r="29" fill="#E9F2F6"/>
+        <path d="M44 62c2-14 20-14 22 0M55 39a9 9 0 1 1 0 18 9 9 0 0 1 0-18" fill="none" stroke="#254B58" stroke-width="5" stroke-linecap="round"/>
+        <text class="sans card-title navy" x="30" y="108">Empresa</text>
+        <text class="sans body muted" x="30" y="145">Su administrador y</text>
+        <text class="sans body muted" x="30" y="178">facilitador gestionan</text>
+        <text class="sans body muted" x="30" y="211">solo sus partidas.</text>
+      </g>
+      <path d="M715 122h52" stroke="#9D459E" stroke-width="6" stroke-linecap="round"/>
+      <path d="M755 109l15 13-15 13" fill="none" stroke="#9D459E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <g transform="translate(780 0)" filter="url(#shadow)">
+        <rect width="315" height="244" rx="26" fill="#FFFFFF"/>
+        <circle cx="55" cy="54" r="29" fill="#FFF2E1"/>
+        <text class="sans card-title amber" x="44" y="65">4</text>
+        <text class="sans card-title navy" x="30" y="108">Equipos</text>
+        <text class="sans body muted" x="30" y="145">Jugadores anónimos</text>
+        <text class="sans body muted" x="30" y="178">entran con el código</text>
+        <text class="sans body muted" x="30" y="211">manual de sala.</text>
+      </g>
+      <path d="M1105 122h52" stroke="#9D459E" stroke-width="6" stroke-linecap="round"/>
+      <path d="M1145 109l15 13-15 13" fill="none" stroke="#9D459E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <g transform="translate(1170 0)" filter="url(#shadow)">
+        <rect width="274" height="244" rx="26" fill="url(#violet)"/>
+        <text class="sans card-title white" x="30" y="66">Resultados</text>
+        <text class="sans body white" x="30" y="110">7 fases completas</text>
+        <text class="sans body white" x="30" y="151">PDF profesional</text>
+        <text class="sans body white" x="30" y="192">PPTX editable · JSON</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Capabilities -->
+  <g transform="translate(78 1445)">
+    <text class="sans section navy" x="0" y="0" dominant-baseline="hanging">Lo que hace diferente a la nueva KREATUM</text>
+    <g transform="translate(0 86)">
+      <g filter="url(#shadow)">
+        <rect width="340" height="240" rx="26" fill="#FFFFFF"/>
+        <text class="sans card-title purple" x="28" y="50">Datos aislados</text>
+        <text class="sans body muted" x="28" y="92">Una empresa no puede</text>
+        <text class="sans body muted" x="28" y="126">ver, inferir ni descargar</text>
+        <text class="sans body muted" x="28" y="160">información de otra.</text>
+        <text class="sans small green" x="28" y="207">Validado A ↔ B</text>
+      </g>
+      <g transform="translate(368 0)" filter="url(#shadow)">
+        <rect width="340" height="240" rx="26" fill="#FFFFFF"/>
+        <text class="sans card-title purple" x="28" y="50">Juego resiliente</text>
+        <text class="sans body muted" x="28" y="92">Reconexión, heartbeat,</text>
+        <text class="sans body muted" x="28" y="126">reintentos seguros y</text>
+        <text class="sans body muted" x="28" y="160">cierre coordinado.</text>
+        <text class="sans small green" x="28" y="207">4 ACK por transición</text>
+      </g>
+      <g transform="translate(736 0)" filter="url(#shadow)">
+        <rect width="340" height="240" rx="26" fill="#FFFFFF"/>
+        <text class="sans card-title purple" x="28" y="50">Gobierno real</text>
+        <text class="sans body muted" x="28" y="92">Licencias, facilitadores,</text>
+        <text class="sans body muted" x="28" y="126">suspensión y motivos</text>
+        <text class="sans body muted" x="28" y="160">quedan auditados.</text>
+        <text class="sans small green" x="28" y="207">Control por empresa</text>
+      </g>
+      <g transform="translate(1104 0)" filter="url(#shadow)">
+        <rect width="340" height="240" rx="26" fill="#FFFFFF"/>
+        <text class="sans card-title purple" x="28" y="50">Entrega profesional</text>
+        <text class="sans body muted" x="28" y="92">Informes versionados,</text>
+        <text class="sans body muted" x="28" y="126">verificables y con</text>
+        <text class="sans body muted" x="28" y="160">descarga protegida.</text>
+        <text class="sans small green" x="28" y="207">PDF · PPTX · JSON</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Evidence strip -->
+  <g transform="translate(0 1840)">
+    <rect width="1600" height="260" fill="#102F3F"/>
+    <text class="sans eyebrow" fill="#C9D9DF" x="78" y="34" dominant-baseline="hanging">EVIDENCIA AL 13 DE AGOSTO</text>
+    <g transform="translate(78 95)">
+      <g>
+        <text class="sans stat white" x="0" y="0">70</text>
+        <text class="sans stat-label" fill="#C9D9DF" x="0" y="40">funciones activas</text>
+      </g>
+      <g transform="translate(300 0)">
+        <text class="sans stat white" x="0" y="0">7 + 4</text>
+        <text class="sans stat-label" fill="#C9D9DF" x="0" y="40">fases + equipos</text>
+      </g>
+      <g transform="translate(600 0)">
+        <text class="sans stat white" x="0" y="0">25</text>
+        <text class="sans stat-label" fill="#C9D9DF" x="0" y="40">partidas en carga local*</text>
+      </g>
+      <g transform="translate(930 0)">
+        <text class="sans stat white" x="0" y="0">2</text>
+        <text class="sans stat-label" fill="#C9D9DF" x="0" y="40">empresas en smoke real</text>
+      </g>
+      <g transform="translate(1240 0)">
+        <text class="sans stat" fill="#79E1B5" x="0" y="0">0</text>
+        <text class="sans stat-label" fill="#C9D9DF" x="0" y="40">residuos del smoke</text>
+      </g>
+    </g>
+    <text class="sans small" fill="#AFC2C9" x="78" y="207">* Prueba local con 100 sesiones y 5.000 eventos, 0 % de error. No constituye un SLA de producción.</text>
+    <text class="sans small" fill="#AFC2C9" x="78" y="237">App Check permanece en observación y activación gradual. Release actual: piloto gestionado.</text>
+  </g>
+</svg>

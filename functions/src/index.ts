@@ -32,6 +32,7 @@ import {
   PHASES,
   REPORT_TEMPLATE_VERSION,
   SCHEMA_VERSION,
+  TEAMS,
   isPhase,
   isPhaseChangeAllowed,
   isRoomCodeValid,
@@ -108,6 +109,10 @@ import { tenantReportRolesForToken } from './security/reportTenantAuthorization.
 import { revalidateWorkshopAdminInTransaction } from './security/workshopAdminAuthorization.js';
 import { revalidateOrganizationOwnerInTransaction } from './security/organizationOwnerAuthorization.js';
 import { RUNTIME_SERVICE_ACCOUNT } from './runtimeOptions.js';
+import {
+  classifyRequestedTransition,
+  selectRequiredTransitionTeams,
+} from './workshopTransitionSafety.js';
 export {
   acceptInvitation,
   cancelInvitation,
@@ -442,6 +447,20 @@ const buildCanonicalReportSnapshot = async (
       .filter((field) => workshopData[field] !== undefined)
       .map((field) => [field, normalizeReportValue(workshopData[field])]),
   );
+  const completionTransition = workshopData.transition
+    && typeof workshopData.transition === 'object'
+    && !Array.isArray(workshopData.transition)
+    ? workshopData.transition as Record<string, unknown>
+    : {};
+  const hasCompletedAt = workshopData.completedAt !== undefined
+    && workshopData.completedAt !== null
+    && workshopData.completedAt !== '';
+  if (!hasCompletedAt && workshopData.status === 'completed'
+    && completionTransition.kind === 'complete'
+    && completionTransition.state === 'committed'
+    && completionTransition.committedAt !== undefined) {
+    workshop.completedAt = normalizeReportValue(completionTransition.committedAt);
+  }
 
   const collectionNames = ['teams', 'attacks', 'defenses', 'solutions'] as const;
   const collectionSnapshots = await Promise.all(
@@ -808,7 +827,11 @@ export const joinWorkshopByCode = callable<JoinWorkshopInput, JoinWorkshopOutput
       }
 
       const existingTeam = sessionSnapshot.data()?.team;
-      const team = isTeam(existingTeam) ? existingTeam : null;
+      const previousTeamRef = isTeam(existingTeam)
+        ? workshopRef.collection('teams').doc(existingTeam) : null;
+      const previousTeamSnapshot = previousTeamRef ? await transaction.get(previousTeamRef) : null;
+      const team = isTeam(existingTeam)
+        && previousTeamSnapshot?.data()?.activeParticipantId === auth.uid ? existingTeam : null;
       transaction.set(slotRefs[reusableSlotIndex], {
         participantId: auth.uid,
         participantHash: hashIdentifier(auth.uid),
@@ -827,6 +850,13 @@ export const joinWorkshopByCode = callable<JoinWorkshopInput, JoinWorkshopOutput
         expiresAt: Timestamp.fromMillis(expiresAtMs),
       }, { merge: true });
 
+      if (team && previousTeamRef) {
+        transaction.update(previousTeamRef, {
+          activeDeviceExpiresAt: Timestamp.fromMillis(expiresAtMs),
+          lastHeartbeatAt: FieldValue.serverTimestamp(),
+        });
+      }
+
       return {
         workshopId,
         roomCode,
@@ -842,7 +872,7 @@ export const heartbeatParticipantSession = callable<
   HeartbeatParticipantSessionInput,
   HeartbeatParticipantSessionOutput
 >('heartbeatParticipantSession', async (request) => {
-  const auth = requireAuth(request as CallableRequest<unknown>);
+  const auth = requireParticipantAuth(request as CallableRequest<unknown>);
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const workshopRef = db.doc('workshops/' + workshopId);
   const sessionRef = workshopRef.collection('participantSessions').doc(auth.uid);
@@ -867,21 +897,25 @@ export const heartbeatParticipantSession = callable<
     const organizationSnapshot = await transaction.get(db.doc('organizations/' + organizationId));
     assertOrganizationOperational(organizationSnapshot);
     const deviceSlot = sessionSnapshot.data()?.deviceSlot;
-    if (typeof deviceSlot !== 'number'
+    if (!Number.isInteger(deviceSlot)
       || deviceSlot < 0
       || deviceSlot >= MAX_PARTICIPANT_DEVICES) {
       throw new HttpsError('failed-precondition', 'La sesion no tiene una reserva de dispositivo valida.');
     }
     const slotRef = workshopRef.collection('participantDeviceSlots').doc(String(deviceSlot));
     const slotSnapshot = await transaction.get(slotRef);
-    if (!slotSnapshot.exists || slotSnapshot.data()?.participantId !== auth.uid) {
+    const slotExpiresAt = slotSnapshot.data()?.expiresAt;
+    if (!slotSnapshot.exists || slotSnapshot.data()?.participantId !== auth.uid
+      || !(slotExpiresAt instanceof Timestamp) || slotExpiresAt.toMillis() <= Date.now()) {
       throw new HttpsError('permission-denied', 'La reserva de este dispositivo ya no esta activa.');
     }
     const rawTeam = sessionSnapshot.data()?.team;
     const team = isTeam(rawTeam) ? rawTeam : null;
     const teamRef = team ? workshopRef.collection('teams').doc(team) : null;
     const teamSnapshot = teamRef ? await transaction.get(teamRef) : null;
-    if (teamRef && teamSnapshot?.data()?.activeParticipantId !== auth.uid) {
+    const teamExpiresAt = teamSnapshot?.data()?.activeDeviceExpiresAt;
+    if (teamRef && (teamSnapshot?.data()?.activeParticipantId !== auth.uid
+      || !(teamExpiresAt instanceof Timestamp) || teamExpiresAt.toMillis() <= Date.now())) {
       throw new HttpsError('permission-denied', 'El equipo esta reservado por otro dispositivo.');
     }
 
@@ -951,7 +985,7 @@ export const resumeWorkshopByCode = callable<
 
 export const selectTeam = callable<SelectTeamInput, SelectTeamOutput>(  'selectTeam',
   async (request) => {
-    const auth = requireAuth(request as CallableRequest<unknown>);
+    const auth = requireParticipantAuth(request as CallableRequest<unknown>);
     const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
     const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
     if (!isTeam(request.data?.team)) {
@@ -989,6 +1023,7 @@ export const selectTeam = callable<SelectTeamInput, SelectTeamOutput>(  'selectT
       const organizationSnapshot = await transaction.get(db.doc('organizations/' + organizationId));
       assertOrganizationOperational(organizationSnapshot);
       const currentTeam = sessionSnapshot.data()?.team;
+      const slotRef = await requireParticipantSlot(transaction, workshopRef, sessionSnapshot.data(), auth.uid);
       if (isTeam(currentTeam) && currentTeam !== team) {
         throw new HttpsError(
           'failed-precondition',
@@ -1005,7 +1040,13 @@ export const selectTeam = callable<SelectTeamInput, SelectTeamOutput>(  'selectT
         throw new HttpsError('already-exists', 'Este equipo ya esta reservado por otro dispositivo.');
       }
       if (commandSnapshot.exists) {
-        return commandSnapshot.data()?.result as SelectTeamOutput;
+        if (currentTeam !== team || activeParticipantId !== auth.uid
+          || !(activeDeviceExpiresAt instanceof Timestamp) || activeDeviceExpiresAt.toMillis() <= Date.now()) {
+          throw new HttpsError('permission-denied', 'La reserva del equipo ya no esta activa.');
+        }
+        return { ...(commandSnapshot.data()?.result as SelectTeamOutput), expiresAt: Math.min(
+          sessionExpiresAt.toMillis(), activeDeviceExpiresAt.toMillis(),
+        ) };
       }
 
       const expiresAtMs = Date.now() + PARTICIPANT_HEARTBEAT_TTL_MS;
@@ -1028,6 +1069,7 @@ export const selectTeam = callable<SelectTeamInput, SelectTeamOutput>(  'selectT
         lastSeenAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromMillis(expiresAtMs),
       });
+      transaction.update(slotRef, { expiresAt: Timestamp.fromMillis(expiresAtMs), updatedAt: FieldValue.serverTimestamp() });
       transaction.create(commandRef, {
         operation: 'selectTeam',
         result,
@@ -1076,11 +1118,21 @@ export const requestWorkshopTransition = callable<
     }
     const existingTransition = workshop.transition;
     const existingDeadline = existingTransition?.deadline;
-    if (existingTransition?.state === 'requested'
-      && existingDeadline instanceof Timestamp
-      && existingDeadline.toMillis() > now) {
+    const existingTransitionClassification = classifyRequestedTransition({
+      state: existingTransition?.state,
+      transitionId: existingTransition?.id,
+      deadlineMs: existingDeadline instanceof Timestamp ? existingDeadline.toMillis() : null,
+      nowMs: now,
+    });
+    if (existingTransitionClassification.state === 'active') {
       throw new HttpsError('aborted', 'Ya hay una transicion pendiente.');
     }
+    const staleTransition = existingTransitionClassification.state === 'stale'
+      ? {
+        id: existingTransitionClassification.transitionId,
+        reason: existingTransitionClassification.reason,
+      }
+      : null;
     const currentPhase = isPhase(workshop.currentPhase) ? workshop.currentPhase : PHASES[0];
     const unlockedPhases = Array.isArray(workshop.unlockedPhases)
       ? workshop.unlockedPhases.filter(isPhase)
@@ -1089,28 +1141,54 @@ export const requestWorkshopTransition = callable<
       && !isPhaseChangeAllowed(currentPhase, targetPhase, unlockedPhases)) {
       throw new HttpsError('failed-precondition', 'No se pueden omitir fases del juego.');
     }
-    const requiredTeams = [...new Set(sessionSnapshots.docs
-      .filter((session) => {
+    const teamSnapshots = await Promise.all(TEAMS.map((team) => (
+      transaction.get(workshopRef.collection('teams').doc(team))
+    )));
+    const requiredTeams = selectRequiredTransitionTeams({
+      sessions: sessionSnapshots.docs.map((session) => {
         const expiration = session.data().expiresAt;
-        return expiration instanceof Timestamp && expiration.toMillis() > now;
-      })
-      .map((session) => session.data().team)
-      .filter(isTeam))].slice(0, MAX_PARTICIPANT_DEVICES);
+        const lastSeenAt = session.data().lastSeenAt;
+        return {
+          id: session.id,
+          status: session.data().status,
+          team: session.data().team,
+          expiresAtMs: expiration instanceof Timestamp ? expiration.toMillis() : null,
+          lastSeenAtMs: lastSeenAt instanceof Timestamp ? lastSeenAt.toMillis() : null,
+        };
+      }),
+      teamLeases: teamSnapshots.map((teamSnapshot, index) => {
+        const activeParticipantId = teamSnapshot.data()?.activeParticipantId;
+        const activeDeviceExpiresAt = teamSnapshot.data()?.activeDeviceExpiresAt;
+        return {
+          team: TEAMS[index],
+          exists: teamSnapshot.exists,
+          activeParticipantId: typeof activeParticipantId === 'string'
+            ? activeParticipantId
+            : null,
+          activeDeviceExpiresAtMs: activeDeviceExpiresAt instanceof Timestamp
+            ? activeDeviceExpiresAt.toMillis()
+            : null,
+        };
+      }),
+      nowMs: now,
+      limit: MAX_PARTICIPANT_DEVICES,
+    });
     const kind: WorkshopTransitionKind = wantsComplete ? 'complete' : 'phase';
+    const commitsImmediately = requiredTeams.length === 0;
     const result: RequestWorkshopTransitionOutput = {
       workshopId,
       transitionId,
       kind,
       targetPhase: isPhase(targetPhase) ? targetPhase : null,
-      state: 'requested',
+      state: commitsImmediately ? 'committed' : 'requested',
       requiredAcks: requiredTeams.length,
       receivedAcks: 0,
       expiresAt,
     };
-    transaction.update(workshopRef, {
+    const transitionUpdate: Record<string, unknown> = {
       transition: {
         id: transitionId,
-        state: 'requested' satisfies WorkshopTransitionState,
+        state: (commitsImmediately ? 'committed' : 'requested') satisfies WorkshopTransitionState,
         kind,
         targetPhase: isPhase(targetPhase) ? targetPhase : null,
         requiredTeams,
@@ -1120,25 +1198,77 @@ export const requestWorkshopTransition = callable<
         requestedAt: FieldValue.serverTimestamp(),
         deadline: Timestamp.fromMillis(expiresAt),
         requestedByHash: hashIdentifier(auth.uid),
+        ...(commitsImmediately ? {
+          committedAt: FieldValue.serverTimestamp(),
+          committedByHash: hashIdentifier(auth.uid),
+          override: null,
+        } : {}),
       },
-      pendingTransitionId: transitionId,
-      transitionState: 'requested',
+      pendingTransitionId: commitsImmediately ? FieldValue.delete() : transitionId,
+      transitionState: commitsImmediately ? 'committed' : 'requested',
       transitionKind: kind,
       transitionTargetPhase: isPhase(targetPhase) ? targetPhase : null,
       transitionExpiresAt: Timestamp.fromMillis(expiresAt),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+    if (commitsImmediately && kind === 'complete') {
+      transitionUpdate.status = 'completed';
+      transitionUpdate.completedAt = FieldValue.serverTimestamp();
+      if (typeof workshop.roomCode === 'string') {
+        transaction.delete(db.doc('activeRoomCodes/' + workshop.roomCode));
+      }
+    } else if (commitsImmediately) {
+      if (!isPhase(targetPhase)) {
+        throw new HttpsError('data-loss', 'La fase de destino no es valida.');
+      }
+      transitionUpdate.currentPhase = targetPhase;
+      transitionUpdate.unlockedPhases = unlockedPhases.includes(targetPhase)
+        ? unlockedPhases
+        : [...unlockedPhases, targetPhase];
+    }
+    transaction.update(
+      workshopRef,
+      transitionUpdate as FirebaseFirestore.UpdateData<DocumentData>,
+    );
     transaction.create(commandRef, {
       operation: 'requestWorkshopTransition',
       result,
       createdAt: FieldValue.serverTimestamp(),
     });
+    if (staleTransition) {
+      createAuditEvent(
+        transaction,
+        workshopRef,
+        'system:transition-timeout',
+        'workshop.transitionCancelled',
+        {
+          transitionId: staleTransition.id,
+          reason: staleTransition.reason,
+          replacementTransitionId: transitionId,
+        },
+      );
+    }
     createAuditEvent(transaction, workshopRef, auth.uid, 'workshop.transitionRequested', {
       transitionId,
       kind,
       targetPhase: isPhase(targetPhase) ? targetPhase : null,
       requiredTeams: requiredTeams.join(','),
     });
+    if (commitsImmediately) {
+      createAuditEvent(
+        transaction,
+        workshopRef,
+        'system:auto-transition',
+        'workshop.transitionCommitted',
+        {
+          transitionId,
+          kind,
+          targetPhase: isPhase(targetPhase) ? targetPhase : null,
+          override: false,
+          requestedByHash: hashIdentifier(auth.uid),
+        },
+      );
+    }
     return result;
   });
 });
@@ -1147,7 +1277,7 @@ export const acknowledgeWorkshopTransition = callable<
   AckWorkshopTransitionInput,
   AckWorkshopTransitionOutput
 >('acknowledgeWorkshopTransition', async (request) => {
-  const auth = requireAuth(request as CallableRequest<unknown>);
+  const auth = requireParticipantAuth(request as CallableRequest<unknown>);
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const transitionId = validateIdentifier(request.data?.transitionId, 'transitionId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
@@ -1176,6 +1306,14 @@ export const acknowledgeWorkshopTransition = callable<
     const organizationId = validateIdentifier(workshop?.organizationId, 'organizationId');
     const organizationSnapshot = await transaction.get(db.doc('organizations/' + organizationId));
     assertOrganizationOperational(organizationSnapshot);
+    await requireParticipantSlot(transaction, workshopRef, sessionSnapshot.data(), auth.uid);
+    const teamRef = workshopRef.collection('teams').doc(rawTeam);
+    const teamSnapshot = await transaction.get(teamRef);
+    const reservationExpiry = teamSnapshot.data()?.activeDeviceExpiresAt;
+    if (!teamSnapshot.exists || teamSnapshot.data()?.activeParticipantId !== auth.uid
+      || !(reservationExpiry instanceof Timestamp) || reservationExpiry.toMillis() <= Date.now()) {
+      throw new HttpsError('permission-denied', 'El equipo no esta reservado por este dispositivo.');
+    }
     if (commandSnapshot.exists) {
       return commandSnapshot.data()?.result as AckWorkshopTransitionOutput;
     }
@@ -1193,11 +1331,6 @@ export const acknowledgeWorkshopTransition = callable<
       : [];
     if (!requiredTeams.includes(rawTeam)) {
       throw new HttpsError('failed-precondition', 'Este equipo no participa en la transicion.');
-    }
-    const teamRef = workshopRef.collection('teams').doc(rawTeam);
-    const teamSnapshot = await transaction.get(teamRef);
-    if (!teamSnapshot.exists || teamSnapshot.data()?.activeParticipantId !== auth.uid) {
-      throw new HttpsError('permission-denied', 'El equipo no esta reservado por este dispositivo.');
     }
     const currentAcks = Array.isArray(transition.acknowledgedTeams)
       ? transition.acknowledgedTeams.filter(isTeam)
@@ -1734,6 +1867,26 @@ export const releaseParticipantSession = callable<
   });
 });
 
+const requireParticipantSlot = async (
+  transaction: Transaction,
+  workshopRef: DocumentReference<DocumentData>,
+  session: DocumentData | undefined,
+  uid: string,
+) => {
+  const slot = session?.deviceSlot;
+  if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_PARTICIPANT_DEVICES) {
+    throw new HttpsError('permission-denied', 'La reserva del dispositivo no es valida.');
+  }
+  const slotRef = workshopRef.collection('participantDeviceSlots').doc(String(slot));
+  const snapshot = await transaction.get(slotRef);
+  const expiresAt = snapshot.data()?.expiresAt;
+  if (snapshot.data()?.participantId !== uid || !(expiresAt instanceof Timestamp)
+    || expiresAt.toMillis() <= Date.now()) {
+    throw new HttpsError('permission-denied', 'La reserva del dispositivo ya no esta activa.');
+  }
+  return slotRef;
+};
+
 const loadActiveParticipantForCommand = async (
   transaction: Transaction,
   workshopRef: DocumentReference<DocumentData>,
@@ -1758,6 +1911,17 @@ const loadActiveParticipantForCommand = async (
   const organizationId = validateIdentifier(workshop.organizationId, 'organizationId');
   const organizationSnapshot = await transaction.get(db.doc('organizations/' + organizationId));
   assertOrganizationOperational(organizationSnapshot);
+  await requireParticipantSlot(transaction, workshopRef, sessionSnapshot.data(), sessionRef.id);
+  const reservation = await transaction.get(workshopRef.collection('teams').doc(team));
+  const reservationExpiresAt = reservation.data()?.activeDeviceExpiresAt;
+  if (reservation.data()?.activeParticipantId !== sessionRef.id
+    || !(reservationExpiresAt instanceof Timestamp) || reservationExpiresAt.toMillis() <= Date.now()) {
+    throw new HttpsError('permission-denied', 'El equipo ya no pertenece a este dispositivo.');
+  }
+  if (typeof workshop.pendingTransitionId === 'string'
+    && sessionSnapshot.data()?.transitionAckId === workshop.pendingTransitionId) {
+    throw new HttpsError('failed-precondition', 'El equipo ya confirmó el guardado para el cambio de fase.');
+  }
   return { workshop, team };
 };
 
@@ -1765,7 +1929,7 @@ export const submitWorkshopAttack = callable<
   SubmitWorkshopAttackInput,
   WorkshopAttackCommandOutput
 >('submitWorkshopAttack', async (request) => {
-  const auth = requireAuth(request as CallableRequest<unknown>);
+  const auth = requireParticipantAuth(request as CallableRequest<unknown>);
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
   if (!isTeam(request.data?.toTeam)) {
@@ -1833,7 +1997,7 @@ export const updateWorkshopAttack = callable<
   UpdateWorkshopAttackInput,
   WorkshopAttackCommandOutput
 >('updateWorkshopAttack', async (request) => {
-  const auth = requireAuth(request as CallableRequest<unknown>);
+  const auth = requireParticipantAuth(request as CallableRequest<unknown>);
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const attackId = validateIdentifier(request.data?.attackId, 'attackId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
@@ -1885,7 +2049,7 @@ export const deleteWorkshopAttack = callable<
   DeleteWorkshopAttackInput,
   WorkshopAttackCommandOutput
 >('deleteWorkshopAttack', async (request) => {
-  const auth = requireAuth(request as CallableRequest<unknown>);
+  const auth = requireParticipantAuth(request as CallableRequest<unknown>);
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const attackId = validateIdentifier(request.data?.attackId, 'attackId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
@@ -1941,7 +2105,7 @@ export const saveWorkshopDefense = callable<
   SaveWorkshopDefenseInput,
   SaveWorkshopDefenseOutput
 >('saveWorkshopDefense', async (request) => {
-  const auth = requireAuth(request as CallableRequest<unknown>);
+  const auth = requireParticipantAuth(request as CallableRequest<unknown>);
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const attackId = validateIdentifier(request.data?.attackId, 'attackId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
@@ -2579,6 +2743,9 @@ const generateReportArtifactsForAdmin = async (
     }
     const sanitizedReportDocument = normalizeReportValue(reportDocument) as Record<string, unknown>;
     const editorialSource = report.editorial as Record<string, unknown> | undefined;
+    const editorialTeamOverrides = editorialSource?.teamOverrides && typeof editorialSource.teamOverrides === 'object'
+      ? editorialSource.teamOverrides as Partial<Record<Team, Record<string, unknown>>>
+      : {};
     const editorial = {
       executiveSummary: typeof editorialSource?.executiveSummary === 'string'
         ? editorialSource.executiveSummary
@@ -2589,6 +2756,19 @@ const generateReportArtifactsForAdmin = async (
       nextSteps: typeof editorialSource?.nextSteps === 'string'
         ? editorialSource.nextSteps
         : '',
+      teamOverrides: Object.fromEntries(TEAMS.flatMap((team) => {
+        const override = editorialTeamOverrides[team];
+        if (!override) return [];
+        const selectedPerspective = typeof override.selectedPerspective === 'string'
+          ? override.selectedPerspective
+          : '';
+        const selectedSolution = typeof override.selectedSolution === 'string'
+          ? override.selectedSolution
+          : '';
+        return selectedPerspective || selectedSolution
+          ? [[team, { selectedPerspective, selectedSolution }]]
+          : [];
+      })),
     };
     const source = reportSourceFromSnapshotDocument(sanitizedReportDocument);
     if (source.status !== 'completed') {
@@ -3046,6 +3226,24 @@ export const updateReportEditorial = callable<
   const workshopId = validateIdentifier(request.data?.workshopId, 'workshopId');
   const reportId = validateIdentifier(request.data?.reportId, 'reportId');
   const idempotencyKey = validateIdempotencyKey(request.data?.idempotencyKey);
+  const requestedTeamOverrides = request.data?.teamOverrides;
+  const teamOverrides = Object.fromEntries(TEAMS.flatMap((team) => {
+    const override = requestedTeamOverrides?.[team];
+    if (!override) return [];
+    const selectedPerspective = validateText(
+      override.selectedPerspective ?? '',
+      'teamOverrides.' + team + '.selectedPerspective',
+      { maxLength: MAX_CONTENT_LENGTH },
+    );
+    const selectedSolution = validateText(
+      override.selectedSolution ?? '',
+      'teamOverrides.' + team + '.selectedSolution',
+      { maxLength: MAX_CONTENT_LENGTH },
+    );
+    return selectedPerspective || selectedSolution
+      ? [[team, { selectedPerspective, selectedSolution }]]
+      : [];
+  }));
   const editorial = {
     executiveSummary: validateText(
       request.data?.executiveSummary ?? '',
@@ -3062,6 +3260,7 @@ export const updateReportEditorial = callable<
       'nextSteps',
       { maxLength: MAX_CONTENT_LENGTH },
     ),
+    teamOverrides,
   };
   const { workshopRef } = await loadWorkshopForTenantReport(
     auth,
@@ -3119,7 +3318,12 @@ export const updateReportEditorial = callable<
     });
     createAuditEvent(transaction, workshopRef, auth.uid, 'report.editorial_updated', {
       reportId,
-      populatedFields: Object.values(editorial).filter((value) => value.trim()).length,
+      populatedFields: [
+        editorial.executiveSummary, editorial.observations, editorial.nextSteps,
+        ...Object.values(teamOverrides).flatMap((override) => [
+          override.selectedPerspective, override.selectedSolution,
+        ]),
+      ].filter((value) => value.trim()).length,
     });
     return result;
   });

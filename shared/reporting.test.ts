@@ -5,7 +5,9 @@ import {
   REPORT_TEAM_ORDER,
   buildReportDataset,
   buildReportDeck,
+  formatReportTimestamp,
   reportDatasetToCsvRows,
+  sentenceCaseReportDisplay,
 } from './reporting';
 
 const fixture: GameCsvRecord = {
@@ -307,7 +309,7 @@ test('ReportDeck follows the approved visible structure without exposing interna
   const finalSolution = finalPage?.blocks.find((block) => block.kind === 'text' && block.label === 'Solución definitiva');
   assert.equal(finalSolution?.kind === 'text' && finalSolution.prominent, true);
   assert.equal(deck.pages.at(-1)?.title, 'KREATUM™');
-  assert.equal(deck.templateVersion, '2.2.0');
+  assert.equal(deck.templateVersion, '2.3.1');
 });
 
 test('ReportDeck compacts repeated records without dropping stored content', () => {
@@ -352,4 +354,174 @@ test('ReportDeck compacts repeated records without dropping stored content', () 
   const serialized = JSON.stringify(deck);
   attacks.forEach((attack) => assert.match(serialized, new RegExp(attack.content)));
   defenses.forEach((defense) => assert.match(serialized, new RegExp(defense.content)));
+});
+
+test('report display casing capitalizes after opening punctuation and preserves brands and acronyms', () => {
+  assert.equal(
+    sentenceCaseReportDisplay('¿cómo podemos mejorar la experiencia?'),
+    '¿Cómo podemos mejorar la experiencia?',
+  );
+  assert.equal(
+    sentenceCaseReportDisplay('HACER PILOTO CON DT, IA Y CAIXABANK'),
+    'Hacer piloto con DT, IA y CaixaBank',
+  );
+  assert.equal(
+    sentenceCaseReportDisplay('HACER PILOTO CON DT, IA Y CAIXABANK EN OFICINAS RELEVANTES de prueba'),
+    'Hacer piloto con DT, IA y CaixaBank en oficinas relevantes de prueba',
+  );
+  assert.equal(
+    sentenceCaseReportDisplay('COMPAÑIA TECNOLOGIA E IA'),
+    'Compañía tecnología e IA',
+  );
+  assert.equal(
+    sentenceCaseReportDisplay('Una compañia usa tecnologia e IA'),
+    'Una compañía usa tecnología e IA',
+  );
+  assert.equal(
+    sentenceCaseReportDisplay('PRIMERA FRASE. SEGUNDA FRASE. ¿TERCERA FRASE?'),
+    'Primera frase. Segunda frase. ¿Tercera frase?',
+  );
+  assert.equal(
+    sentenceCaseReportDisplay('HACER PILOTO CON DT\nPRUEBA CON IA de campo\nINCENTIVOS PARA CAIXABANK'),
+    'Hacer piloto con DT\nPrueba con IA de campo\nIncentivos para CaixaBank',
+  );
+});
+
+test('ReportDeck proofreads every customer-facing block without mutating audit data', () => {
+  const rawSolution = 'FOMENTAR LA TECNOLOGIA EN EL AMBITO PUBLICO';
+  const rawAttack = 'QUE METODOS SE USARAN EN LA COMUNICACION';
+  const rawDefense = 'SE DA POR ECHO QUE SERA ONLINE';
+  const dataset = buildReportDataset({
+    id: 'full-deck-proofreading',
+    status: 'completed',
+    teams: {
+      Agua: {
+        team: 'Agua',
+        solutions: [rawSolution],
+        top3Solutions: [rawSolution],
+        solutionVotes: [3],
+        selectedSolution: rawSolution,
+      },
+    },
+    attacks: [{
+      id: 'attack-proofreading',
+      fromTeam: 'Agua',
+      toTeam: 'Aire',
+      content: rawAttack,
+    }],
+    defenses: [{
+      id: 'defense-proofreading',
+      attackId: 'attack-proofreading',
+      team: 'Aire',
+      content: rawDefense,
+    }],
+    solutions: [],
+  });
+  const serialized = JSON.stringify(buildReportDeck(dataset));
+
+  assert.equal(dataset.teams[0]?.solutions[0], rawSolution);
+  assert.equal(dataset.attacks[0]?.content, rawAttack);
+  assert.match(serialized, /Fomentar la tecnología en el ámbito público/);
+  assert.match(serialized, /Qué métodos se usarán en la comunicación/);
+  assert.match(serialized, /Se da por hecho que será online/);
+  assert.equal(serialized.includes('TECNOLOGIA'), false);
+  assert.equal(serialized.includes('COMUNICACION'), false);
+});
+
+test('ReportDeck excludes Solución aterrizada while preserving Fermentar data in the audit dataset', () => {
+  const dataset = buildReportDataset({
+    ...fixture,
+    globalState: {
+      ...fixture.globalState,
+      challenge: '¿cómo podemos conseguir mejores resultados?',
+    },
+    teams: {
+      Agua: {
+        ...fixture.teams.Agua,
+        audience: 'DT',
+        strengths: ['Mejorar percepción de empleados y clientes.'],
+        weaknesses: ['Gente con aversión a la tecnología.'],
+        pilot: 'HACER PILOTO DE IMPULSO DE UTILIZACIÓN DE LAS NOVEDADES TECNOLÓGICAS EN OFICINAS RELEVANTES',
+        resources: ['Recursos económicos por parte del partner.'],
+      },
+    },
+  });
+  const deck = buildReportDeck(dataset);
+  assert.equal(deck.pages[0]?.title, '¿Cómo podemos conseguir mejores resultados?');
+
+  assert.equal(deck.pages.some((page) => page.sectionId === 'ferment'), false);
+  assert.equal(dataset.teams[0]?.ferment.audience, 'DT');
+  assert.equal(dataset.teams[0]?.ferment.pilot.length > 0, true);
+});
+
+test('ReportDeck makes perspectives explicit and applies traceable team overrides', () => {
+  const tierraPerspective = 'Cómo dirigirnos al entorno de nuestros clientes con una perspectiva de crecimiento sin olvidarnos de los jóvenes.';
+  const aguaSolution = 'Jóvenes captando a jóvenes, de la presencia local a 200 nuevos clientes jóvenes en un día.';
+  const dataset = buildReportDataset({
+    id: 'editorial-team-overrides',
+    status: 'completed',
+    teams: {
+      Agua: { team: 'Agua', perspectives: ['Captar talento joven'] },
+      Tierra: { team: 'Tierra', selectedPerspective: 'Frase original' },
+    },
+    attacks: [],
+    defenses: [],
+    solutions: [],
+  }, {
+    executiveSummary: '',
+    observations: '',
+    nextSteps: '',
+    teamOverrides: {
+      Agua: { selectedSolution: aguaSolution },
+      Tierra: { selectedPerspective: tierraPerspective },
+    },
+  });
+  const deck = buildReportDeck(dataset);
+  const serialized = JSON.stringify(deck);
+
+  assert.match(serialized, /¿Cómo podríamos captar talento joven\?/);
+  assert.match(serialized, /¿Cómo podríamos dirigirnos al entorno de nuestros clientes con una perspectiva de crecimiento sin olvidarnos de los jóvenes\?/);
+  assert.match(serialized, /Jóvenes captando a jóvenes, de la presencia local a 200 nuevos clientes jóvenes en un día\./);
+  assert.equal(deck.pages.some((page) => page.sectionId === 'ferment'), false);
+  assert.equal(dataset.teams.find((team) => team.name === 'Tierra')?.selectedPerspective, 'Frase original');
+});
+
+test('report timestamps preserve Spanish day/month order and use Madrid time', () => {
+  assert.equal(
+    formatReportTimestamp('01/09/2026, 15:45'),
+    '01/09/2026, 15:45',
+  );
+  assert.equal(
+    formatReportTimestamp('2026-09-01T13:45:00.000Z'),
+    '01/09/2026, 15:45:00',
+  );
+});
+
+test('completed reports recover Final only from a committed completion transition', () => {
+  const dataset = buildReportDataset({
+    id: 'completion-fallback',
+    status: 'completed',
+    workshop: {
+      transition: {
+        kind: 'complete',
+        state: 'committed',
+        committedAt: '2026-09-01T17:15:00.000Z',
+      },
+    },
+    teams: {},
+  });
+  assert.equal(dataset.workshop.completedAt, '01/09/2026, 19:15:00');
+});
+
+test('completed reports show an explicit missing Final and never substitute updatedAt', () => {
+  const dataset = buildReportDataset({
+    id: 'missing-completion',
+    status: 'completed',
+    workshop: { updatedAt: '2026-09-01T18:00:00.000Z' },
+    teams: {},
+  });
+  assert.equal(dataset.workshop.completedAt, 'No registrada');
+  const technicalPage = buildReportDeck(dataset).pages.find((page) => page.sectionId === 'technical');
+  const finalBlock = technicalPage?.blocks.find((block) => block.kind === 'text' && block.label === 'Final');
+  assert.equal(finalBlock?.kind === 'text' ? finalBlock.text : '', 'No registrada');
 });

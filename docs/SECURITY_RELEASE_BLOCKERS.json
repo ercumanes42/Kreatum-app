@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "projectId": "kreatum-dinamic",
+  "instructions": "Close each control manually only after verification. Evidence must reference an auditable report or artifact, never credentials or personal data. Local tests alone do not verify production operations.",
+  "controls": [
+    {
+      "id": "production-mfa",
+      "status": "pending",
+      "evidence": "docs/SECURITY_CLOUD_READBACK_2026-09-11.md",
+      "reason": "Readback succeeded with x-goog-user-project. MFA is DISABLED in production and staging; the application lacks enrollment and second-factor challenge flows. Activation and verification remain pending."
+    },
+    {
+      "id": "deployed-rules",
+      "status": "passed",
+      "evidence": "docs/SECURITY_CLOUD_READBACK_2026-09-11.md",
+      "reason": "Deployed Firestore and Storage rules were read and compared with local source. This verifies readback only: Firestore still lacks candidate K-02 changes; coordinated publication and verification remain blocked by staging-validation."
+    },
+    {
+      "id": "alert-delivery",
+      "status": "passed",
+      "evidence": "docs/SECURITY_ALERT_DELIVERY_2026-09-11.md",
+      "reason": "Delivery of all four staging categories is verified in the authorized recipient mailbox and user screenshots. Reports/backups received at 18:43:20 UTC and completion at 18:43:21 UTC after the 18:42:42 synthetic probe; access was received at 16:04:11 UTC. This closes receipt only, not production policy deployment or backup recovery."
+    },
+    {
+      "id": "staging-validation",
+      "status": "pending",
+      "evidence": "docs/SECURITY_STAGING_CANDIDATE_2026-09-11.md",
+      "reason": "The isolated candidate passes local checks. Automated App Check preflight was rejected; the user subsequently completed normal manual login and history navigation without reducing protections. Coordinated candidate publication and full staging gameplay/report validation remain pending."
+    },
+    {
+      "id": "full-recovery",
+      "status": "pending",
+      "evidence": "docs/SECURITY_RECOVERY_FILE_READ_2026-09-11.md",
+      "reason": "Isolated Firestore restore and all six referenced artifact hashes/sizes/formats were verified. User-authorized exact-object read binding was removed and absence confirmed. Independent Storage backup restoration and full application recovery remain unverified; integrity of existing objects is not a complete disaster-recovery test."
+    }
+  ]
+}

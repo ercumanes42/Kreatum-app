@@ -1,6 +1,6 @@
 export const SCHEMA_VERSION = 2 as const;
 export const EXPORT_VERSION = '2.0.0' as const;
-export const REPORT_TEMPLATE_VERSION = '2.1.1' as const;
+export const REPORT_TEMPLATE_VERSION = '2.3.1' as const;
 
 export const TEAMS = ['Fuego', 'Agua', 'Aire', 'Tierra'] as const;
 export type Team = (typeof TEAMS)[number];
@@ -254,7 +254,7 @@ export interface RequestWorkshopTransitionOutput {
   transitionId: string;
   kind: WorkshopTransitionKind;
   targetPhase: Phase | null;
-  state: 'requested';
+  state: 'requested' | 'committed';
   requiredAcks: number;
   receivedAcks: number;
   expiresAt: number;
@@ -454,6 +454,12 @@ export interface ReportEditorial {
   executiveSummary: string;
   observations: string;
   nextSteps: string;
+  teamOverrides?: Partial<Record<Team, ReportTeamEditorialOverride>>;
+}
+
+export interface ReportTeamEditorialOverride {
+  selectedPerspective?: string;
+  selectedSolution?: string;
 }
 
 export interface UpdateReportEditorialInput extends ReportEditorial {

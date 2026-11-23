@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "name": "pptxgenjs",
+  "version": "4.0.1",
+  "source": "https://registry.npmjs.org/pptxgenjs/-/pptxgenjs-4.0.1.tgz",
+  "integrity": "sha512-TeJISr8wouAuXw4C1F/mC33xbZs/FuEG6nH9FG1Zj+nuPcGMP5YRHl6X+j3HSUnS1f3at6k75ZZXPMZlA5Lj9A==",
+  "upstreamRepository": "https://github.com/gitbrent/PptxGenJS/tree/v4.0.1",
+  "distributionFile": "../pptxgenjs-4.0.1.tgz",
+  "distributionIntegrity": "sha512-a/W12g2XcN3f49gORCq/4Rzd5wowqXgYsBZ//C9JReMunIfPLk5mmANC10Dzjn+a+0OByFooCUvCl2zj163BTw==",
+  "verification": "All upstream files matched byte-for-byte the npm tarball, whose SHA512 matched the prior package-lock integrity. Only the local package manifest removes the unused image-size dependency. No runtime code was modified.",
+  "files": {
+    "LICENSE": "7a2bfe96150786ed1908b8e63f98ebab88875c1e79e28faff6649e0f11f77e52",
+    "dist/pptxgen.bundle.js": "4fb9eac5cfefb213e2d8743c2b7151025f31bfb3f834c73c12062916daa0f3f8",
+    "dist/pptxgen.cjs.js": "873d182a8e2e1c0b5e522ef146117936b96b9b2024667bd4c1de59e2b031d27a",
+    "dist/pptxgen.es.js": "05844c5625e2cda3b449eb967c2246dd57ca57341886a7c28eeebca263b29bd4",
+    "dist/pptxgen.min.js": "097f0b92e15035a72bba72b59ef1ece62ab45ec6075ac85fe0e2d80d3f59b8e3",
+    "upstream.package.json": "a4fc694898ef6f7da4c5840b799b593a0a74e9e05b7490b2ac5ee144762db477",
+    "dist/pptxgen.bundle.js.map": "7052233dd27e06d32d9f0431ce98030a64936f74f7f463ff05fea98c4f7fd0e0",
+    "dist/pptxgen.min.js.map": "3cfaf38a822a934a114fd5b7f0ff59bfffdf90ccde85bb3aa8d61aa69d949ed6",
+    "README.md": "e36118997c58ec08a1fff55e1d9744a47420945167af1efc360af3d1ccaf0d3b",
+    "types/index.d.ts": "0726d015dbcb55ccfa75546cb2fd43fe13a0dfeb783d08572f1c62f59193bbe5"
+  }
+}

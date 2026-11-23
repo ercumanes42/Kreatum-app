@@ -13,6 +13,7 @@ public-kreatum/
 .DS_Store
 *.log
 .env*
+**/.secret.local
 !.env.example
 *-debug.log
 
@@ -35,3 +36,5 @@ public/*.csv
 output/
 public/*.pdf
 public/*.pptx
+.agents/
+.playwright-mcp/

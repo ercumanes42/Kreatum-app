@@ -138,6 +138,7 @@ beforeEach(async () => {
       {
         team: 'Agua',
         status: 'active',
+        deviceSlot: 0,
         expiresAt,
         joinedAt: Timestamp.now(),
         lastSeenAt: Timestamp.now(),
@@ -148,11 +149,14 @@ beforeEach(async () => {
       {
         team: 'Fuego',
         status: 'active',
+        deviceSlot: 1,
         expiresAt,
         joinedAt: Timestamp.now(),
         lastSeenAt: Timestamp.now(),
       },
     );
+    await setDoc(doc(firestore, 'workshops', workshopId, 'participantDeviceSlots', '0'), { participantId, expiresAt });
+    await setDoc(doc(firestore, 'workshops', workshopId, 'participantDeviceSlots', '1'), { participantId: otherParticipantId, expiresAt });
     await setDoc(doc(firestore, 'workshops', workshopId, 'teams', 'Agua'), {
       team: 'Agua',
       schemaVersion: 2,
@@ -206,6 +210,63 @@ beforeEach(async () => {
   });
 });
 
+test('rejects stale team reservations for private reads and solution writes', async () => {
+  const participant = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await updateDoc(doc(db, 'workshops', workshopId), { currentPhase: 'Conjugar' });
+    await setDoc(doc(db, 'workshops', workshopId, 'attacks', 'lease-attack'), { fromTeam: 'Agua', toTeam: 'Fuego' });
+    await setDoc(doc(db, 'workshops', workshopId, 'defenses', 'lease-defense'), { team: 'Agua' });
+    await setDoc(doc(db, 'workshops', workshopId, 'solutions', 'Agua'), { team: 'Agua', content: 'Private' });
+  });
+  for (const [collectionName, id] of [['teams', 'Agua'], ['attacks', 'lease-attack'], ['defenses', 'lease-defense'], ['solutions', 'Agua']]) {
+    await assertSucceeds(getDoc(doc(participant, 'workshops', workshopId, collectionName, id)));
+  }
+  await assertSucceeds(setDoc(doc(participant, 'workshops', workshopId, 'solutions', 'Agua'), {
+    team: 'Agua', content: 'Private', timestamp: serverTimestamp(), schemaVersion: 2,
+  }));
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await updateDoc(doc(db, 'workshops', workshopId, 'teams', 'Agua'), { activeParticipantId: otherParticipantId });
+  });
+  for (const [collectionName, id] of [['teams', 'Agua'], ['attacks', 'lease-attack'], ['defenses', 'lease-defense'], ['solutions', 'Agua']]) {
+    await assertFails(getDoc(doc(participant, 'workshops', workshopId, collectionName, id)));
+  }
+  await assertFails(setDoc(doc(participant, 'workshops', workshopId, 'solutions', 'Agua'), {
+    team: 'Agua', content: 'Unauthorized', timestamp: serverTimestamp(), schemaVersion: 2,
+  }));
+});
+
+test('requires anonymous identity, valid session and owned live device slot for writes', async () => {
+  const participant = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
+  const passwordIdentity = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'password' } }).firestore();
+  await assertSucceeds(getDoc(doc(participant, 'workshops', workshopId, 'teams', 'Agua')));
+  await assertSucceeds(updateDoc(doc(participant, 'workshops', workshopId, 'teams', 'Agua'), {
+    perspectives: ['Authorized baseline'], updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp(),
+  }));
+  await assertFails(getDoc(doc(passwordIdentity, 'workshops', workshopId, 'teams', 'Agua')));
+  const changes = [
+    { collection: 'participantSessions', id: participantId, patch: { expiresAt: Timestamp.fromMillis(1) } },
+    { collection: 'participantDeviceSlots', id: '0', patch: { participantId: otherParticipantId } },
+    { collection: 'participantDeviceSlots', id: '0', patch: { expiresAt: Timestamp.fromMillis(1) } },
+    { collection: 'teams', id: 'Agua', patch: { activeDeviceExpiresAt: Timestamp.fromMillis(1) } },
+  ];
+  for (const change of changes) {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const expiresAt = Timestamp.fromMillis(Date.now() + 60_000);
+      await updateDoc(doc(db, 'workshops', workshopId, 'participantSessions', participantId), { expiresAt });
+      await updateDoc(doc(db, 'workshops', workshopId, 'participantDeviceSlots', '0'), { participantId, expiresAt });
+      await updateDoc(doc(db, 'workshops', workshopId, 'teams', 'Agua'), { activeDeviceExpiresAt: expiresAt });
+      await updateDoc(doc(db, 'workshops', workshopId, change.collection, change.id), change.patch);
+    });
+    await assertFails(getDoc(doc(participant, 'workshops', workshopId, 'teams', 'Agua')));
+    await assertFails(updateDoc(doc(participant, 'workshops', workshopId, 'teams', 'Agua'), {
+      perspectives: ['Unauthorized'], updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp(),
+    }));
+  }
+});
+
 test('denies workshop data to unauthenticated clients', async () => {
   const firestore = environment.unauthenticatedContext().firestore();
   await assertFails(getDoc(doc(firestore, 'workshops', workshopId)));
@@ -218,7 +279,7 @@ test('denies organization and workshop data to an authenticated non-member', asy
 });
 
 test('limits a participant to the workshop, own session and own team', async () => {
-  const firestore = environment.authenticatedContext(participantId).firestore();
+  const firestore = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
 
   await assertSucceeds(getDoc(doc(firestore, 'workshops', workshopId)));
   await assertSucceeds(getDoc(
@@ -244,7 +305,7 @@ test('delivers terminal workshop state only to participants of that workshop', a
     );
   });
 
-  const participant = environment.authenticatedContext(participantId).firestore();
+  const participant = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
   const outsider = environment.authenticatedContext('terminal-outsider').firestore();
   await assertSucceeds(getDoc(doc(participant, 'workshops', workshopId)));
   await assertFails(getDoc(doc(participant, 'workshops', workshopBId)));
@@ -261,7 +322,7 @@ test('delivers terminal workshop state only to participants of that workshop', a
 });
 
 test('allows only phase-scoped team content updates from participants', async () => {
-  const firestore = environment.authenticatedContext(participantId).firestore();
+  const firestore = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
   const ownTeam = doc(firestore, 'workshops', workshopId, 'teams', 'Agua');
 
   await assertSucceeds(updateDoc(ownTeam, {
@@ -290,6 +351,21 @@ test('allows only phase-scoped team content updates from participants', async ()
   }));
 });
 
+test('allows a live participant to save Fermentar content after phase dispatch optimization', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'workshops', workshopId), { currentPhase: 'Fermentar' });
+  });
+  const participant = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
+  const ownTeam = doc(participant, 'workshops', workshopId, 'teams', 'Agua');
+  await assertSucceeds(updateDoc(ownTeam, {
+    audience: 'Clientes', strengths: 'Cercanía', weaknesses: 'Coste', pilot: 'Piloto local', resources: 'Equipo',
+    updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(ownTeam, {
+    perspectives: ['Wrong phase'], updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp(),
+  }));
+});
+
 test('rejects invalid types and oversized team content', async () => {
   await environment.withSecurityRulesDisabled(async (context) => {
     await updateDoc(doc(context.firestore(), 'workshops', workshopId), {
@@ -297,7 +373,7 @@ test('rejects invalid types and oversized team content', async () => {
     });
   });
 
-  const firestore = environment.authenticatedContext(participantId).firestore();
+  const firestore = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
   const ownTeam = doc(firestore, 'workshops', workshopId, 'teams', 'Agua');
 
   await assertFails(updateDoc(ownTeam, {
@@ -334,7 +410,7 @@ test('validates Sublimar view and completion types', async () => {
     });
   });
 
-  const firestore = environment.authenticatedContext(participantId).firestore();
+  const firestore = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
   const ownTeam = doc(firestore, 'workshops', workshopId, 'teams', 'Agua');
 
   await assertSucceeds(updateDoc(ownTeam, {
@@ -377,7 +453,7 @@ test('keeps attack writes server-only and hides unrelated attacks', async () => 
     });
   });
 
-  const firestore = environment.authenticatedContext(participantId).firestore();
+  const firestore = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
   await assertSucceeds(getDoc(
     doc(firestore, 'workshops', workshopId, 'attacks', 'visible-attack'),
   ));
@@ -507,7 +583,7 @@ test('cuts tenant and participant reads when the organization is suspended', asy
   });
   const owner = environment.authenticatedContext(ownerId).firestore();
   const facilitator = environment.authenticatedContext(facilitatorId).firestore();
-  const participant = environment.authenticatedContext(participantId).firestore();
+  const participant = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
 
   await assertFails(getDoc(doc(owner, 'organizations', organizationId)));
   await assertFails(getDoc(doc(owner, 'workshops', workshopId)));
@@ -524,7 +600,7 @@ test('cuts tenant and participant reads when commercial validity expires', async
   });
   const owner = environment.authenticatedContext(ownerId).firestore();
   const facilitator = environment.authenticatedContext(facilitatorId).firestore();
-  const participant = environment.authenticatedContext(participantId).firestore();
+  const participant = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
 
   await assertFails(getDoc(doc(owner, 'workshops', workshopId)));
   await assertFails(getDoc(doc(facilitator, 'workshops', workshopId)));
@@ -572,7 +648,7 @@ test('allows owner access management and denies facilitator, historical analyst 
   const analyst = environment.authenticatedContext(analystId).firestore();
   const facilitator = environment.authenticatedContext(facilitatorId).firestore();
   const owner = environment.authenticatedContext(ownerId).firestore();
-  const participant = environment.authenticatedContext(participantId).firestore();
+  const participant = environment.authenticatedContext(participantId, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
   const outsider = environment.authenticatedContext('outsider-test').firestore();
   const anonymous = environment.unauthenticatedContext().firestore();
 

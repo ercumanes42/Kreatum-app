@@ -32,6 +32,10 @@ import { Sparkles } from 'lucide-react';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { isPhaseChangeAllowed, type OrganizationRole } from '../../../shared/contracts';
 import { createIdempotencyKey, workshopApi } from '../../lib/workshopApi';
+import {
+  getWorkshopTransitionProgress,
+  requestWorkshopFinalization,
+} from '../../lib/workshopTransition';
 // Fixed color mapping to avoid dynamic Tailwind class issues
 const TEAM_BAR_COLORS: Record<Team, string> = {
   Fuego: 'bg-kreatum-red',
@@ -76,7 +80,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
   const [pendingPhase, setPendingPhase] = useState<Phase | null>(null);
   const [actionError, setActionError] = useState('');
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [currentTimestamp, setCurrentTimestamp] = useState(0);
+  const [currentTimestamp, setCurrentTimestamp] = useState(() => Date.now());
   const [transitionAction, setTransitionAction] = useState(false);
   const [showOverride, setShowOverride] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
@@ -115,9 +119,21 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
   const unlockedPhases: Phase[] = hasUnlockedPhases
     ? (globalState.unlockedPhases as Phase[])
     : isV2DataModel ? [PHASES[0]] : [...PHASES];
+  const activeTransition = globalState.transition?.state === 'requested'
+    ? globalState.transition
+    : null;
+  const transitionProgress = getWorkshopTransitionProgress(
+    activeTransition,
+    currentTimestamp,
+  );
+  const requiredAckCount = transitionProgress.required;
+  const receivedAckCount = transitionProgress.received;
+  const pendingAckCount = transitionProgress.pending;
+  const transitionExpired = transitionProgress.expired;
+  const transitionBlocking = Boolean(activeTransition && !transitionExpired);
 
   const requestTransition = async (options: { targetPhase?: Phase; complete?: boolean }) => {
-    if (actionInFlightRef.current || globalState.transition?.state === 'requested') return;
+    if (actionInFlightRef.current || transitionBlocking) return;
     actionInFlightRef.current = true;
     setTransitionAction(true);
     setActionError('');
@@ -140,7 +156,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
     if (
       phase === currentPhase
       || pendingPhase !== null
-      || globalState.transition?.state === 'requested'
+      || transitionBlocking
       || !isPhaseChangeAllowed(currentPhase, phase, unlockedPhases)
     ) return;
 
@@ -185,7 +201,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
       await workshopApi.cancelWorkshopTransition({
         workshopId: gameId,
         transitionId,
-        reason: 'Cancelado por el Alquimista',
+        reason: 'Cancelado desde el Control Room',
         idempotencyKey: createIdempotencyKey('cancelWorkshopTransition'),
       });
     } catch (error: unknown) {
@@ -195,23 +211,8 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
       setTransitionAction(false);
     }
   };
-  const activeTransition = globalState.transition?.state === 'requested'
-    ? globalState.transition
-    : null;
-  const requiredAckCount = activeTransition
-    ? typeof activeTransition.requiredAcks === 'number'
-      ? activeTransition.requiredAcks
-      : activeTransition.requiredAcks.length
-    : 0;
-  const receivedAckCount = activeTransition
-    ? typeof activeTransition.receivedAcks === 'number'
-      ? activeTransition.receivedAcks
-      : activeTransition.receivedAcks.length
-    : 0;
-  const pendingAckCount = Math.max(0, requiredAckCount - receivedAckCount);
-
   useEffect(() => {
-    if (!activeTransition?.id || receivedAckCount < requiredAckCount) return;
+    if (!activeTransition?.id || transitionExpired || receivedAckCount < requiredAckCount) return;
     if (commitInFlightRef.current === activeTransition.id) return;
 
     commitInFlightRef.current = activeTransition.id;
@@ -228,7 +229,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
       actionInFlightRef.current = false;
       setTransitionAction(false);
     });
-  }, [activeTransition?.id, gameId, receivedAckCount, requiredAckCount]);
+  }, [activeTransition?.id, gameId, receivedAckCount, requiredAckCount, transitionExpired]);
 
   useEffect(() => {
     if (globalState.status === 'completed') leaveGame();
@@ -335,11 +336,27 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
   };
 
   const handleFinalize = async () => {
+    if (actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setTransitionAction(true);
+    setActionError('');
     try {
-      await requestTransition({ complete: true });
+      await requestWorkshopFinalization(
+        gameId,
+        activeTransition,
+        workshopApi,
+        createIdempotencyKey,
+      );
       setShowFinalizeModal(false);
-    } catch {
+    } catch (error: unknown) {
+      setActionError(getUserFacingError(
+        error,
+        'No se pudo iniciar la finalización. Si el cambio anterior ya se canceló, inténtalo de nuevo.',
+      ));
       setShowFinalizeModal(false);
+    } finally {
+      actionInFlightRef.current = false;
+      setTransitionAction(false);
     }
   };
 
@@ -456,7 +473,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 id="safe-transition-title" className="text-lg font-extrabold text-kreatum-purple">
-                  Cambio seguro en curso
+                  {transitionExpired ? 'La espera segura terminó' : 'Cambio seguro en curso'}
                 </h2>
                 <p className="mt-1 text-sm text-kreatum-gray/70 dark:text-white/65">
                   {activeTransition.complete
@@ -464,9 +481,14 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
                     : 'Preparando ' + (activeTransition.targetPhase || 'la siguiente fase')}
                   {' · '}{receivedAckCount}/{requiredAckCount} equipos guardados
                 </p>
+                {transitionExpired && (
+                  <p className="mt-2 max-w-2xl text-sm font-semibold text-amber-700 dark:text-amber-300">
+                    Los datos guardados se conservan. Cancela la espera para reintentar, finaliza la partida o fuerza el cambio con un motivo auditado.
+                  </p>
+                )}
               </div>
               <span className={cn('rounded-full px-3 py-1 text-xs font-bold', pendingAckCount === 0 ? 'bg-green-500/15 text-green-600' : 'bg-amber-500/15 text-amber-700')}>
-                {pendingAckCount === 0 ? 'Todos confirmados' : pendingAckCount + ' pendientes'}
+                {transitionExpired ? 'Espera agotada' : pendingAckCount === 0 ? 'Todos confirmados' : pendingAckCount + ' pendientes'}
               </span>
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
@@ -477,16 +499,21 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <Button variant="outline" className="min-h-11" onClick={cancelTransition} disabled={transitionAction}>
-                Cancelar cambio
+                {transitionExpired ? 'Cancelar espera' : 'Cancelar cambio'}
               </Button>
-              {pendingAckCount === 0 && (
+              {pendingAckCount === 0 && !transitionExpired && (
                 <Button className='min-h-11 bg-kreatum-purple text-white hover:bg-kreatum-purple-dark' onClick={() => commitTransition()} disabled={transitionAction}>
                   {transitionAction ? 'Aplicando…' : 'Aplicar cambio'}
                 </Button>
               )}
-              {pendingAckCount > 0 && (
+              {(pendingAckCount > 0 || transitionExpired) && (
                 <Button variant="outline" className="min-h-11 border-amber-500/30 text-amber-700" onClick={() => setShowOverride(true)} disabled={transitionAction}>
-                  Forzar con advertencia
+                  {activeTransition.complete ? 'Finalizar sin confirmaciones' : 'Forzar fase con advertencia'}
+                </Button>
+              )}
+              {!activeTransition.complete && (
+                <Button className="min-h-11 bg-kreatum-purple text-white hover:bg-kreatum-purple-dark" onClick={() => setShowFinalizeModal(true)} disabled={transitionAction}>
+                  Finalizar esta partida
                 </Button>
               )}
             </div>
@@ -509,7 +536,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
                     Volver
                   </Button>
                   <Button className="min-h-11 bg-amber-600 text-white hover:bg-amber-700" onClick={() => commitTransition(overrideReason)} disabled={transitionAction || overrideReason.trim().length < 5}>
-                    {transitionAction ? 'Aplicando…' : 'Confirmar avance forzado'}
+                    {transitionAction ? 'Aplicando…' : activeTransition.complete ? 'Confirmar finalización' : 'Confirmar avance forzado'}
                   </Button>
                 </div>
               </div>
@@ -572,7 +599,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
                   <div key={phase} className="relative">
                     <button
                       onClick={() => setGlobalPhase(phase)}
-                      disabled={isActive || isBlocked || pendingPhase !== null || Boolean(activeTransition) || transitionAction}
+                      disabled={isActive || isBlocked || pendingPhase !== null || transitionBlocking || transitionAction}
                       aria-current={isActive ? 'step' : undefined}
                       title={
                         isActive
@@ -636,7 +663,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
                         {!unlockedPhases.includes('Fermentar') && (
                           <Button 
                             onClick={(e) => { e.stopPropagation(); setGlobalPhase('Fermentar'); }}
-                            disabled={pendingPhase !== null || Boolean(activeTransition) || transitionAction}
+                            disabled={pendingPhase !== null || transitionBlocking || transitionAction}
                             className="w-full bg-kreatum-green hover:bg-kreatum-green/90 text-white rounded-xl text-sm h-10"
                           >
                             <ChevronRight className="w-4 h-4 mr-2" />
@@ -945,7 +972,9 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
             >
               <h2 id="finalize-workshop-title" className="text-2xl font-extrabold text-center mb-2 text-kreatum-dark dark:text-white">Finalizar Workshop</h2>
               <p className="text-sm text-center text-kreatum-gray/60 dark:text-white/60 mb-8">
-                ¿Seguro que quieres finalizar el workshop? Esto marcará la sesión como completada para todos los equipos.
+                {activeTransition && !activeTransition.complete
+                  ? 'Hay un cambio de fase pendiente. Se cancelará y se iniciará una finalización segura para conservar el trabajo de los equipos.'
+                  : '¿Seguro que quieres finalizar el workshop? Esto marcará la sesión como completada para todos los equipos.'}
               </p>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 py-4" onClick={() => setShowFinalizeModal(false)}>Cancelar</Button>
@@ -975,7 +1004,7 @@ export function AlchemistPanel({ gameId, organizationId, role, verifiedGfsIdenti
              <p className="max-w-sm text-xs font-medium text-kreatum-gray/55 dark:text-white/45">
                Los informes se generan desde Historial de Partidas después de finalizar el workshop.
              </p>
-             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-xl px-8 h-12 w-full sm:w-auto" onClick={() => setShowFinalizeModal(true)} disabled={Boolean(activeTransition) || transitionAction}>
+             <Button className="bg-kreatum-purple hover:bg-kreatum-purple-dark text-white rounded-xl px-8 h-12 w-full sm:w-auto" onClick={() => setShowFinalizeModal(true)} disabled={Boolean(activeTransition?.complete && !transitionExpired) || transitionAction}>
                Finalizar Workshop
              </Button>
           </div>

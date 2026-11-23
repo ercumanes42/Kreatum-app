@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { parseEnv } from 'node:util';
+import { evaluateRelease, operationalBlockers, productionBuildEnvironment, releaseCheckEnvironment, REQUIRED_RELEASE_CHECKS, skippedTestCount } from './lib/release-security.mjs';
 
 const args = new Set(process.argv.slice(2));
 const full = args.has('--full');
 const allowDirty = args.has('--allow-dirty');
 const outputDirectory = path.resolve('tmp', 'release-evidence');
+const outputPath = path.join(outputDirectory, 'release-manifest.json');
 
 const executable = (name) => process.platform === 'win32' ? name + '.cmd' : name;
 
@@ -26,21 +29,34 @@ const capture = (command, commandArgs) => {
   return result.stdout.trim();
 };
 
-const run = (command, commandArgs) => {
+const run = (name, command, commandArgs, environment) => {
   const startedAt = Date.now();
   const result = spawnSync(command, commandArgs, {
     cwd: process.cwd(),
-    env: process.env,
+    env: environment ?? releaseCheckEnvironment(name, full, process.env),
     shell: false,
-    stdio: 'inherit',
+    encoding: 'utf8',
+    maxBuffer: 50 * 1024 * 1024,
     windowsHide: true,
   });
-  if (result.error) throw result.error;
-  if (result.signal) throw new Error(`${command} stopped by ${result.signal}.`);
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  const auditEvidence = (result.stdout ?? '').split(/\r?\n/).flatMap((line) => {
+    try {
+      const value = JSON.parse(line);
+      return value.type === 'security-audit' ? [value] : [];
+    } catch { return []; }
+  });
   return {
+    name,
     command: [command, ...commandArgs].join(' '),
     durationMs: Date.now() - startedAt,
+    startedAtMs: startedAt,
+    status: result.status === 0 && !result.error && !result.signal ? 'passed' : 'failed',
+    exitCode: result.status ?? 1,
+    skippedTests: skippedTestCount(output),
+    auditEvidence,
   };
 };
 
@@ -67,6 +83,8 @@ const hashFile = async (file) => {
 
 const hashTree = async (directory) => {
   const files = await listFiles(directory);
+  const entrypoint = path.join(directory, directory.endsWith('dist') ? 'index.html' : 'index.js');
+  const entrypointStat = await stat(entrypoint).catch(() => null);
   const hash = createHash('sha256');
   for (const file of files) {
     const relativePath = path.relative(directory, file).replaceAll('\\', '/');
@@ -78,9 +96,19 @@ const hashTree = async (directory) => {
   return {
     sha256: hash.digest('hex'),
     fileCount: files.length,
+    entrypointPresent: entrypointStat?.isFile() === true,
+    entrypointModifiedAtMs: entrypointStat?.mtimeMs ?? null,
   };
 };
 
+// Invalidate earlier success before any check can fail or the process can stop.
+await mkdir(outputDirectory, { recursive: true });
+await writeFile(outputPath, JSON.stringify({
+  schemaVersion: 2,
+  generatedAt: new Date().toISOString(),
+  releaseEligible: false,
+  blockingReasons: ['verification-incomplete'],
+}) + '\n', 'utf8');
 const gitStatus = capture('git', ['status', '--porcelain']);
 const changedFileCount = gitStatus ? gitStatus.split(/\r?\n/).length : 0;
 if (changedFileCount > 0 && !allowDirty) {
@@ -97,21 +125,35 @@ const npmPrefix = process.platform === 'win32'
   ? ['/d', '/s', '/c', 'npm.cmd']
   : [];
 const checks = [];
-checks.push(run(npm, [...npmPrefix, 'run', 'verify']));
+// Always collect current audit evidence, including diagnostic partial runs.
+checks.push(run('audit:security', npm, [...npmPrefix, 'run', 'audit:security']));
+const requestedChecks = full ? REQUIRED_RELEASE_CHECKS.filter((name) => name !== 'audit:security' && !name.startsWith('build:release:')) : ['verify'];
+// Firebase emulator suites deliberately remain serial because they share ports.
+for (const script of requestedChecks) {
+  checks.push(run(script, npm, [...npmPrefix, 'run', script]));
+  if (checks.at(-1).status !== 'passed') break;
+}
 
-if (full) {
-  // Firebase emulator suites are deliberately serial: they share local ports.
-  for (const script of [
-    'test:integration',
-    'test:e2e',
-    'test:e2e:access',
-    'test:e2e:report',
-    'test:load',
-    'test:migration',
-  ]) {
-    checks.push(run(npm, [...npmPrefix, 'run', script]));
+// E2E runners rebuild dist for demo-kreatum. Only final production builds may
+// supply release artifacts; never certify the emulator fixture left by E2E.
+if (full && requestedChecks.every((name) => checks.some((check) => check.name === name && check.status === 'passed' && check.skippedTests === 0))) {
+  let fileValues = {};
+  for (const file of ['.env', '.env.local', '.env.production', '.env.production.local']) {
+    if (existsSync(file)) fileValues = { ...fileValues, ...parseEnv(await readFile(file, 'utf8')) };
   }
-  checks.push(run(npm, [...npmPrefix, 'run', 'audit:security']));
+  try {
+    const environment = productionBuildEnvironment(process.env, fileValues);
+    for (const [name, buildArgs] of [
+      ['build:release:frontend', ['run', 'build']],
+      ['build:release:functions', ['--prefix', 'functions', 'run', 'build:production']],
+    ]) {
+      const check = run(name, npm, [...npmPrefix, ...buildArgs], environment);
+      checks.push({ ...check, environmentVerified: true, projectId: 'kreatum-dinamic' });
+      if (check.status !== 'passed') break;
+    }
+  } catch {
+    checks.push({ name: 'build:release:frontend', status: 'failed', exitCode: 1, skippedTests: 0, environmentVerified: false });
+  }
 }
 
 const packageLock = path.resolve('package-lock.json');
@@ -124,15 +166,35 @@ const firebaseVersion = (() => {
   }
 })();
 
+const finalGitStatus = capture('git', ['status', '--porcelain']);
+const finalChangedFileCount = finalGitStatus ? finalGitStatus.split(/\r?\n/).length : 0;
+const artifacts = {
+  frontend: await hashTree(path.resolve('dist')),
+  functions: await hashTree(path.resolve('functions', 'lib')),
+};
+const auditEvidence = checks.find((check) => check.name === 'audit:security')?.auditEvidence ?? [];
+const securityBlockers = auditEvidence.flatMap((evidence) => evidence.blockers.map((entry) => ({ scope: evidence.scope, ...entry })));
+if (!['frontend', 'functions'].every((scope) => auditEvidence.some((evidence) => evidence.scope === scope))) {
+  securityBlockers.push({ name: 'missing-audit-evidence', severity: 'unknown' });
+}
+const operationalEvidencePath = path.resolve('docs', 'SECURITY_RELEASE_BLOCKERS.json');
+let operationalControls = null;
+try {
+  operationalControls = JSON.parse(await readFile(operationalEvidencePath, 'utf8'));
+} catch {
+  // Missing, unreadable or malformed evidence always blocks production release.
+}
+const pendingOperationalControls = operationalBlockers(operationalControls);
+const eligibility = evaluateRelease({ fullGate: full, dirty: changedFileCount > 0 || finalChangedFileCount > 0, checks, artifacts, blockers: securityBlockers, operationalControls });
 const manifest = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
-  releaseEligible: changedFileCount === 0,
+  ...eligibility,
   fullGate: full,
   source: {
     commit: capture('git', ['rev-parse', 'HEAD']),
-    dirty: changedFileCount > 0,
-    changedFileCount,
+    dirty: changedFileCount > 0 || finalChangedFileCount > 0,
+    changedFileCount: Math.max(changedFileCount, finalChangedFileCount),
   },
   runtime: {
     node: process.version,
@@ -146,29 +208,21 @@ const manifest = {
     rootSha256: await hashFile(packageLock),
     functionsSha256: await hashFile(functionsPackageLock),
   },
-  artifacts: {
-    frontend: await hashTree(path.resolve('dist')),
-    functions: await hashTree(path.resolve('functions', 'lib')),
+  rules: {
+    firestoreSha256: await hashFile(path.resolve('firestore.rules')),
+    storageSha256: await hashFile(path.resolve('storage.rules')),
   },
+  artifacts,
   checks,
-  acceptedRisks: [
-    {
-      id: 'functions-pptxgenjs-image-size-advisory',
-      severity: 'high',
-      scope: 'managed-pilot-only',
-      dependencyPath: 'pptxgenjs@4.0.1 > image-size@<=2.0.2',
-      controls: [
-        'internal-controlled-assets-only',
-        'external-image-inputs-blocked',
-        'upstream-advisory-monitored',
-      ],
-      commercialGate: 'blocked-until-upstream-patch-or-dependency-replacement',
-    },
-  ],
+  securityBlockers,
+  operations: {
+    evidenceFile: 'docs/SECURITY_RELEASE_BLOCKERS.json',
+    evidenceSha256: await hashFile(operationalEvidencePath).catch(() => null),
+    blockers: pendingOperationalControls,
+  },
 };
 
 await mkdir(outputDirectory, { recursive: true });
-const outputPath = path.join(outputDirectory, 'release-manifest.json');
 await writeFile(outputPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
 console.log(JSON.stringify({
   outputPath,
@@ -176,4 +230,8 @@ console.log(JSON.stringify({
   fullGate: manifest.fullGate,
   frontendSha256: manifest.artifacts.frontend.sha256,
   functionsSha256: manifest.artifacts.functions.sha256,
+  firestoreRulesSha256: manifest.rules.firestoreSha256,
+  storageRulesSha256: manifest.rules.storageSha256,
+  blockingReasons: manifest.blockingReasons,
 }));
+if (!manifest.releaseEligible) process.exitCode = 1;

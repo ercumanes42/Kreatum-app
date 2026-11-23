@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
+import { EXPORT_VERSION, REPORT_TEMPLATE_VERSION, SCHEMA_VERSION } from '../shared/contracts';
 
 const email = 'report-owner@example.test';
 const password = 'ReportOwner123!';
@@ -29,7 +30,7 @@ test('owner generates, downloads and publishes an immutable report version', asy
     .toBeVisible({ timeout: 180_000 });
   await expect(page.getByText('Listo', { exact: true }).first()).toBeVisible();
 
-  const downloadArtifact = async (name: 'PDF' | 'PPTX') => {
+  const downloadArtifact = async (name: 'PDF' | 'PPTX' | 'JSON') => {
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 30_000 }),
       page.getByRole('button', { name }).click(),
@@ -39,12 +40,43 @@ test('owner generates, downloads and publishes an immutable report version', asy
     expect(downloadedPath).not.toBeNull();
     const bytes = await readFile(downloadedPath!);
     expect(bytes.length).toBeGreaterThan(100);
-    expect(bytes.subarray(0, name === 'PDF' ? 4 : 2).toString('ascii'))
-      .toBe(name === 'PDF' ? '%PDF' : 'PK');
+    if (name === 'JSON') {
+      const report = JSON.parse(bytes.toString('utf8'));
+      // These fields come from seed-report-e2e and the real audit JSON serializer.
+      expect(report).toMatchObject({
+        exportVersion: EXPORT_VERSION,
+        reportTemplateVersion: REPORT_TEMPLATE_VERSION,
+        snapshot: {
+          exportVersion: EXPORT_VERSION,
+          reportTemplateVersion: REPORT_TEMPLATE_VERSION,
+          schemaVersion: SCHEMA_VERSION,
+          workshop: {
+            id: 'workshop-report-e2e',
+            client: 'Cliente E2E',
+            facilitator: 'Facilitador E2E',
+            challenge: 'Reducir el tiempo de respuesta con datos verificables.',
+            status: 'completed',
+          },
+        },
+        reportDataset: {
+          version: '1.0.0',
+          workshop: { id: 'workshop-report-e2e', client: 'Cliente E2E', status: 'completed' },
+        },
+      });
+      expect(report.sourceSnapshotHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(Number.isFinite(Date.parse(report.artifactGeneratedAt))).toBe(true);
+      expect(report.pageCount).toBeGreaterThan(0);
+    } else {
+      expect(bytes.subarray(0, name === 'PDF' ? 4 : 2).toString('ascii'))
+        .toBe(name === 'PDF' ? '%PDF' : 'PK');
+    }
+    return bytes;
   };
 
   await downloadArtifact('PDF');
   await downloadArtifact('PPTX');
+
+  const draftJson = await downloadArtifact('JSON');
 
   await page.getByRole('button', { name: 'Publicar' }).click();
   await expect(page.getByRole('alertdialog', { name: 'Publicar versión' })).toBeVisible();
@@ -54,4 +86,6 @@ test('owner generates, downloads and publishes an immutable report version', asy
 
   await downloadArtifact('PDF');
   await downloadArtifact('PPTX');
+  const publishedJson = await downloadArtifact('JSON');
+  expect(publishedJson.equals(draftJson)).toBe(true);
 });

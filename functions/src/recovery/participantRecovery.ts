@@ -150,9 +150,25 @@ export const reconnectParticipantSession = onCall<ReconnectParticipantSessionInp
           { reason: 'team-occupied' },
         );
       }
+      if (!teamSnapshot.exists || activeParticipantId !== auth.uid) {
+        throw new HttpsError('permission-denied', 'El equipo ya no pertenece a este dispositivo.',
+          { reason: 'participant-identity-mismatch' });
+      }
 
       const cachedResult = commandSnapshot.data()?.result as ReconnectParticipantSessionOutput | undefined;
-      if (cachedResult && cachedResult.expiresAt > now) return cachedResult;
+      const priorSlot = session.deviceSlot;
+      const priorSlotData = Number.isInteger(priorSlot) && priorSlot >= 0 && priorSlot < MAX_PARTICIPANT_DEVICES
+        ? slotSnapshots[priorSlot]?.data() : undefined;
+      if (cachedResult && cachedResult.team === requestedTeam && cachedResult.expiresAt > now
+        && session.expiresAt instanceof Timestamp && session.expiresAt.toMillis() > now
+        && activeDeviceExpiresAt instanceof Timestamp && activeDeviceExpiresAt.toMillis() > now
+        && priorSlotData?.participantId === auth.uid
+        && priorSlotData.expiresAt instanceof Timestamp && priorSlotData.expiresAt.toMillis() > now) {
+        return { ...cachedResult, roomCode, currentPhase,
+          unlockedPhases: canonicalPhases(workshopSnapshot.data()?.unlockedPhases, currentPhase),
+          expiresAt: Math.min(cachedResult.expiresAt, session.expiresAt.toMillis(),
+            activeDeviceExpiresAt.toMillis(), priorSlotData.expiresAt.toMillis()) };
+      }
 
       const previousSlot = session.deviceSlot;
       const reusableSlotIndex = typeof previousSlot === 'number'

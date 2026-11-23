@@ -24,6 +24,8 @@ import type {
   ReportJobStatus,
   ReportRecord,
   ReportStatus,
+  ReportTeamEditorialOverride,
+  Team,
 } from '../../../shared/contracts';
 import { auth, db } from '../../lib/firebase';
 import { workshopCollectionName } from '../../lib/dataModel';
@@ -59,6 +61,17 @@ interface ReportView extends ReportRecord {
   artifactGeneratedAt?: number;
   failureCode?: string;
 }
+
+const REPORT_EDITOR_TEAMS: readonly Team[] = ['Agua', 'Aire', 'Fuego', 'Tierra'];
+
+type EditableTeamOverrides = Record<Team, {
+  selectedPerspective: string;
+  selectedSolution: string;
+}>;
+
+const createEmptyTeamOverrides = (): EditableTeamOverrides => Object.fromEntries(
+  REPORT_EDITOR_TEAMS.map((team) => [team, { selectedPerspective: '', selectedSolution: '' }]),
+) as EditableTeamOverrides;
 
 const toMillis = (value: unknown): number | undefined => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -168,6 +181,9 @@ function AuthorizedReportManager({ organizationId, workshopId, roomCode }: Autho
   const [executiveSummary, setExecutiveSummary] = useState('');
   const [observations, setObservations] = useState('');
   const [nextSteps, setNextSteps] = useState('');
+  const [teamOverrides, setTeamOverrides] = useState<EditableTeamOverrides>(
+    createEmptyTeamOverrides,
+  );
 
   const loadReports = useCallback(async () => {
     setIsLoading(true);
@@ -280,7 +296,15 @@ function AuthorizedReportManager({ organizationId, workshopId, roomCode }: Autho
         workshopId,
         idempotencyKey: createIdempotencyKey('generateReportSnapshot'),
       });
-      if (executiveSummary.trim() || observations.trim() || nextSteps.trim()) {
+      const populatedTeamOverrides = Object.fromEntries(REPORT_EDITOR_TEAMS.flatMap((team) => {
+        const selectedPerspective = teamOverrides[team].selectedPerspective.trim();
+        const selectedSolution = teamOverrides[team].selectedSolution.trim();
+        return selectedPerspective || selectedSolution
+          ? [[team, { selectedPerspective, selectedSolution } satisfies ReportTeamEditorialOverride]]
+          : [];
+      }));
+      if (executiveSummary.trim() || observations.trim() || nextSteps.trim()
+        || Object.keys(populatedTeamOverrides).length > 0) {
         setProgress('Guardando anexo editorial…');
         await workshopApi.updateReportEditorial({
           workshopId,
@@ -288,6 +312,7 @@ function AuthorizedReportManager({ organizationId, workshopId, roomCode }: Autho
           executiveSummary,
           observations,
           nextSteps,
+          teamOverrides: populatedTeamOverrides,
           idempotencyKey: createIdempotencyKey('updateReportEditorial'),
         });
       }
@@ -304,6 +329,7 @@ function AuthorizedReportManager({ organizationId, workshopId, roomCode }: Autho
       setExecutiveSummary('');
       setObservations('');
       setNextSteps('');
+      setTeamOverrides(createEmptyTeamOverrides());
     } catch (generationError: unknown) {
       setProgress('');
       setError(getUserFacingError(generationError, 'No se pudo generar el informe.'));
@@ -427,6 +453,10 @@ function AuthorizedReportManager({ organizationId, workshopId, roomCode }: Autho
                 onChange={(event) => setExecutiveSummary(event.target.value)}
                 maxLength={20_000}
                 rows={4}
+                lang="es"
+                spellCheck
+                autoCapitalize="sentences"
+                autoCorrect="on"
                 className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-kreatum-purple/30 dark:border-white/10 dark:bg-white/[0.04]"
               />
             </label>
@@ -437,6 +467,10 @@ function AuthorizedReportManager({ organizationId, workshopId, roomCode }: Autho
                 onChange={(event) => setObservations(event.target.value)}
                 maxLength={20_000}
                 rows={4}
+                lang="es"
+                spellCheck
+                autoCapitalize="sentences"
+                autoCorrect="on"
                 className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-kreatum-purple/30 dark:border-white/10 dark:bg-white/[0.04]"
               />
             </label>
@@ -447,10 +481,67 @@ function AuthorizedReportManager({ organizationId, workshopId, roomCode }: Autho
                 onChange={(event) => setNextSteps(event.target.value)}
                 maxLength={20_000}
                 rows={4}
+                lang="es"
+                spellCheck
+                autoCapitalize="sentences"
+                autoCorrect="on"
                 className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-kreatum-purple/30 dark:border-white/10 dark:bg-white/[0.04]"
               />
             </label>
           </div>
+          <details className="mt-5 rounded-xl border border-kreatum-purple/15 bg-white/70 p-4 dark:bg-white/[0.03]">
+            <summary className="cursor-pointer text-sm font-bold text-kreatum-dark dark:text-white">
+              Correcciones puntuales por equipo
+            </summary>
+            <p className="mt-2 text-xs leading-relaxed text-kreatum-gray/60 dark:text-white/50">
+              Sustituyen solo el texto visible de esta nueva versión. Los datos originales no cambian.
+            </p>
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {REPORT_EDITOR_TEAMS.map((team) => (
+                <fieldset key={team} className="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
+                  <legend className="px-1 text-xs font-extrabold text-kreatum-purple">Equipo {team}</legend>
+                  <div className="grid gap-3">
+                    <label className="text-xs font-bold text-kreatum-gray dark:text-white/75">
+                      Perspectiva definitiva
+                      <textarea
+                        value={teamOverrides[team].selectedPerspective}
+                        onChange={(event) => setTeamOverrides((current) => ({
+                          ...current,
+                          [team]: { ...current[team], selectedPerspective: event.target.value },
+                        }))}
+                        placeholder="Se mostrará como ¿Cómo podríamos…?"
+                        maxLength={20_000}
+                        rows={3}
+                        lang="es"
+                        spellCheck
+                        autoCapitalize="sentences"
+                        autoCorrect="on"
+                        className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-kreatum-purple/30 dark:border-white/10 dark:bg-white/[0.04]"
+                      />
+                    </label>
+                    <label className="text-xs font-bold text-kreatum-gray dark:text-white/75">
+                      Solución definitiva
+                      <textarea
+                        value={teamOverrides[team].selectedSolution}
+                        onChange={(event) => setTeamOverrides((current) => ({
+                          ...current,
+                          [team]: { ...current[team], selectedSolution: event.target.value },
+                        }))}
+                        placeholder="Úsalo si falta o debe corregirse la solución final"
+                        maxLength={20_000}
+                        rows={3}
+                        lang="es"
+                        spellCheck
+                        autoCapitalize="sentences"
+                        autoCorrect="on"
+                        className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-kreatum-purple/30 dark:border-white/10 dark:bg-white/[0.04]"
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+          </details>
         </div>
       )}
 

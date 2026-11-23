@@ -1,0 +1,2 @@
+# Preserve the reviewed upstream bytes and tarball across Windows/Linux checkouts.
+functions/vendor/** -text

@@ -2,11 +2,14 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import PDFDocument from 'pdfkit';
 import PptxGenJS from 'pptxgenjs';
-import type {
-  ReportBlock,
-  ReportDeck,
-  ReportDeckPage,
-  ReportTeamName,
+import {
+  capitalizeFirstAlphabeticCharacter,
+  reportBlockEstimatedHeight,
+  sentenceCaseReportDisplay,
+  type ReportBlock,
+  type ReportDeck,
+  type ReportDeckPage,
+  type ReportTeamName,
 } from '../../../shared/reporting.js';
 
 const PAGE = { width: 841.89, height: 595.28 };
@@ -39,14 +42,23 @@ export interface ReportAssets {
 }
 
 export const loadReportAssets = async (
-  root = join(process.cwd(), 'assets', 'report'),
+  root?: string,
 ): Promise<ReportAssets> => {
+  const roots = root
+    ? [root]
+    : [
+      join(process.cwd(), 'assets', 'report'),
+      join(process.cwd(), 'functions', 'assets', 'report'),
+    ];
   const optionalRead = async (name: string) => {
-    try {
-      return await readFile(join(root, name));
-    } catch {
-      return undefined;
+    for (const candidate of roots) {
+      try {
+        return await readFile(join(candidate, name));
+      } catch {
+        // Try the next supported runtime layout.
+      }
     }
+    return undefined;
   };
   const [logo, Agua, Aire, Fuego, Tierra, regular, semibold, bold] = await Promise.all([
     optionalRead('logo.png'),
@@ -67,21 +79,6 @@ const collectPdf = (document: PDFKit.PDFDocument) => new Promise<Buffer>((resolv
   document.on('end', () => resolve(Buffer.concat(chunks)));
   document.on('error', reject);
 });
-const capitalizeFirstLetter = (value: string): string => value.replace(
-  /^(\s*)(\p{L})/u,
-  (_match, spacing: string, letter: string) => `${spacing}${letter.toLocaleUpperCase('es-ES')}`,
-);
-const sentenceCaseDisplay = (value: string): string => {
-  const normalized = value.trim();
-  if (!normalized || normalized.includes('KREATUM')) return capitalizeFirstLetter(normalized);
-  const letters = normalized.match(/\p{L}/gu)?.join('') || '';
-  const isAllUppercase = letters.length > 3
-    && letters === letters.toLocaleUpperCase('es-ES')
-    && letters !== letters.toLocaleLowerCase('es-ES');
-  return capitalizeFirstLetter(isAllUppercase ? normalized.toLocaleLowerCase('es-ES') : normalized);
-};
-
-
 type PdfFontNames = { regular: string; bold: string };
 const pdfFontNames = new WeakMap<PDFKit.PDFDocument, PdfFontNames>();
 
@@ -93,7 +90,7 @@ const fitPdfFontSize = (
   const fontName = options.bold
     ? (pdfFontNames.get(document)?.bold || 'Helvetica-Bold')
     : (pdfFontNames.get(document)?.regular || 'Helvetica');
-  const displayText = capitalizeFirstLetter(text);
+  const displayText = capitalizeFirstAlphabeticCharacter(text);
   document.font(fontName);
   for (let fontSize = options.maxFontSize; fontSize >= options.minFontSize; fontSize -= 1) {
     document.fontSize(fontSize);
@@ -132,7 +129,7 @@ const pdfText = (
     .font(bold ? (pdfFontNames.get(document)?.bold || 'Helvetica-Bold') : (pdfFontNames.get(document)?.regular || 'Helvetica'))
     .fontSize(fontSize)
     .fillColor(color)
-    .text(capitalizeFirstLetter(text), x, y, { lineGap: 3, ...textOptions });
+    .text(capitalizeFirstAlphabeticCharacter(text), x, y, { lineGap: 3, ...textOptions });
 };
 
 const drawPdfBrand = (document: PDFKit.PDFDocument, page: ReportDeckPage, assets: ReportAssets) => {
@@ -155,7 +152,7 @@ const drawPdfBrand = (document: PDFKit.PDFDocument, page: ReportDeckPage, assets
     width: page.team ? 675 : 735, fontSize: 25, bold: true, color: COLORS.ink,
   });
   if (page.subtitle) {
-    pdfText(document, sentenceCaseDisplay(page.subtitle), 48, 124, { width: 700, fontSize: 12, color: COLORS.muted });
+    pdfText(document, sentenceCaseReportDisplay(page.subtitle), 48, 124, { width: 700, fontSize: 12, color: COLORS.muted });
   }
   pdfText(document, `KREATUM™ · ${page.pageNumber}/${page.totalPages}`, 48, 566, {
     width: 735, fontSize: 9, color: COLORS.muted, align: 'right',
@@ -209,6 +206,10 @@ const estimateContrastLineCount = (block: Extract<ReportBlock, { kind: 'contrast
   Math.max(1, Math.ceil(block.attack.length / 38), Math.ceil(block.defense.length / 38))
 );
 
+const estimateTextLineCount = (text: string, charactersPerLine = 80): number => text
+  .split(/\r?\n/u)
+  .reduce((total, line) => total + Math.max(1, Math.ceil(line.trim().length / charactersPerLine)), 0);
+
 const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => {
   if (page.blocks.length === 1 && page.blocks[0].kind === 'metrics') {
     renderPdfMetrics(document, page.blocks[0]);
@@ -242,7 +243,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       const rowY = listStartY + rowOffset;
       const prefix = decision.list.ordered ? `${index + 1}.` : '\u2022';
       pdfText(document, prefix, 70, rowY, { width: 22, fontSize: 12, bold: true, color: accent });
-      pdfText(document, sentenceCaseDisplay(item.text), 94, rowY, { width: 500, height: rowHeight - 3, fontSize: 12, color: COLORS.ink });
+      pdfText(document, sentenceCaseReportDisplay(item.text), 94, rowY, { width: 500, height: rowHeight - 3, fontSize: 12, color: COLORS.ink });
       if (item.votes !== null) {
         document.roundedRect(615, rowY + 5, 120, 8, 4).fill('#E4E9EC');
         document.roundedRect(615, rowY + 5, 120 * item.votes / maxVotes, 8, 4).fill(accent);
@@ -253,7 +254,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
 
     drawCard(48, bottomY, 745, bottomHeight);
     pdfText(document, (decision.choice.label || '').toUpperCase(), 68, bottomY + 16, { width: 690, fontSize: 9.5, bold: true, color: accent, characterSpacing: 0.5 });
-    pdfText(document, sentenceCaseDisplay(decision.choice.text), 68, bottomY + 44, { width: 690, height: bottomHeight - 58, fontSize: 18, bold: true, color: COLORS.ink });
+    pdfText(document, sentenceCaseReportDisplay(decision.choice.text), 68, bottomY + 44, { width: 690, height: bottomHeight - 58, fontSize: 18, bold: true, color: COLORS.ink });
     return;
   }
   if (page.blocks.length > 1 && page.blocks.every((block) => block.kind === 'contrast')) {
@@ -284,7 +285,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       if (block.attackRecordedAt) pdfText(document, block.attackRecordedAt, attackX + 60, y + 9, {
         width: 225, fontSize: 7.5, color: COLORS.muted, align: 'right',
       });
-      pdfText(document, sentenceCaseDisplay(block.attack), attackX, y + 25, {
+      pdfText(document, sentenceCaseReportDisplay(block.attack), attackX, y + 25, {
         width: 285, height: rowHeight - 31, fontSize: 12, color: COLORS.ink,
       });
       document.rect(485, y + 10, 1, Math.max(20, rowHeight - 20)).fill('#DDE3E6');
@@ -295,7 +296,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
         if (block.defenseRecordedAt) pdfText(document, block.defenseRecordedAt, defenseX + 114, y + 9, {
           width: 170, fontSize: 7.5, color: COLORS.muted, align: 'right',
         });
-        pdfText(document, sentenceCaseDisplay(block.defense), defenseX, y + 25, {
+        pdfText(document, sentenceCaseReportDisplay(block.defense), defenseX, y + 25, {
           width: 278, height: rowHeight - 31, fontSize: 12, color: COLORS.ink,
         });
       }
@@ -313,7 +314,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       document.roundedRect(x, cardY, cardWidth, cardHeight, 12).fill(COLORS.light);
       document.rect(x, cardY, 6, cardHeight).fill(color);
       pdfText(document, title, x + 22, cardY + 23, { width: cardWidth - 44, fontSize: 13, bold: true, color });
-      pdfText(document, sentenceCaseDisplay(body), x + 22, cardY + 61, {
+      pdfText(document, sentenceCaseReportDisplay(body), x + 22, cardY + 61, {
         width: cardWidth - 44, height: 232, fontSize: 12, color: COLORS.ink,
       });
       if (timestamp) pdfText(document, timestamp, x + 22, cardY + 303, {
@@ -325,6 +326,53 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       drawSide(437, `DEFENSA / MITIGACIÓN · ${block.toTeam}`, block.defense, '#3D8A69', block.defenseRecordedAt);
     }
     return;
+  }
+
+  if (page.kind === 'technical' && page.blocks.every((block) => block.kind === 'text')) {
+    const textBlocks = page.blocks.filter(
+      (block): block is Extract<ReportBlock, { kind: 'text' }> => block.kind === 'text',
+    );
+    const challenge = textBlocks.find((block) => block.label?.toLocaleLowerCase('es-ES') === 'reto');
+    const metadata = textBlocks.filter((block) => block !== challenge);
+    if (challenge && metadata.length <= 4) {
+      const topY = 156;
+      const challengeHeight = 132;
+      const gridTop = topY + challengeHeight + 14;
+      const gapX = 18;
+      const gapY = 12;
+      const width = (745 - gapX) / 2;
+      const height = 102;
+      const drawCard = (
+        block: Extract<ReportBlock, { kind: 'text' }>,
+        x: number,
+        y: number,
+        cardWidth: number,
+        cardHeight: number,
+        fontSize: number,
+      ) => {
+        document.roundedRect(x, y, cardWidth, cardHeight, 8).fill(COLORS.light);
+        pdfText(document, block.label || '', x + 14, y + 12, {
+          width: cardWidth - 28, fontSize: 9.5, bold: true, color: COLORS.purple,
+        });
+        pdfText(document, sentenceCaseReportDisplay(block.text), x + 14, y + 35, {
+          width: cardWidth - 28, height: cardHeight - 47, fontSize, color: COLORS.ink,
+        });
+      };
+      drawCard(challenge, 48, topY, 745, challengeHeight, 13);
+      metadata.forEach((block, index) => {
+        const column = index % 2;
+        const row = Math.floor(index / 2);
+        drawCard(
+          block,
+          48 + column * (width + gapX),
+          gridTop + row * (height + gapY),
+          width,
+          height,
+          12,
+        );
+      });
+      return;
+    }
   }
 
   if ((page.kind === 'technical' || page.kind === 'index')
@@ -345,7 +393,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       pdfText(document, block.label || '', x + 14, y + 12, {
         width: width - 28, fontSize: 9.5, bold: true, color: COLORS.purple,
       });
-      pdfText(document, sentenceCaseDisplay(block.text), x + 14, y + 34, {
+      pdfText(document, sentenceCaseReportDisplay(block.text), x + 14, y + 34, {
         width: width - 28, height: height - 44, fontSize: 12, color: COLORS.ink,
       });
     });
@@ -353,11 +401,12 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
   }
 
   const startY = page.subtitle ? 161 : 145;
-  const availableHeight = 400;
   const gap = 12;
-  const blockHeight = Math.max(62, (availableHeight - gap * Math.max(page.blocks.length - 1, 0)) / Math.max(page.blocks.length, 1));
+  const blockHeights = page.blocks.map(reportBlockEstimatedHeight);
+  let blockOffset = 0;
   page.blocks.forEach((block, index) => {
-    const y = startY + index * (blockHeight + gap);
+    const blockHeight = blockHeights[index];
+    const y = startY + blockOffset;
     if (block.kind === 'metrics' || block.kind === 'contrast') return;
     const accent = block.accent || (page.kind === 'editorial' ? '#C58B24' : COLORS.purple);
     document.roundedRect(48, y, 745, blockHeight, 9).fill(page.kind === 'editorial' ? COLORS.editorial : COLORS.light);
@@ -366,7 +415,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       if (block.label) pdfText(document, block.label.toUpperCase(), 68, y + 14, {
         width: 690, fontSize: 9.5, bold: true, color: accent, characterSpacing: 0.5,
       });
-      pdfText(document, sentenceCaseDisplay(block.text), 68, y + (block.label ? 35 : 17), {
+      pdfText(document, sentenceCaseReportDisplay(block.text), 68, y + (block.label ? 35 : 17), {
         width: 690, height: blockHeight - (block.label ? 47 : 30), fontSize: block.prominent ? 18 : 12, bold: block.prominent, color: COLORS.ink,
       });
     } else if (block.kind === 'list') {
@@ -375,18 +424,17 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       });
       const itemY = y + (block.label ? 36 : 17);
       const availableListHeight = blockHeight - (block.label ? 48 : 30);
-      const lineWeights = block.items.map((item) => Math.max(1, Math.ceil(item.length / 72)));
-      const totalLineWeight = Math.max(1, lineWeights.reduce((sum, weight) => sum + weight, 0));
+      const rowHeights = block.items.map((item) => estimateTextLineCount(item) * 18);
       let itemOffset = 0;
       block.items.forEach((item, itemIndex) => {
-        const eachHeight = availableListHeight * lineWeights[itemIndex] / totalLineWeight;
+        const eachHeight = Math.min(availableListHeight - itemOffset, rowHeights[itemIndex]);
         const rowY = itemY + itemOffset;
         const prefix = block.ordered ? `${itemIndex + 1}.` : '•';
         pdfText(document, prefix, 70, rowY, { width: 22, fontSize: 12, bold: true, color: accent });
-        pdfText(document, sentenceCaseDisplay(item), 94, rowY, {
+        pdfText(document, sentenceCaseReportDisplay(item), 94, rowY, {
           width: 660, height: eachHeight - 2, fontSize: 12, color: COLORS.ink,
         });
-        itemOffset += eachHeight;
+        itemOffset += eachHeight + (itemIndex < block.items.length - 1 ? 8 : 0);
       });
     } else if (block.kind === 'votes') {
       pdfText(document, block.label.toUpperCase(), 68, y + 14, { width: 690, fontSize: 9.5, bold: true, color: accent });
@@ -394,7 +442,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
       const eachHeight = Math.max(23, (blockHeight - 48) / Math.max(block.items.length, 1));
       block.items.forEach((item, itemIndex) => {
         const rowY = y + 38 + itemIndex * eachHeight;
-        pdfText(document, sentenceCaseDisplay(item.option), 68, rowY, { width: 450, height: eachHeight - 2, fontSize: 12, color: COLORS.ink });
+        pdfText(document, sentenceCaseReportDisplay(item.option), 68, rowY, { width: 450, height: eachHeight - 2, fontSize: 12, color: COLORS.ink });
         const votes = item.votes;
         if (votes !== null) {
           document.roundedRect(535, rowY + 2, 190, 8, 4).fill('#E4E9EC');
@@ -403,6 +451,7 @@ const renderPdfBlocks = (document: PDFKit.PDFDocument, page: ReportDeckPage) => 
         }
       });
     }
+    blockOffset += blockHeight + (index < page.blocks.length - 1 ? gap : 0);
   });
 };
 
@@ -424,7 +473,7 @@ const renderPdfCover = (document: PDFKit.PDFDocument, page: ReportDeckPage, asse
   page.blocks.forEach((block) => {
     if (block.kind !== 'text') return;
     pdfText(document, block.label || '', 82, y, { width: 170, fontSize: 10, bold: true, color: COLORS.purple });
-    pdfText(document, sentenceCaseDisplay(block.text), 256, y - 3, { width: 380, fontSize: 13, bold: true, color: COLORS.ink });
+    pdfText(document, sentenceCaseReportDisplay(block.text), 256, y - 3, { width: 380, fontSize: 13, bold: true, color: COLORS.ink });
     y += 42;
   });
   pdfText(document, `${page.pageNumber}/${page.totalPages}`, 690, 495, { width: 65, fontSize: 9, color: COLORS.muted, align: 'right' });
@@ -485,7 +534,7 @@ const addSlideText = (
   w: number,
   h: number,
   options: PptxGenJS.TextPropsOptions = {},
-) => slide.addText(capitalizeFirstLetter(text), {
+) => slide.addText(capitalizeFirstAlphabeticCharacter(text), {
   x, y, w, h,
   fontFace: 'Montserrat',
   color: COLORS.ink.replace('#', ''),
@@ -506,7 +555,7 @@ const addSlideBrand = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDeck
   slide.addShape(pptx.ShapeType.line, { x: 0.66, y: 0.93, w: 10.34, h: 0, line: { color: COLORS.rule.replace('#', ''), width: 1 } });
   if (page.team && assets.teams[page.team]) slide.addImage({ data: bufferToDataUri(assets.teams[page.team] as Buffer), x: 10.28, y: 1.08, w: 0.56, h: 0.56 });
   addSlideText(slide, page.title, 0.66, 1.12, page.team ? 9.35 : 10.25, 0.52, { fontSize: 29, bold: true });
-  if (page.subtitle) addSlideText(slide, sentenceCaseDisplay(page.subtitle), 0.66, 1.69, 9.75, 0.42, { fontSize: 16, color: COLORS.muted.replace('#', '') });
+  if (page.subtitle) addSlideText(slide, sentenceCaseReportDisplay(page.subtitle), 0.66, 1.69, 9.75, 0.42, { fontSize: 16, color: COLORS.muted.replace('#', '') });
   addSlideText(slide, `KREATUM™ · ${page.pageNumber}/${page.totalPages}`, 8.45, 7.84, 2.55, 0.2, { fontSize: 9, color: COLORS.muted.replace('#', ''), align: 'right' });
 };
 
@@ -553,7 +602,7 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
       const rowY = listStartY + rowOffset;
       const prefix = decision.list.ordered ? `${index + 1}.` : '\u2022';
       addSlideText(slide, prefix, 0.97, rowY, 0.28, rowHeight - 0.03, { fontSize: 16, bold: true, color: accent });
-      addSlideText(slide, sentenceCaseDisplay(item.text), 1.28, rowY, 7.0, rowHeight - 0.03, { fontSize: 16, breakLine: true, fit: 'shrink' });
+      addSlideText(slide, sentenceCaseReportDisplay(item.text), 1.28, rowY, 7.0, rowHeight - 0.03, { fontSize: 16, breakLine: true, fit: 'shrink' });
       if (item.votes !== null) {
         slide.addShape(pptx.ShapeType.roundRect, { x: 8.65, y: rowY + 0.12, w: 1.55, h: 0.11, rectRadius: 0.04, line: { transparency: 100 }, fill: { color: 'E4E9EC' } });
         slide.addShape(pptx.ShapeType.roundRect, { x: 8.65, y: rowY + 0.12, w: 1.55 * item.votes / maxVotes, h: 0.11, rectRadius: 0.04, line: { transparency: 100 }, fill: { color: accent } });
@@ -564,7 +613,7 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
 
     drawCard(0.66, bottomY, 10.34, bottomHeight);
     addSlideText(slide, (decision.choice.label || '').toUpperCase(), 0.95, bottomY + 0.18, 9.55, 0.2, { fontSize: 9, bold: true, color: accent, charSpacing: 0.7 });
-    addSlideText(slide, sentenceCaseDisplay(decision.choice.text), 0.95, bottomY + 0.5, 9.55, bottomHeight - 0.68, { fontSize: 22, bold: true, breakLine: true });
+    addSlideText(slide, sentenceCaseReportDisplay(decision.choice.text), 0.95, bottomY + 0.5, 9.55, bottomHeight - 0.68, { fontSize: 22, bold: true, breakLine: true });
     return;
   }
   if (page.blocks.length > 1 && page.blocks.every((block) => block.kind === 'contrast')) {
@@ -587,14 +636,14 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
       addSlideText(slide, `${block.fromTeam} \u2192 ${block.toTeam}`, 0.95, y + 0.15, 1.35, 0.24, { fontSize: 10, bold: true });
       addSlideText(slide, 'ATAQUE', 2.38, y + 0.13, 0.7, 0.18, { fontSize: 8, bold: true, color: 'D45C53', charSpacing: 0.5 });
       if (block.attackRecordedAt) addSlideText(slide, block.attackRecordedAt, 3.1, y + 0.13, 2.25, 0.18, { fontSize: 7, color: COLORS.muted.replace('#', ''), align: 'right' });
-      addSlideText(slide, sentenceCaseDisplay(block.attack), 2.38, y + 0.36, 3.92, rowHeight - 0.45, {
+      addSlideText(slide, sentenceCaseReportDisplay(block.attack), 2.38, y + 0.36, 3.92, rowHeight - 0.45, {
         fontSize: 16, fit: 'shrink', breakLine: true, valign: 'top',
       });
       slide.addShape(pptx.ShapeType.line, { x: 6.47, y: y + 0.13, w: 0, h: Math.max(0.25, rowHeight - 0.26), line: { color: 'DDE3E6', width: 1 } });
       if (block.defense) {
         addSlideText(slide, 'DEFENSA / MITIGACIÓN', 6.68, y + 0.13, 1.52, 0.18, { fontSize: 8, bold: true, color: '3D8A69', charSpacing: 0.3 });
         if (block.defenseRecordedAt) addSlideText(slide, block.defenseRecordedAt, 8.23, y + 0.13, 2.22, 0.18, { fontSize: 7, color: COLORS.muted.replace('#', ''), align: 'right' });
-        addSlideText(slide, sentenceCaseDisplay(block.defense), 6.68, y + 0.36, 3.87, rowHeight - 0.45, {
+        addSlideText(slide, sentenceCaseReportDisplay(block.defense), 6.68, y + 0.36, 3.87, rowHeight - 0.45, {
           fontSize: 16, fit: 'shrink', breakLine: true, valign: 'top',
         });
       }
@@ -610,7 +659,7 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
       slide.addShape(pptx.ShapeType.roundRect, { x, y: 2.25, w: cardWidth, h: 4.72, rectRadius: 0.08, line: { transparency: 100 }, fill: { color: COLORS.light.replace('#', '') } });
       slide.addShape(pptx.ShapeType.rect, { x, y: 2.25, w: 0.08, h: 4.72, line: { transparency: 100 }, fill: { color: color.replace('#', '') } });
       addSlideText(slide, title, x + 0.3, 2.55, cardWidth - 0.65, 0.28, { fontSize: 14, bold: true, color: color.replace('#', '') });
-      addSlideText(slide, sentenceCaseDisplay(body), x + 0.3, 3.08, cardWidth - 0.65, 3.12, { fontSize: 16, breakLine: true, valign: 'top', fit: 'shrink' });
+      addSlideText(slide, sentenceCaseReportDisplay(body), x + 0.3, 3.08, cardWidth - 0.65, 3.12, { fontSize: 16, breakLine: true, valign: 'top', fit: 'shrink' });
       if (timestamp) addSlideText(slide, timestamp, x + 0.3, 6.58, cardWidth - 0.65, 0.2, { fontSize: 9, color: COLORS.muted.replace('#', '') });
     };
     addSide(0.66, `ATAQUE · ${block.fromTeam}`, block.attack, '#D45C53', block.attackRecordedAt);
@@ -619,6 +668,56 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
     }
     return;
   }
+  if (page.kind === 'technical' && page.blocks.every((block) => block.kind === 'text')) {
+    const textBlocks = page.blocks.filter(
+      (block): block is Extract<ReportBlock, { kind: 'text' }> => block.kind === 'text',
+    );
+    const challenge = textBlocks.find((block) => block.label?.toLocaleLowerCase('es-ES') === 'reto');
+    const metadata = textBlocks.filter((block) => block !== challenge);
+    if (challenge && metadata.length <= 4) {
+      const topY = 2.17;
+      const challengeHeight = 1.66;
+      const gridTop = topY + challengeHeight + 0.18;
+      const gapX = 0.24;
+      const gapY = 0.16;
+      const width = (10.34 - gapX) / 2;
+      const height = 1.28;
+      const drawCard = (
+        block: Extract<ReportBlock, { kind: 'text' }>,
+        x: number,
+        y: number,
+        cardWidth: number,
+        cardHeight: number,
+        fontSize: number,
+      ) => {
+        slide.addShape(pptx.ShapeType.roundRect, {
+          x, y, w: cardWidth, h: cardHeight, rectRadius: 0.05,
+          line: { transparency: 100 }, fill: { color: COLORS.light.replace('#', '') },
+        });
+        addSlideText(slide, block.label || '', x + 0.2, y + 0.16, cardWidth - 0.4, 0.2, {
+          fontSize: 9, bold: true, color: COLORS.purple.replace('#', ''),
+        });
+        addSlideText(slide, sentenceCaseReportDisplay(block.text), x + 0.2, y + 0.47, cardWidth - 0.4, cardHeight - 0.61, {
+          fontSize, fit: 'shrink', breakLine: true,
+        });
+      };
+      drawCard(challenge, 0.66, topY, 10.34, challengeHeight, 17);
+      metadata.forEach((block, index) => {
+        const column = index % 2;
+        const row = Math.floor(index / 2);
+        drawCard(
+          block,
+          0.66 + column * (width + gapX),
+          gridTop + row * (height + gapY),
+          width,
+          height,
+          14,
+        );
+      });
+      return;
+    }
+  }
+
   if ((page.kind === 'technical' || page.kind === 'index')
     && page.blocks.every((block) => block.kind === 'text')) {
     const columns = 2;
@@ -640,7 +739,7 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
       addSlideText(slide, block.label || '', x + 0.2, y + 0.16, width - 0.4, 0.2, {
         fontSize: 9, bold: true, color: COLORS.purple.replace('#', ''),
       });
-      addSlideText(slide, sentenceCaseDisplay(block.text), x + 0.2, y + 0.45, width - 0.4, height - 0.58, {
+      addSlideText(slide, sentenceCaseReportDisplay(block.text), x + 0.2, y + 0.45, width - 0.4, height - 0.58, {
         fontSize: 16, fit: 'shrink', breakLine: true,
       });
     });
@@ -648,32 +747,40 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
   }
 
   const startY = page.subtitle ? 2.22 : 2.02;
-  const available = 5.24;
   const gap = 0.16;
-  const height = Math.max(0.82, (available - gap * Math.max(page.blocks.length - 1, 0)) / Math.max(page.blocks.length, 1));
+  const blockHeights = page.blocks.map((block) => reportBlockEstimatedHeight(block) / 72);
+  let blockOffset = 0;
   page.blocks.forEach((block, index) => {
     if (block.kind === 'metrics' || block.kind === 'contrast') return;
-    const y = startY + index * (height + gap);
+    const height = blockHeights[index];
+    const y = startY + blockOffset;
     const accent = (block.accent || (page.kind === 'editorial' ? '#C58B24' : COLORS.purple)).replace('#', '');
     slide.addShape(pptx.ShapeType.roundRect, { x: 0.66, y, w: 10.34, h: height, rectRadius: 0.06, line: { transparency: 100 }, fill: { color: (page.kind === 'editorial' ? COLORS.editorial : COLORS.light).replace('#', '') } });
     slide.addShape(pptx.ShapeType.rect, { x: 0.66, y, w: 0.07, h: height, line: { transparency: 100 }, fill: { color: accent } });
     if (block.kind === 'text') {
       if (block.label) addSlideText(slide, block.label.toUpperCase(), 0.95, y + 0.16, 9.55, 0.18, { fontSize: 9, bold: true, color: accent, charSpacing: 0.7 });
-      addSlideText(slide, sentenceCaseDisplay(block.text), 0.95, y + (block.label ? 0.46 : 0.21), 9.55, height - (block.label ? 0.59 : 0.35), { fontSize: block.prominent ? 24 : 16, bold: block.prominent, fit: 'shrink', breakLine: true });
+      addSlideText(slide, sentenceCaseReportDisplay(block.text), 0.95, y + (block.label ? 0.46 : 0.21), 9.55, height - (block.label ? 0.59 : 0.35), { fontSize: block.prominent ? 24 : 16, bold: block.prominent, fit: 'shrink', breakLine: true });
     } else if (block.kind === 'list') {
       if (block.label) addSlideText(slide, block.label.toUpperCase(), 0.95, y + 0.16, 9.55, 0.18, { fontSize: 9, bold: true, color: accent });
-      const rows = block.items.map((item, itemIndex) => ({
-        text: `${block.ordered ? `${itemIndex + 1}.` : '•'} ${sentenceCaseDisplay(item)}`,
-        options: { bullet: false, breakLine: itemIndex < block.items.length - 1 },
-      }));
-      slide.addText(rows, { x: 0.95, y: y + (block.label ? 0.45 : 0.2), w: 9.55, h: height - (block.label ? 0.58 : 0.33), fontFace: 'Montserrat', fontSize: 16, color: COLORS.ink.replace('#', ''), margin: 0, breakLine: true, fit: 'shrink', paraSpaceAfter: 8 });
+      const itemY = y + (block.label ? 0.45 : 0.2);
+      let itemOffset = 0;
+      block.items.forEach((item, itemIndex) => {
+        const rowHeight = estimateTextLineCount(item) * 0.25;
+        addSlideText(slide, block.ordered ? `${itemIndex + 1}.` : '•', 0.97, itemY + itemOffset, 0.25, rowHeight, {
+          fontSize: 16, bold: true, color: accent,
+        });
+        addSlideText(slide, sentenceCaseReportDisplay(item), 1.28, itemY + itemOffset, 9.18, rowHeight, {
+          fontSize: 16, breakLine: true, fit: 'shrink',
+        });
+        itemOffset += rowHeight + (itemIndex < block.items.length - 1 ? 0.11 : 0);
+      });
     } else if (block.kind === 'votes') {
       addSlideText(slide, block.label.toUpperCase(), 0.95, y + 0.16, 9.55, 0.18, { fontSize: 9, bold: true, color: accent });
       const maxVotes = Math.max(1, ...block.items.map((item) => item.votes || 0));
       const eachHeight = Math.max(0.32, (height - 0.58) / Math.max(block.items.length, 1));
       block.items.forEach((item, itemIndex) => {
         const rowY = y + 0.48 + itemIndex * eachHeight;
-        addSlideText(slide, sentenceCaseDisplay(item.option), 0.95, rowY, 6.15, eachHeight - 0.03, { fontSize: 14, fit: 'shrink' });
+        addSlideText(slide, sentenceCaseReportDisplay(item.option), 0.95, rowY, 6.15, eachHeight - 0.03, { fontSize: 14, fit: 'shrink' });
         if (item.votes !== null) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 7.35, y: rowY + 0.07, w: 2.4, h: 0.11, rectRadius: 0.04, line: { transparency: 100 }, fill: { color: 'E4E9EC' } });
           slide.addShape(pptx.ShapeType.roundRect, { x: 7.35, y: rowY + 0.07, w: 2.4 * item.votes / maxVotes, h: 0.11, rectRadius: 0.04, line: { transparency: 100 }, fill: { color: accent } });
@@ -681,6 +788,7 @@ const addSlideBlocks = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDec
         }
       });
     }
+    blockOffset += height + (index < page.blocks.length - 1 ? gap : 0);
   });
 };
 
@@ -700,7 +808,7 @@ const addCoverSlide = (pptx: PptxGenJS, slide: PptxGenJS.Slide, page: ReportDeck
   page.blocks.forEach((block) => {
     if (block.kind !== 'text') return;
     addSlideText(slide, block.label || '', 1.14, y, 2.25, 0.22, { fontSize: 11, bold: true, color: COLORS.purple.replace('#', '') });
-    addSlideText(slide, sentenceCaseDisplay(block.text), 3.45, y - 0.03, 4.7, 0.34, { fontSize: 16, bold: true });
+    addSlideText(slide, sentenceCaseReportDisplay(block.text), 3.45, y - 0.03, 4.7, 0.34, { fontSize: 16, bold: true });
     y += 0.6;
   });
   addSlideText(slide, `${page.pageNumber}/${page.totalPages}`, 9.4, 6.88, 1.1, 0.2, { fontSize: 9, color: COLORS.muted.replace('#', ''), align: 'right' });

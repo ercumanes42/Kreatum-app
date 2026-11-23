@@ -10,7 +10,7 @@ import {
   signOut,
   updatePassword,
 } from 'firebase/auth';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, setDoc, Timestamp, connectFirestoreEmulator } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 
@@ -33,7 +33,9 @@ const createClient = (name: string) => {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   const functions = getFunctions(app, 'europe-west1');
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-  return { auth, functions };
+  const firestore = getFirestore(app);
+  connectFirestoreEmulator(firestore, '127.0.0.1', 8080);
+  return { auth, functions, firestore };
 };
 
 const call = <Input, Output>(functions: ReturnType<typeof getFunctions>, name: string, input: Input) =>
@@ -167,6 +169,17 @@ test('covers invitations, activation, roles, session revocation, concurrency and
     role: 'owner',
     idempotencyKey: key('restore-owner'),
   });
+  const sharedOrganizationId = `${organizationId}-shared`;
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await setDoc(doc(firestore, 'organizations', sharedOrganizationId), {
+      status: 'active', schemaVersion: 3,
+      commercial: { status: 'active', validFrom: Timestamp.fromMillis(Date.now() - 60_000), validUntil: null },
+    });
+    await setDoc(doc(firestore, 'organizations', sharedOrganizationId, 'members', accepted.memberId), {
+      role: 'owner', status: 'active', schemaVersion: 3,
+    });
+  });
   await call(ownerClient.functions, 'changeMemberStatus', {
     organizationId,
     memberId: accepted.memberId,
@@ -175,9 +188,10 @@ test('covers invitations, activation, roles, session revocation, concurrency and
     idempotencyKey: key('disable'),
   });
   await signOut(activationClient.auth);
-  await assert.rejects(
-    signInWithEmailAndPassword(activationClient.auth, invitedEmail, 'Kreatum-New-Account-123!'),
-  );
+  await signInWithEmailAndPassword(activationClient.auth, invitedEmail, 'Kreatum-New-Account-123!');
+  await assert.rejects(call(activationClient.functions, 'listTeamAccess', { organizationId }),
+    (error: { code?: string }) => error.code === 'functions/permission-denied');
+  assert.equal((await getDoc(doc(activationClient.firestore, 'organizations', sharedOrganizationId))).exists(), true);
 
   const existingClient = createClient(`existing-${Date.now()}`);
   const existingEmail = `existing-${Date.now()}@gfs.es`;

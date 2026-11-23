@@ -69,6 +69,185 @@ after(async () => {
   await Promise.all(apps.map((app) => deleteApp(app)));
 });
 
+test('revalidates team and slot ownership after expiry, takeover and cached recovery', {
+  timeout: resilienceTimeoutMs,
+}, async () => {
+  environment = await initializeTestEnvironment({ projectId });
+  const suffix = Date.now().toString(36);
+  const workshopId = 'lease-security-' + suffix;
+  const orgId = 'lease-security-org-' + suffix;
+  const roomCode = ('SEC' + suffix).slice(-10).toUpperCase();
+  const clients = Array.from({ length: 5 }, (_, i) => createClient('lease-security-' + suffix + '-' + i));
+  const credentials = await Promise.all(clients.map((client) => signInAnonymously(client.auth)));
+  const uid = credentials.map((credential) => credential.user.uid);
+  const execute = (index: number, name: string, input: Record<string, unknown> = {}) =>
+    call<Record<string, unknown>, any>(clients[index].functions, name, {
+      workshopId, idempotencyKey: key(name), ...input,
+    });
+  const expectDenied = (error: unknown) => (error as { code?: string }).code === 'functions/permission-denied';
+  const expire = async (index: number, team: string) => environment!.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const session = doc(db, 'workshops', workshopId, 'participantSessions', uid[index]);
+    const slot = String((await getDoc(session)).data()?.deviceSlot);
+    const expiresAt = Timestamp.fromMillis(1);
+    await updateDoc(session, { expiresAt });
+    await updateDoc(doc(db, 'workshops', workshopId, 'participantDeviceSlots', slot), { expiresAt });
+    await updateDoc(doc(db, 'workshops', workshopId, 'teams', team), { activeDeviceExpiresAt: expiresAt });
+  });
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'organizations', orgId), {
+      status: 'active', schemaVersion: 3,
+      commercial: { status: 'active', validFrom: Timestamp.fromMillis(1), validUntil: null },
+    });
+    await setDoc(doc(db, 'workshops', workshopId), {
+      organizationId: orgId, facilitatorUid: 'fixture-owner', roomCode, status: 'active',
+      currentPhase: 'Sublimar', unlockedPhases: ['Sublimar'], schemaVersion: 3,
+    });
+    await setDoc(doc(db, 'activeRoomCodes', roomCode), { workshopId, organizationId: orgId });
+  });
+  const teams = ['Agua', 'Aire', 'Fuego', 'Tierra'];
+  const selectionKey = key('select-original');
+  for (let i = 0; i < 4; i++) {
+    await execute(i, 'joinWorkshopByCode', { roomCode });
+    await execute(i, 'selectTeam', { team: teams[i], ...(i === 0 ? { idempotencyKey: selectionKey } : {}) });
+  }
+  const originalAttack = await execute(0, 'submitWorkshopAttack', { toTeam: 'Fuego', content: 'Original' });
+  const incomingAttack = await execute(2, 'submitWorkshopAttack', { toTeam: 'Agua', content: 'Incoming' });
+  const recoveryKey = key('cached-recovery');
+  await execute(0, 'reconnectParticipantSession', { team: 'Agua', idempotencyKey: recoveryKey });
+  await expire(0, 'Agua');
+  await execute(4, 'joinWorkshopByCode', { roomCode });
+  await execute(4, 'selectTeam', { team: 'Agua' });
+  await assert.rejects(execute(0, 'joinWorkshopByCode', { roomCode }),
+    (error: unknown) => (error as { code?: string }).code === 'functions/resource-exhausted');
+  await assert.rejects(execute(0, 'reconnectParticipantSession', { team: 'Agua', idempotencyKey: recoveryKey }));
+  await expire(1, 'Aire');
+  // Isolate team ownership: A has a live session and own live slot, but its stale
+  // session still names Agua, which now belongs to B. Do not rejoin/clean it yet.
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const releasedSession = await getDoc(doc(db, 'workshops', workshopId, 'participantSessions', uid[1]));
+    const deviceSlot = releasedSession.data()?.deviceSlot;
+    const expiresAt = Timestamp.fromMillis(Date.now() + 60_000);
+    await updateDoc(doc(db, 'workshops', workshopId, 'participantDeviceSlots', String(deviceSlot)), {
+      participantId: uid[0], expiresAt,
+    });
+    await updateDoc(doc(db, 'workshops', workshopId, 'participantSessions', uid[0]), {
+      status: 'active', team: 'Agua', deviceSlot, expiresAt,
+    });
+    assert.equal((await getDoc(doc(db, 'workshops', workshopId, 'teams', 'Agua'))).data()?.activeParticipantId, uid[4]);
+  });
+  await assert.rejects(execute(0, 'submitWorkshopAttack', { toTeam: 'Fuego', content: 'Stale team forbidden' }), expectDenied);
+  await assert.rejects(execute(0, 'updateWorkshopAttack', { attackId: originalAttack.attackId, content: 'Stale team forbidden' }), expectDenied);
+  await assert.rejects(execute(0, 'deleteWorkshopAttack', { attackId: originalAttack.attackId }), expectDenied);
+  await assert.rejects(execute(0, 'saveWorkshopDefense', { attackId: incomingAttack.attackId, content: 'Stale team forbidden' }), expectDenied);
+  const rejoined = await execute(0, 'joinWorkshopByCode', { roomCode });
+  assert.equal(rejoined.team, null);
+  await assert.rejects(execute(0, 'submitWorkshopAttack', { toTeam: 'Fuego', content: 'Forbidden' }), expectDenied);
+  await assert.rejects(execute(0, 'updateWorkshopAttack', { attackId: originalAttack.attackId, content: 'Forbidden' }), expectDenied);
+  await assert.rejects(execute(0, 'deleteWorkshopAttack', { attackId: originalAttack.attackId }), expectDenied);
+  await assert.rejects(execute(0, 'saveWorkshopDefense', { attackId: incomingAttack.attackId, content: 'Forbidden' }), expectDenied);
+  await assert.rejects(execute(0, 'selectTeam', { team: 'Agua', idempotencyKey: selectionKey }));
+  await execute(0, 'selectTeam', { team: 'Aire' });
+  const ownRejoin = await execute(0, 'joinWorkshopByCode', { roomCode });
+  assert.equal(ownRejoin.team, 'Aire');
+  await execute(0, 'heartbeatParticipantSession');
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const slots = await getDocs(collection(db, 'workshops', workshopId, 'participantDeviceSlots'));
+    assert.equal(slots.size, 4);
+    assert.equal(new Set(slots.docs.map((slot) => slot.data().participantId)).size, 4);
+    assert.equal((await getDoc(doc(db, 'workshops', workshopId, 'teams', 'Agua'))).data()?.activeParticipantId, uid[4]);
+    assert.equal((await getDoc(doc(db, 'workshops', workshopId, 'attacks', originalAttack.attackId))).data()?.content, 'Original');
+  });
+  // A cached recovery may not restore access after all device slots are reassigned.
+  const currentRecoveryKey = key('cached-own-team');
+  await execute(0, 'reconnectParticipantSession', { team: 'Aire', idempotencyKey: currentRecoveryKey });
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const session = await getDoc(doc(db, 'workshops', workshopId, 'participantSessions', uid[0]));
+    await updateDoc(doc(db, 'workshops', workshopId, 'participantDeviceSlots', String(session.data()?.deviceSlot)), {
+      participantId: uid[1], expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+    });
+  });
+  await assert.rejects(execute(0, 'reconnectParticipantSession', { team: 'Aire', idempotencyKey: currentRecoveryKey }),
+    (error: unknown) => (error as { code?: string }).code === 'functions/resource-exhausted');
+  await assert.rejects(execute(0, 'submitWorkshopAttack', { toTeam: 'Fuego', content: 'Forbidden' }), expectDenied);
+});
+
+test('freezes participant commands and cached results after ACK until transition cancellation', {
+  timeout: resilienceTimeoutMs,
+}, async () => {
+  environment = await initializeTestEnvironment({ projectId });
+  const suffix = Date.now().toString(36);
+  const workshopId = 'ack-security-' + suffix;
+  const orgId = 'ack-security-org-' + suffix;
+  const roomCode = ('ACK' + suffix).slice(-10).toUpperCase();
+  const owner = createClient('ack-owner-' + suffix);
+  const ownerCredential = await createUserWithEmailAndPassword(owner.auth, 'ack-' + suffix + '@gfs.es', 'Fixture-Password-123!');
+  const clients = [createClient('ack-a-' + suffix), createClient('ack-b-' + suffix)];
+  await Promise.all(clients.map((client) => signInAnonymously(client.auth)));
+  const execute = (index: number, name: string, input: Record<string, unknown> = {}) =>
+    call<Record<string, unknown>, any>(clients[index].functions, name, {
+      workshopId, idempotencyKey: key(name), ...input,
+    });
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'organizations', orgId), {
+      status: 'active', schemaVersion: 3,
+      commercial: { status: 'active', validFrom: Timestamp.fromMillis(1), validUntil: null },
+    });
+    await setDoc(doc(db, 'organizations', orgId, 'members', ownerCredential.user.uid), {
+      role: 'owner', status: 'active', schemaVersion: 3,
+    });
+    await setDoc(doc(db, 'workshops', workshopId), {
+      organizationId: orgId, facilitatorUid: ownerCredential.user.uid, roomCode, status: 'active',
+      currentPhase: 'Sublimar', unlockedPhases: ['Sublimar'], schemaVersion: 3,
+    });
+    await setDoc(doc(db, 'activeRoomCodes', roomCode), { workshopId, organizationId: orgId });
+  });
+  for (let index = 0; index < 2; index++) {
+    await execute(index, 'joinWorkshopByCode', { roomCode });
+    await execute(index, 'selectTeam', { team: index === 0 ? 'Agua' : 'Fuego' });
+  }
+  const incoming = await execute(1, 'submitWorkshopAttack', { toTeam: 'Agua', content: 'Incoming' });
+  const disposable = await execute(0, 'submitWorkshopAttack', { toTeam: 'Fuego', content: 'Disposable' });
+  const transition = await call<any, RequestWorkshopTransitionOutput>(owner.functions, 'requestWorkshopTransition', {
+    workshopId, targetPhase: 'Fermentar', idempotencyKey: key('ack-transition'),
+  });
+  assert.equal(transition.requiredAcks, 2);
+  const cacheKeys = { submit: key('before-ack-submit'), update: key('before-ack-update'), delete: key('before-ack-delete'), defense: key('before-ack-defense') };
+  // Pending alone does not block the last save: every command succeeds before A acknowledges.
+  const outgoing = await execute(0, 'submitWorkshopAttack', {
+    toTeam: 'Fuego', content: 'Before ACK', idempotencyKey: cacheKeys.submit,
+  });
+  await execute(0, 'updateWorkshopAttack', { attackId: outgoing.attackId, content: 'Saved before ACK', idempotencyKey: cacheKeys.update });
+  await execute(0, 'deleteWorkshopAttack', { attackId: disposable.attackId, idempotencyKey: cacheKeys.delete });
+  await execute(0, 'saveWorkshopDefense', { attackId: incoming.attackId, content: 'Saved defense', idempotencyKey: cacheKeys.defense });
+  const ack = await execute(0, 'acknowledgeWorkshopTransition', { transitionId: transition.transitionId });
+  assert.equal(ack.receivedAcks, 1);
+  assert.notEqual(ack.state, 'committed');
+  const blockedCommands = [
+    ['submitWorkshopAttack', { toTeam: 'Fuego', content: 'Before ACK', idempotencyKey: cacheKeys.submit }],
+    ['updateWorkshopAttack', { attackId: outgoing.attackId, content: 'Saved before ACK', idempotencyKey: cacheKeys.update }],
+    ['deleteWorkshopAttack', { attackId: disposable.attackId, idempotencyKey: cacheKeys.delete }],
+    ['saveWorkshopDefense', { attackId: incoming.attackId, content: 'Saved defense', idempotencyKey: cacheKeys.defense }],
+  ] as const;
+  for (const [name, input] of blockedCommands) {
+    const isFrozen = (error: unknown) => (error as { code?: string }).code === 'functions/failed-precondition';
+    await assert.rejects(execute(0, name, input), isFrozen);
+    await assert.rejects(execute(0, name, { ...input, idempotencyKey: key('after-ack') }), isFrozen);
+  }
+  await call(owner.functions, 'cancelWorkshopTransition', {
+    workshopId, transitionId: transition.transitionId, reason: 'Test cancellation', idempotencyKey: key('cancel-ack-transition'),
+  });
+  const resumed = await execute(0, 'submitWorkshopAttack', { toTeam: 'Fuego', content: 'After cancellation' });
+  await execute(0, 'updateWorkshopAttack', { attackId: resumed.attackId, content: 'Allowed again' });
+  await execute(0, 'deleteWorkshopAttack', { attackId: resumed.attackId });
+  await execute(0, 'saveWorkshopDefense', { attackId: incoming.attackId, content: 'Allowed again' });
+});
+
 test('protects device leases and commits only server-confirmed team saves', {
   timeout: resilienceTimeoutMs,
 }, async () => {
@@ -132,6 +311,42 @@ test('protects device leases and commits only server-confirmed team saves', {
     participantClients.map((client) => signInAnonymously(client.auth)),
   );
   const teams = ['Agua', 'Aire', 'Fuego', 'Tierra'] as const;
+  const refreshParticipantPresence = async (
+    lastSeenAtByTeam: Partial<Record<(typeof teams)[number], number>> = {},
+  ) => {
+    const presenceNow = Date.now();
+    const leaseUntil = Timestamp.fromMillis(presenceNow + 5 * 60_000);
+    await environment!.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await Promise.all(participantCredentials.flatMap((credential, index) => {
+        const team = teams[index];
+        return [
+          updateDoc(
+            doc(
+              firestore,
+              'workshops',
+              created.workshopId,
+              'participantSessions',
+              credential.user.uid,
+            ),
+            {
+              status: 'active',
+              expiresAt: leaseUntil,
+              lastSeenAt: Timestamp.fromMillis(lastSeenAtByTeam[team] ?? presenceNow),
+            },
+          ),
+          setDoc(
+            doc(firestore, 'workshops', created.workshopId, 'teams', team),
+            {
+              activeParticipantId: credential.user.uid,
+              activeDeviceExpiresAt: leaseUntil,
+            },
+            { merge: true },
+          ),
+        ];
+      }));
+    });
+  };
 
   const firstJoin = await call<any, JoinWorkshopOutput>(
     participantClients[0].functions,
@@ -296,6 +511,7 @@ test('protects device leases and commits only server-confirmed team saves', {
     }),
     (error: { code?: string }) => error.code === 'functions/permission-denied',
   );
+  await refreshParticipantPresence();
   const concurrentRequests = await Promise.allSettled([
     call<any, RequestWorkshopTransitionOutput>(
       owner.functions,
@@ -385,6 +601,7 @@ test('protects device leases and commits only server-confirmed team saves', {
     }
   });
 
+  await refreshParticipantPresence();
   const cancellable = await call<any, RequestWorkshopTransitionOutput>(
     secondOwner.functions,
     'requestWorkshopTransition',
@@ -406,6 +623,7 @@ test('protects device leases and commits only server-confirmed team saves', {
   );
   assert.equal(cancelled.state, 'cancelled');
 
+  await refreshParticipantPresence();
   const overrideRequest = await call<any, RequestWorkshopTransitionOutput>(
     owner.functions,
     'requestWorkshopTransition',
@@ -448,6 +666,186 @@ test('protects device leases and commits only server-confirmed team saves', {
       assert.equal(session.data()?.team, teams[index]);
     }
   });
+
+  await refreshParticipantPresence();
+  const expiringTransition = await call<any, RequestWorkshopTransitionOutput>(
+    owner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      targetPhase: 'Conjugar',
+      idempotencyKey: key('transition-expiring'),
+    },
+  );
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'workshops', created.workshopId), {
+      'transition.deadline': Timestamp.fromMillis(Date.now() - 1_000),
+      transitionExpiresAt: Timestamp.fromMillis(Date.now() - 1_000),
+    });
+  });
+  const replacementTransition = await call<any, RequestWorkshopTransitionOutput>(
+    secondOwner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      targetPhase: 'Conjugar',
+      idempotencyKey: key('transition-replacement'),
+    },
+  );
+  assert.notEqual(replacementTransition.transitionId, expiringTransition.transitionId);
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const audit = await getDocs(collection(
+      context.firestore(),
+      'workshops',
+      created.workshopId,
+      'auditEvents',
+    ));
+    assert.ok(audit.docs.some((event) => (
+      event.data().action === 'workshop.transitionCancelled'
+      && event.data().metadata?.transitionId === expiringTransition.transitionId
+      && event.data().metadata?.reason === 'deadlineExpired'
+    )));
+  });
+  await call(owner.functions, 'cancelWorkshopTransition', {
+    workshopId: created.workshopId,
+    transitionId: replacementTransition.transitionId,
+    reason: 'Preparar prueba de sesión no canónica',
+    idempotencyKey: key('cancel-replacement'),
+  });
+
+  await refreshParticipantPresence();
+  const invalidDeadlineTransition = await call<any, RequestWorkshopTransitionOutput>(
+    owner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      targetPhase: 'Conjugar',
+      idempotencyKey: key('transition-invalid-deadline'),
+    },
+  );
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'workshops', created.workshopId), {
+      'transition.deadline': 'invalid',
+    });
+  });
+  const invalidDeadlineReplacement = await call<any, RequestWorkshopTransitionOutput>(
+    secondOwner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      targetPhase: 'Conjugar',
+      idempotencyKey: key('transition-invalid-deadline-replacement'),
+    },
+  );
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const audit = await getDocs(collection(
+      context.firestore(),
+      'workshops',
+      created.workshopId,
+      'auditEvents',
+    ));
+    assert.ok(audit.docs.some((event) => (
+      event.data().action === 'workshop.transitionCancelled'
+      && event.data().metadata?.transitionId === invalidDeadlineTransition.transitionId
+      && event.data().metadata?.reason === 'invalidDeadline'
+    )));
+  });
+  await call(owner.functions, 'cancelWorkshopTransition', {
+    workshopId: created.workshopId,
+    transitionId: invalidDeadlineReplacement.transitionId,
+    reason: 'Preparar prueba de sesión no canónica',
+    idempotencyKey: key('cancel-invalid-deadline-replacement'),
+  });
+
+  await refreshParticipantPresence();
+  const futureLease = Timestamp.fromMillis(Date.now() + 5 * 60_000);
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), 'workshops', created.workshopId, 'teams', 'Agua'),
+      {
+        activeParticipantId: participantCredentials[1].user.uid,
+        activeDeviceExpiresAt: futureLease,
+      },
+      { merge: true },
+    );
+  });
+  const canonicalOnlyTransition = await call<any, RequestWorkshopTransitionOutput>(
+    owner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      targetPhase: 'Conjugar',
+      idempotencyKey: key('transition-canonical-leases'),
+    },
+  );
+  assert.equal(canonicalOnlyTransition.requiredAcks, 3);
+  await call(owner.functions, 'cancelWorkshopTransition', {
+    workshopId: created.workshopId,
+    transitionId: canonicalOnlyTransition.transitionId,
+    reason: 'Preparar prueba sin equipos conectados',
+    idempotencyKey: key('cancel-canonical-leases'),
+  });
+
+  const stalePresenceAt = Date.now() - 90_000;
+  await refreshParticipantPresence({ Agua: stalePresenceAt });
+  const stalePresenceTransition = await call<any, RequestWorkshopTransitionOutput>(
+    owner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      targetPhase: 'Conjugar',
+      idempotencyKey: key('transition-stale-presence'),
+    },
+  );
+  assert.equal(stalePresenceTransition.requiredAcks, 3);
+  await call(owner.functions, 'cancelWorkshopTransition', {
+    workshopId: created.workshopId,
+    transitionId: stalePresenceTransition.transitionId,
+    reason: 'Preparar prueba sin equipos conectados',
+    idempotencyKey: key('cancel-stale-presence'),
+  });
+
+  const expiredLease = Timestamp.fromMillis(Date.now() - 1_000);
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await Promise.all(participantCredentials.flatMap((credential, index) => ([
+      updateDoc(
+        doc(
+          firestore,
+          'workshops',
+          created.workshopId,
+          'participantSessions',
+          credential.user.uid,
+        ),
+        { status: 'active', expiresAt: expiredLease },
+      ),
+      setDoc(
+        doc(firestore, 'workshops', created.workshopId, 'teams', teams[index]),
+        { activeDeviceExpiresAt: expiredLease },
+        { merge: true },
+      ),
+    ])));
+  });
+  const zeroTeamTransition = await call<any, RequestWorkshopTransitionOutput>(
+    owner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      targetPhase: 'Conjugar',
+      idempotencyKey: key('transition-zero-teams'),
+    },
+  );
+  assert.equal(zeroTeamTransition.requiredAcks, 0);
+  assert.equal(zeroTeamTransition.state, 'committed');
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const workshop = await getDoc(
+      doc(context.firestore(), 'workshops', created.workshopId),
+    );
+    assert.equal(workshop.data()?.currentPhase, 'Conjugar');
+    assert.equal(workshop.data()?.transition?.state, 'committed');
+    assert.equal(workshop.data()?.pendingTransitionId, undefined);
+  });
+  await refreshParticipantPresence();
 
   await environment.withSecurityRulesDisabled(async (context) => {
     await updateDoc(doc(context.firestore(), 'workshops', created.workshopId), {
@@ -502,13 +900,70 @@ test('protects device leases and commits only server-confirmed team saves', {
     assert.equal(defenses.docs[0].data().content, 'Defensa revisada');
   });
 
+  const completionExpiredLease = Timestamp.fromMillis(Date.now() - 1_000);
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await Promise.all(participantCredentials.flatMap((credential, index) => ([
+      updateDoc(
+        doc(
+          firestore,
+          'workshops',
+          created.workshopId,
+          'participantSessions',
+          credential.user.uid,
+        ),
+        { status: 'active', expiresAt: completionExpiredLease },
+      ),
+      setDoc(
+        doc(firestore, 'workshops', created.workshopId, 'teams', teams[index]),
+        { activeDeviceExpiresAt: completionExpiredLease },
+        { merge: true },
+      ),
+    ])));
+  });
+  const zeroTeamCompletion = await call<any, RequestWorkshopTransitionOutput>(
+    owner.functions,
+    'requestWorkshopTransition',
+    {
+      workshopId: created.workshopId,
+      complete: true,
+      idempotencyKey: key('transition-zero-team-completion'),
+    },
+  );
+  assert.equal(zeroTeamCompletion.requiredAcks, 0);
+  assert.equal(zeroTeamCompletion.state, 'committed');
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    const [workshop, activeRoomCode, preservedTeam, audit] = await Promise.all([
+      getDoc(doc(firestore, 'workshops', created.workshopId)),
+      getDoc(doc(firestore, 'activeRoomCodes', created.roomCode)),
+      getDoc(doc(firestore, 'workshops', created.workshopId, 'teams', 'Agua')),
+      getDocs(collection(
+        firestore,
+        'workshops',
+        created.workshopId,
+        'auditEvents',
+      )),
+    ]);
+    assert.equal(workshop.data()?.status, 'completed');
+    assert.ok(workshop.data()?.completedAt instanceof Timestamp);
+    assert.equal(workshop.data()?.transition?.state, 'committed');
+    assert.equal(workshop.data()?.pendingTransitionId, undefined);
+    assert.equal(activeRoomCode.exists(), false);
+    assert.deepEqual(preservedTeam.data()?.perspectives, ['late-write-Agua']);
+    assert.ok(audit.docs.some((event) => (
+      event.data().action === 'workshop.transitionCommitted'
+      && event.data().metadata?.transitionId === zeroTeamCompletion.transitionId
+      && event.data().metadata?.override === false
+    )));
+  });
+
   const longRunningJobId = 'job-long-running';
   const reportId = 'report-long-running';
   const olderThanSeventySeconds = Date.now() - 80_000;
   await environment.withSecurityRulesDisabled(async (context) => {
     const firestore = context.firestore();
     await updateDoc(doc(firestore, 'workshops', created.workshopId), {
-      status: 'completed',
       activeReportJobId: longRunningJobId,
       activeReportJobStatus: 'processing',
     });

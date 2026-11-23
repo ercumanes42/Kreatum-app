@@ -151,18 +151,36 @@ service cloud.firestore {
     }
 
     function isWorkshopParticipant(workshopId) {
+      let session = participantSession(workshopId).data;
       return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
         && isActiveWorkshop(workshopId)
         && exists(
           /databases/$(database)/documents/workshops/$(workshopId)/participantSessions/$(request.auth.uid)
         )
-        && participantSession(workshopId).data.status == 'active'
-        && participantSession(workshopId).data.expiresAt > request.time;
+        && session.status == 'active'
+        && session.expiresAt > request.time
+        && ownsDeviceSlot(workshopId, session.deviceSlot);
+    }
+
+    function ownsDeviceSlot(workshopId, slot) {
+      let reservation = get(/databases/$(database)/documents/workshops/$(workshopId)/participantDeviceSlots/$(string(slot)));
+      return slot is int && slot >= 0 && slot < 4
+        && reservation.data.participantId == request.auth.uid
+        && reservation.data.expiresAt > request.time;
+    }
+
+    function isAssignedParticipant(workshopId) {
+      let team = participantTeam(workshopId);
+      return isWorkshopParticipant(workshopId)
+        && validTeam(team)
+        && ownsTeamReservation(workshopId, team);
     }
 
     function isTerminalWorkshopParticipant(workshopId) {
       let workshopData = workshop(workshopId).data;
       return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
         && workshopData.status in ['completed', 'archived']
         && workshopData.keys().hasAll(['organizationId'])
         && workshopData.organizationId is string
@@ -191,10 +209,11 @@ service cloud.firestore {
     }
 
     function hasAcknowledgedPendingTransition(workshopId) {
-      return workshop(workshopId).data.keys().hasAny(['pendingTransitionId'])
-        && participantSession(workshopId).data.keys().hasAny(['transitionAckId'])
-        && participantSession(workshopId).data.transitionAckId
-          == workshop(workshopId).data.pendingTransitionId;
+      let workshopData = workshop(workshopId).data;
+      let session = participantSession(workshopId).data;
+      return workshopData.keys().hasAny(['pendingTransitionId'])
+        && session.keys().hasAny(['transitionAckId'])
+        && session.get('transitionAckId', null) == workshopData.get('pendingTransitionId', null);
     }
 
     function isActiveWorkshop(workshopId) {
@@ -219,7 +238,8 @@ service cloud.firestore {
     }
 
     function validOptionalText(field) {
-      return validText(request.resource.data.get(field, ''));
+      let value = request.resource.data.get(field, '');
+      return value is string && value.size() <= 20000;
     }
 
     function validOptionalBool(field) {
@@ -231,31 +251,33 @@ service cloud.firestore {
     }
 
     function validTeamContentShape() {
-      return validOptionalList('perspectives', 50)
-        && validOptionalList('top3Perspectives', 3)
-        && validOptionalList('perspectiveVotes', 3)
-        && validOptionalText('selectedPerspective')
-        && validOptionalList('solutions', 50)
-        && validOptionalList('top3Solutions', 3)
-        && validOptionalList('solutionVotes', 3)
-        && validOptionalText('selectedSolution')
-        && validOptionalText('receivedSolutionToAttack')
-        && validOptionalList('attacksOnOthers', 20)
-        && validOptionalList('receivedAttacks', 20)
-        && validOptionalList('defenses', 20)
-        && validOptionalText('reformulatedSolution')
-        && validOptionalText('expectedResults')
-        && validOptionalText('audience')
-        && validOptionalText('strengths')
-        && validOptionalText('weaknesses')
-        && validOptionalText('pilot')
-        && validOptionalText('resources')
-        && validOptionalText('pitch')
-        && validOptionalText('pitchStart')
-        && validOptionalText('pitchProblem')
-        && validOptionalText('pitchSolution')
-        && validOptionalText('pitchAction')
-        && validOptionalBool('isFinished');
+      // Same complete shape; inline checks keep evaluation within the Rules expression budget.
+      let data = request.resource.data;
+      return (data.get('perspectives', []) is list && data.get('perspectives', []).size() <= 50)
+        && (data.get('top3Perspectives', []) is list && data.get('top3Perspectives', []).size() <= 3)
+        && (data.get('perspectiveVotes', []) is list && data.get('perspectiveVotes', []).size() <= 3)
+        && (data.get('selectedPerspective', '') is string && data.get('selectedPerspective', '').size() <= 20000)
+        && (data.get('solutions', []) is list && data.get('solutions', []).size() <= 50)
+        && (data.get('top3Solutions', []) is list && data.get('top3Solutions', []).size() <= 3)
+        && (data.get('solutionVotes', []) is list && data.get('solutionVotes', []).size() <= 3)
+        && (data.get('selectedSolution', '') is string && data.get('selectedSolution', '').size() <= 20000)
+        && (data.get('receivedSolutionToAttack', '') is string && data.get('receivedSolutionToAttack', '').size() <= 20000)
+        && (data.get('attacksOnOthers', []) is list && data.get('attacksOnOthers', []).size() <= 20)
+        && (data.get('receivedAttacks', []) is list && data.get('receivedAttacks', []).size() <= 20)
+        && (data.get('defenses', []) is list && data.get('defenses', []).size() <= 20)
+        && (data.get('reformulatedSolution', '') is string && data.get('reformulatedSolution', '').size() <= 20000)
+        && (data.get('expectedResults', '') is string && data.get('expectedResults', '').size() <= 20000)
+        && (data.get('audience', '') is string && data.get('audience', '').size() <= 20000)
+        && (data.get('strengths', '') is string && data.get('strengths', '').size() <= 20000)
+        && (data.get('weaknesses', '') is string && data.get('weaknesses', '').size() <= 20000)
+        && (data.get('pilot', '') is string && data.get('pilot', '').size() <= 20000)
+        && (data.get('resources', '') is string && data.get('resources', '').size() <= 20000)
+        && (data.get('pitch', '') is string && data.get('pitch', '').size() <= 20000)
+        && (data.get('pitchStart', '') is string && data.get('pitchStart', '').size() <= 20000)
+        && (data.get('pitchProblem', '') is string && data.get('pitchProblem', '').size() <= 20000)
+        && (data.get('pitchSolution', '') is string && data.get('pitchSolution', '').size() <= 20000)
+        && (data.get('pitchAction', '') is string && data.get('pitchAction', '').size() <= 20000)
+        && data.get('isFinished', false) is bool;
     }
 
     function validTeamStateUpdate(workshopId) {
@@ -267,9 +289,8 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastSavedAt == request.time
         && (
-          (
-            phase == 'Diluir'
-            && changed.hasOnly([
+          phase == 'Diluir'
+            ? changed.hasOnly([
               'perspectives',
               'top3Perspectives',
               'perspectiveVotes',
@@ -277,10 +298,8 @@ service cloud.firestore {
               'lastSavedAt',
               'updatedAt'
             ])
-          )
-          || (
-            phase == 'Conjugar'
-            && changed.hasOnly([
+          : phase == 'Conjugar'
+            ? changed.hasOnly([
               'solutions',
               'top3Solutions',
               'solutionVotes',
@@ -288,10 +307,8 @@ service cloud.firestore {
               'lastSavedAt',
               'updatedAt'
             ])
-          )
-          || (
-            phase == 'Sublimar'
-            && changed.hasOnly([
+          : phase == 'Sublimar'
+            ? changed.hasOnly([
               'receivedSolutionToAttack',
               'attacksOnOthers',
               'receivedAttacks',
@@ -303,15 +320,10 @@ service cloud.firestore {
               'lastSavedAt',
               'updatedAt'
             ])
-            && (
-              request.resource.data.get('sublimarView', 'Ataque') == 'Ataque'
-              || request.resource.data.get('sublimarView', 'Ataque') == 'Defensa'
-            )
+            && request.resource.data.get('sublimarView', 'Ataque') in ['Ataque', 'Defensa']
             && validOptionalBool('sublimarDefenseCompleted')
-          )
-          || (
-            phase == 'Fermentar'
-            && changed.hasOnly([
+          : phase == 'Fermentar'
+            ? changed.hasOnly([
               'audience',
               'strengths',
               'weaknesses',
@@ -320,10 +332,8 @@ service cloud.firestore {
               'lastSavedAt',
               'updatedAt'
             ])
-          )
-          || (
-            phase == 'Proyectar'
-            && changed.hasOnly([
+          : phase == 'Proyectar'
+            ? changed.hasOnly([
               'pitch',
               'pitchStart',
               'pitchProblem',
@@ -333,7 +343,7 @@ service cloud.firestore {
               'lastSavedAt',
               'updatedAt'
             ])
-          )
+          : false
         );
     }
 
@@ -396,13 +406,13 @@ service cloud.firestore {
       match /teams/{teamName} {
         allow read: if isWorkshopAdmin(workshopId)
           || (
-            isWorkshopParticipant(workshopId)
+            isAssignedParticipant(workshopId)
             && participantTeam(workshopId) == teamName
           );
         allow create, delete: if false;
-        allow update: if ownsTeamReservation(workshopId, teamName)
+        allow update: if isAssignedParticipant(workshopId)
           && !hasAcknowledgedPendingTransition(workshopId)
-          && isActiveWorkshop(workshopId)
+          // isAssignedParticipant -> isWorkshopParticipant already requires isActiveWorkshop.
           && validTeam(teamName)
           && participantTeam(workshopId) == teamName
           && validTeamStateUpdate(workshopId);
@@ -411,7 +421,7 @@ service cloud.firestore {
       match /attacks/{attackId} {
         allow read: if isWorkshopAdmin(workshopId)
           || (
-            isWorkshopParticipant(workshopId)
+            isAssignedParticipant(workshopId)
             && (
               resource.data.fromTeam == participantTeam(workshopId)
               || resource.data.toTeam == participantTeam(workshopId)
@@ -423,7 +433,7 @@ service cloud.firestore {
       match /defenses/{defenseId} {
         allow read: if isWorkshopAdmin(workshopId)
           || (
-            isWorkshopParticipant(workshopId)
+            isAssignedParticipant(workshopId)
             && resource.data.team == participantTeam(workshopId)
           );
         allow create, update, delete: if false;
@@ -432,7 +442,7 @@ service cloud.firestore {
       match /solutions/{teamName} {
         allow read: if isWorkshopAdmin(workshopId)
           || (
-            isWorkshopParticipant(workshopId)
+            isAssignedParticipant(workshopId)
             && (
               participantTeam(workshopId) == teamName
               || workshop(workshopId).data.currentPhase in [
@@ -442,8 +452,9 @@ service cloud.firestore {
               ]
             )
           );
-        allow create, update: if isWorkshopParticipant(workshopId)
-          && isActiveWorkshop(workshopId)
+        allow create, update: if isAssignedParticipant(workshopId)
+          && !hasAcknowledgedPendingTransition(workshopId)
+          // The assigned-participant guard above already rejects non-active workshops.
           && isWorkshopPhase(workshopId, 'Conjugar')
           && participantTeam(workshopId) == teamName
           && request.resource.data.team == teamName

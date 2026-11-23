@@ -18,6 +18,8 @@ import { isV2DataModel } from './lib/dataModel';
 import { useGame } from './contexts/GameContext';
 import { createIdempotencyKey, workshopApi } from './lib/workshopApi';
 import { reportClientError } from './lib/clientLogger';
+import { getWorkshopTransitionProgress } from './lib/workshopTransition';
+
 function TeamIcon({ team, className }: { team: Team | null; className?: string }) {
   if (team) {
     return (
@@ -72,10 +74,34 @@ export default function PlayerApp() {
   const acknowledgedTransitionRef = useRef<string | null>(null);
   const participantSessionRef = useRef(participantSession);
   const transition = globalState.transition;
+  const transitionProgress = getWorkshopTransitionProgress(
+    transition?.state === 'requested' ? transition : null,
+    sessionClock,
+  );
+  const transitionBlocking = transition?.state === 'requested' && !transitionProgress.expired;
+  const transitionNotice = transition?.state === 'requested'
+    ? transitionProgress.expired
+      ? 'La espera de cambio terminó. Tus datos guardados se conservan y puedes seguir trabajando mientras el facilitador reintenta.'
+      : transitionError
+    : '';
 
   useEffect(() => {
     participantSessionRef.current = participantSession;
   }, [participantSession]);
+
+  useEffect(() => {
+    if (transition?.state !== 'requested') return undefined;
+
+    const expiresAt = transition.expiresAt;
+    const remainingMs = Number.isFinite(expiresAt) && expiresAt > 0
+      ? Math.max(0, expiresAt - Date.now())
+      : 0;
+    const timeoutId = window.setTimeout(
+      () => setSessionClock(Date.now()),
+      Math.min(remainingMs + 25, 2_147_483_647),
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [transition?.expiresAt, transition?.id, transition?.state]);
 
   // Ref to hold the latest leaveGame function so the timeout always uses the current one
   // without causing the useEffect to re-run (leaveGame is not memoized in GameContext).
@@ -83,7 +109,7 @@ export default function PlayerApp() {
   useEffect(() => { leaveGameRef.current = leaveGame; }, [leaveGame]);
 
   const updateState = (updates: Partial<GameState>) => {
-    if (transition?.state === 'requested') {
+    if (transitionBlocking) {
       setTransitionError('Espera un momento: el Alquimista está preparando el cambio de fase.');
       return;
     }
@@ -229,10 +255,16 @@ export default function PlayerApp() {
   ]);
 
   useEffect(() => {
-    if (!isV2DataModel || !gameId || !team || isAlchemist || transition?.state !== 'requested' || !transition.id) return;
+    if (!isV2DataModel || !gameId || !team || isAlchemist || !transitionBlocking || transition?.state !== 'requested' || !transition.id) return;
 
-    if (participantSession?.transitionAckId === transition.id || acknowledgedTransitionRef.current === transition.id) {
-      acknowledgedTransitionRef.current = transition.id;
+    const requestedTransition = transition;
+    const transitionHasExpired = () => getWorkshopTransitionProgress(
+      requestedTransition,
+      Date.now(),
+    ).expired;
+
+    if (participantSession?.transitionAckId === requestedTransition.id || acknowledgedTransitionRef.current === requestedTransition.id) {
+      acknowledgedTransitionRef.current = requestedTransition.id;
       return;
     }
     const ackIdempotencyKey = createIdempotencyKey('acknowledgeWorkshopTransition');
@@ -242,13 +274,14 @@ export default function PlayerApp() {
     let retryDelay = 1_000;
 
     const scheduleRetry = () => {
-      if (cancelled) return;
+      if (cancelled || transitionHasExpired()) return;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = window.setTimeout(() => void flushAndAcknowledge(), retryDelay);
       retryDelay = Math.min(retryDelay * 2, 8_000);
     };
 
     const flushAndAcknowledge = async () => {
+      if (cancelled || transitionHasExpired()) return;
       setTransitionError('');
       const saved = await flushTeamChanges();
       if (!saved || cancelled) {
@@ -260,16 +293,17 @@ export default function PlayerApp() {
         }
         return;
       }
+      if (transitionHasExpired()) return;
       try {
         await workshopApi.acknowledgeWorkshopTransition({
           workshopId: gameId,
-          transitionId: transition.id,
+          transitionId: requestedTransition.id,
           idempotencyKey: ackIdempotencyKey,
         });
-        if (!cancelled) acknowledgedTransitionRef.current = transition.id;
+        if (!cancelled) acknowledgedTransitionRef.current = requestedTransition.id;
       } catch (ackError) {
         reportClientError('Workshop transition acknowledgement failed', ackError);
-        if (!cancelled) {
+        if (!cancelled && !transitionHasExpired()) {
           setTransitionError('Guardado confirmado, pero falta validar el cambio. Reintentando…');
           scheduleRetry();
         }
@@ -281,7 +315,7 @@ export default function PlayerApp() {
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [flushTeamChanges, gameId, isAlchemist, participantSession?.transitionAckId, team, transition?.id, transition?.state]);
+  }, [flushTeamChanges, gameId, isAlchemist, participantSession?.transitionAckId, team, transition, transitionBlocking]);
 
   const reconnectSession = async () => {
     if (isReconnectingSession) return;
@@ -524,7 +558,7 @@ export default function PlayerApp() {
                 <div className="w-6 h-6 bg-kreatum-purple rounded-lg flex items-center justify-center shrink-0">
                   <Hexagon className="w-3 h-3 text-white" />
                 </div>
-                <p className="text-xs font-semibold text-kreatum-dark dark:text-white leading-tight max-w-[180px] line-clamp-1">
+                <p className="text-xs font-semibold text-kreatum-dark dark:text-white leading-tight max-w-[180px] whitespace-pre-wrap [overflow-wrap:anywhere]">
                   "{challenge}"
                 </p>
               </div>
@@ -535,7 +569,7 @@ export default function PlayerApp() {
                   <span className="text-xs font-bold text-kreatum-purple/80 mb-1">
                     Reto Activo
                   </span>
-                  <p className="text-sm font-semibold text-kreatum-dark dark:text-white leading-snug text-right max-w-[360px] line-clamp-2">
+                  <p className="text-sm font-semibold text-kreatum-dark dark:text-white leading-snug text-right max-w-[360px] whitespace-pre-wrap [overflow-wrap:anywhere]">
                     "{challenge}"
                   </p>
                 </div>
@@ -550,7 +584,7 @@ export default function PlayerApp() {
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 md:py-12 relative z-10">
-        {transition?.state === 'requested' && (
+        {transitionBlocking && (
           <div className="mb-5 rounded-2xl border border-kreatum-purple/20 bg-kreatum-purple/10 p-4 text-center" role="status" aria-live="polite">
             <p className="font-bold text-kreatum-purple">Preparando cambio seguro</p>
             <p className="mt-1 text-sm text-kreatum-gray/70 dark:text-white/65">
@@ -558,9 +592,9 @@ export default function PlayerApp() {
             </p>
           </div>
         )}
-        {transitionError && (
+        {transitionNotice && (
           <p className="mb-5 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700" role="alert">
-            {transitionError}
+            {transitionNotice}
           </p>
         )}
         {sessionExpired ? (
@@ -594,7 +628,7 @@ export default function PlayerApp() {
             </p>
           </section>
         ) : (
-          <fieldset disabled={transition?.state === 'requested'} className="min-w-0 border-0 p-0">        <AnimatePresence mode="wait">
+          <fieldset disabled={transitionBlocking} className="min-w-0 border-0 p-0">        <AnimatePresence mode="wait">
           <motion.div
             key={state.currentPhase}
             initial={{ opacity: 0, y: 14 }}

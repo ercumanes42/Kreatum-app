@@ -84,6 +84,7 @@ import {
   parseEmailSender,
 } from './brevoEmail.js';
 import { assertOrganizationOperational } from '../security/organizationAccess.js';
+import { revalidateOrganizationOwnerInTransaction } from '../security/organizationOwnerAuthorization.js';
 import {
   activatePendingOrganizationForAcceptedInvitation,
 } from '../platform/platformOrganizationCommands.js';
@@ -595,6 +596,7 @@ export const inviteMember = callable<InviteMemberInput, InvitationCommandOutput>
     const result: InvitationCommandOutput = { invitationId, status: 'pending', updatedAt: now };
     const commandRef = getFirestore().doc(`organizations/${organizationId}/commandKeys/${commandDocumentId(auth.uid, idempotencyKey)}`);
     const transactionResult = await getFirestore().runTransaction(async (transaction) => {
+      await revalidateOrganizationOwnerInTransaction(transaction, getFirestore(), auth.uid, organizationId);
       const invitationRef = getFirestore().doc(invitationPath);
       const memberQuery = getFirestore().collection(`organizations/${organizationId}/members`).where('email', '==', email).limit(1);
       const [commandSnapshot, invitationSnapshot, memberSnapshot] = await Promise.all([
@@ -667,6 +669,7 @@ export const resendInvitation = callable<InvitationCommandInput, InvitationComma
     const invitationPath = `organizations/${organizationId}/invitations/${invitationId}`;
     const commandRef = getFirestore().doc(`organizations/${organizationId}/commandKeys/${commandDocumentId(auth.uid, idempotencyKey)}`);
     const transactionResult = await getFirestore().runTransaction(async (transaction) => {
+      await revalidateOrganizationOwnerInTransaction(transaction, getFirestore(), auth.uid, organizationId);
       const invitationRef = getFirestore().doc(invitationPath);
       const [commandSnapshot, invitationSnapshot] = await Promise.all([
         transaction.get(commandRef),
@@ -738,7 +741,8 @@ export const cancelInvitation = callable<InvitationCommandInput, InvitationComma
     const actor = await loadOwner(auth, organizationId);
     const now = Date.now();
     const commandRef = getFirestore().doc(`organizations/${organizationId}/commandKeys/${commandDocumentId(auth.uid, idempotencyKey)}`);
-    const verificationUid = await getFirestore().runTransaction(async (transaction) => {
+    await getFirestore().runTransaction(async (transaction) => {
+      await revalidateOrganizationOwnerInTransaction(transaction, getFirestore(), auth.uid, organizationId);
       const invitationRef = getFirestore().doc(`organizations/${organizationId}/invitations/${invitationId}`);
       const [commandSnapshot, invitationSnapshot] = await Promise.all([transaction.get(commandRef), transaction.get(invitationRef)]);
       if (commandSnapshot.exists) return null;
@@ -755,9 +759,7 @@ export const cancelInvitation = callable<InvitationCommandInput, InvitationComma
       });
       transaction.create(commandRef, { operation: 'cancelInvitation', result, createdAt: FieldValue.serverTimestamp() });
       writeAudit(transaction, organizationId, actor, 'invitation.cancelled', 'invitation', invitationId, { status: invitation.status }, { status: 'cancelled' }, null);
-      return typeof invitation.verificationUid === 'string' ? invitation.verificationUid : null;
     });
-    if (verificationUid) await getAuth().revokeRefreshTokens(verificationUid);
     return { invitationId, status: 'cancelled', updatedAt: now };
   },
 );
@@ -776,6 +778,7 @@ export const changeMemberRole = callable<ChangeMemberRoleInput, MemberCommandOut
     const now = Date.now();
     const commandRef = getFirestore().doc(`organizations/${organizationId}/commandKeys/${commandDocumentId(auth.uid, idempotencyKey)}`);
     return getFirestore().runTransaction(async (transaction) => {
+      await revalidateOrganizationOwnerInTransaction(transaction, getFirestore(), auth.uid, organizationId);
       const memberRef = getFirestore().doc(`organizations/${organizationId}/members/${memberId}`);
       const membershipIndexRef = getFirestore().doc(`users/${memberId}/organizationMemberships/${organizationId}`);
       const [commandSnapshot, memberSnapshot, ownersSnapshot] = await Promise.all([
@@ -825,6 +828,7 @@ export const changeMemberStatus = callable<ChangeMemberStatusInput, MemberComman
     const now = Date.now();
     const commandRef = getFirestore().doc(`organizations/${organizationId}/commandKeys/${commandDocumentId(auth.uid, idempotencyKey)}`);
     const result = await getFirestore().runTransaction(async (transaction) => {
+      await revalidateOrganizationOwnerInTransaction(transaction, getFirestore(), auth.uid, organizationId);
       const memberRef = getFirestore().doc(`organizations/${organizationId}/members/${memberId}`);
       const membershipIndexRef = getFirestore().doc(`users/${memberId}/organizationMemberships/${organizationId}`);
       const [commandSnapshot, memberSnapshot, ownersSnapshot] = await Promise.all([
@@ -860,8 +864,6 @@ export const changeMemberStatus = callable<ChangeMemberStatusInput, MemberComman
       writeAudit(transaction, organizationId, actor, requestedStatus === 'disabled' ? 'member.disabled' : 'member.activated', 'member', memberId, { role: member.role, status: member.status }, { role: member.role, status: requestedStatus }, reason);
       return output;
     });
-    await getAuth().updateUser(memberId, { disabled: requestedStatus === 'disabled' });
-    if (requestedStatus === 'disabled') await getAuth().revokeRefreshTokens(memberId);
     return result;
   },
 );
@@ -959,13 +961,14 @@ export const verifyInvitationCode = callable<VerifyInvitationCodeInput, VerifyIn
         });
         return { kind: 'invalid' as const, attempts: next };
       }
+      const previousStatus = String(invitation.status) === 'deliveryFailed' ? 'deliveryFailed' : 'pending';
       transaction.update(invitationRef, {
         status: 'verificationInProgress',
         verificationLeaseUntil: Timestamp.fromMillis(Date.now() + 60_000),
         verifiedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return { kind: 'valid' as const, attempts: attemptCount };
+      return { kind: 'valid' as const, attempts: attemptCount, previousStatus };
     });
     if (codeCheck.kind === 'expired') {
       throw new HttpsError('deadline-exceeded', 'El código ha caducado. Solicita un reenvío.');
@@ -979,13 +982,17 @@ export const verifyInvitationCode = callable<VerifyInvitationCodeInput, VerifyIn
       let user: UserRecord;
       try {
         user = await getAuth().getUserByEmail(email);
-        user = await getAuth().updateUser(user.uid, { emailVerified: true, disabled: false });
+        if (user.disabled) throw new HttpsError('permission-denied', 'La cuenta está bloqueada. Contacta con GFS.');
+        user = await getAuth().updateUser(user.uid, { emailVerified: true });
       } catch (error) {
         if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
         user = await getAuth().createUser({ email, emailVerified: true, disabled: false });
       }
       const activationToken = randomBytes(32).toString('base64url');
       const activationExpiresAt = Date.now() + INVITATION_ACTIVATION_TTL_MS;
+      if ((await getAuth().getUser(user.uid)).disabled) {
+        throw new HttpsError('permission-denied', 'La cuenta está bloqueada. Contacta con GFS.');
+      }
       const customToken = await createInvitationCustomToken(
         user.uid,
         organizationId,
@@ -1008,10 +1015,16 @@ export const verifyInvitationCode = callable<VerifyInvitationCodeInput, VerifyIn
       });
       return { customToken, activationToken, email, expiresAt: activationExpiresAt };
     } catch (error) {
-      await invitationRef.update({
-        status: 'pending',
-        verificationLeaseUntil: FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
+      await getFirestore().runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(invitationRef);
+        if (!snapshot.exists || snapshot.data()?.status !== 'verificationInProgress') {
+          return;
+        }
+        transaction.update(invitationRef, {
+          status: codeCheck.previousStatus,
+          verificationLeaseUntil: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       }).catch(() => undefined);
       throw error;
     }
@@ -1036,6 +1049,7 @@ export const acceptInvitation = callable<AcceptInvitationInput, AcceptInvitation
     assertLegalAcceptance(request.data, legalConfiguration);
     await loadOrganizationPolicy(organizationId, true, invitationId);
     const user = await getAuth().getUser(auth.uid);
+    if (user.disabled) throw new HttpsError('permission-denied', 'La cuenta está bloqueada. Contacta con GFS.');
     if (!user.email || !user.emailVerified || !user.providerData.some((item) => item.providerId === 'password')) {
       throw new HttpsError('failed-precondition', 'Debes establecer la contraseña antes de activar la cuenta.');
     }
@@ -1044,6 +1058,9 @@ export const acceptInvitation = callable<AcceptInvitationInput, AcceptInvitation
     const now = Date.now();
     const commandRef = getFirestore().doc(`organizations/${organizationId}/commandKeys/${commandDocumentId(auth.uid, idempotencyKey)}`);
     const result = await getFirestore().runTransaction(async (transaction) => {
+      if ((await getAuth().getUser(auth.uid)).disabled) {
+        throw new HttpsError('permission-denied', 'La cuenta está bloqueada. Contacta con GFS.');
+      }
       const organizationRef = getFirestore().doc(`organizations/${organizationId}`);
       const invitationRef = getFirestore().doc(`organizations/${organizationId}/invitations/${invitationId}`);
       const memberRef = getFirestore().doc(`organizations/${organizationId}/members/${auth.uid}`);
@@ -1117,7 +1134,7 @@ export const acceptInvitation = callable<AcceptInvitationInput, AcceptInvitation
       writeAudit(transaction, organizationId, actor, 'member.activated', 'member', auth.uid, memberSnapshot.exists ? { status: memberSnapshot.data()?.status ?? null, role: memberSnapshot.data()?.role ?? null } : null, { status: 'active', role: invitation.role }, 'Invitación aceptada');
       return output;
     });
-    await getAuth().updateUser(auth.uid, { displayName: `${firstName} ${lastName}`, disabled: false, emailVerified: true });
+    await getAuth().updateUser(auth.uid, { displayName: `${firstName} ${lastName}`, emailVerified: true });
     await activatePendingOrganizationForAcceptedInvitation(
       organizationId,
       invitationId,

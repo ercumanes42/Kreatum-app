@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { integrationTestBatches } from './lib/function-test-suites.mjs';
+
+const integrationBatches = integrationTestBatches(process.env.KREATUM_INTEGRATION_SCOPE || 'all');
 
 const run = (command, args, extraEnvironment = {}) => {
   const result = spawnSync(command, args, {
@@ -59,20 +62,10 @@ const firebaseCli = resolveFirebaseCli();
 if (!existsSync(firebaseCli)) {
   throw new Error(`Firebase CLI was not found at ${firebaseCli}.`);
 }
-const integrationScopes = {
-  all: 'tests/platform.integration.test.ts tests/functions.integration.test.ts tests/access.integration.test.ts tests/resilience.integration.test.ts functions/src/security/workshopAdminAuthorization.test.ts functions/src/security/organizationOwnerAuthorization.test.ts',
-  lifecycle: 'tests/functions.integration.test.ts',
-  access: 'tests/access.integration.test.ts',
-  platform: 'tests/platform.integration.test.ts',
-  resilience: 'tests/resilience.integration.test.ts',
-};
-const integrationScope = process.env.KREATUM_INTEGRATION_SCOPE || 'all';
-if (!(integrationScope in integrationScopes)) {
-  throw new Error(
-    'KREATUM_INTEGRATION_SCOPE must be all, lifecycle, access, platform or resilience.',
-  );
-}
-run(
+for (const files of integrationBatches) {
+  // spawnSync waits for emulators:exec to stop its workers before the next file.
+  // run() exits on any failure: later files cannot overwrite a failed result.
+  run(
   process.execPath,
   [
     firebaseCli,
@@ -81,7 +74,7 @@ run(
     'auth,firestore,functions,storage',
     '--project',
     'demo-kreatum',
-    'tsx --test --test-concurrency=1 ' + integrationScopes[integrationScope],
+    'tsx --test --test-concurrency=1 ' + files.join(' '),
   ],
   {
     FUNCTIONS_DISCOVERY_TIMEOUT: '90',
@@ -96,3 +89,4 @@ run(
     KREATUM_APP_BASE_URL: 'http://127.0.0.1:3000',
   },
 );
+}

@@ -1,3 +1,4 @@
+// Requires Firestore emulator; collected by the integration runner.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';

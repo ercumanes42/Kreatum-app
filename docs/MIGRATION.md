@@ -73,6 +73,51 @@ La precedencia comercial es `commercial`, después `commercialPlan` y finalmente
 `facilitatorUid` solo se añade cuando `facilitatorAssignment.facilitatorUid` o, en su ausencia, `createdBy` identifica un miembro `facilitator` activo de la misma empresa. Un UID inactivo, desconocido, contradictorio o perteneciente a otro tenant bloquea toda la aplicación. Los resultados solo muestran hashes, nunca correos, códigos o respuestas.
 
 No desplegar las reglas nuevas antes del `--verify`: las organizaciones sin `commercial` canónico y las partidas sin `facilitatorUid` quedan bloqueadas de forma intencionada.
+
+## Recuperación del índice de actividad
+
+`migrate:audit-backfill` recupera eventos compatibles desde `workshops/<workshopId>/auditEvents`
+hacia `organizations/<organizationId>/auditEvents`. No modifica partidas, respuestas ni eventos
+fuente. El destino usa el mismo ID determinista que el trigger en tiempo real, por lo que repetir
+la operación no crea duplicados.
+
+Ejecutar por empresa y primero en staging:
+
+```powershell
+npm --prefix functions run migrate:audit-backfill -- --project <staging-id> --organization <org-id> --since 2026-08-24T00:00:00Z
+npm --prefix functions run migrate:audit-backfill -- --apply --project <staging-id> --confirm-project <staging-id> --organization <org-id> --since 2026-08-24T00:00:00Z
+npm --prefix functions run migrate:audit-backfill -- --verify --project <staging-id> --organization <org-id> --since 2026-08-24T00:00:00Z
+```
+
+El script pagina talleres y eventos, limita el escaneo a 20.000 eventos por defecto y solo consulta
+la identidad del actor dentro de la empresa canónica de la partida. La salida contiene recuentos y
+hashes, nunca nombres ni correos. Un destino distinto, una empresa inexistente, un actor ajeno al
+tenant o alcanzar el límite bloquea `--apply` con código 2. `--since` filtra qué eventos se copian,
+pero el escaneo sigue paginado por ID y los eventos anteriores también consumen el límite. Si se
+alcanza, ejecutar por empresa o ampliar `--max-events`, hasta un máximo de 50.000.
+
+Producción permanece rechazada salvo inclusión explícita en `KREATUM_MIGRATION_ALLOWED_PROJECTS`.
+Antes de autorizarla: exportar Firestore, corregir el trigger, validar dry-run en staging y detener
+temporalmente operaciones administrativas de las partidas afectadas.
+
+### Reconciliación de resúmenes de partidas
+
+`migrate:summary-reconcile` reconstruye los contadores resumidos de cada partida tomando como
+verdad sus subcolecciones canónicas. El resultado se escribe como un conjunto absoluto e
+idempotente: repetir la ejecución no incrementa contadores ni altera los datos fuente. No elimina
+documentos de `summaryEvents` y la auditoría técnica registra únicamente contadores, sin IDs reales
+ni datos personales.
+
+Ejecutar siempre por empresa, primero en dry-run y después verificar:
+
+```powershell
+npm --prefix functions run migrate:summary-reconcile -- --project <staging-id> --organization <org-id>
+npm --prefix functions run migrate:summary-reconcile -- --apply --project <staging-id> --confirm-project <staging-id> --organization <org-id>
+npm --prefix functions run migrate:summary-reconcile -- --verify --project <staging-id> --organization <org-id>
+```
+
+Producción exige `--organization` y que el proyecto esté incluido explícitamente en
+`KREATUM_MIGRATION_ALLOWED_PROJECTS`.
 ## Resolución comercial controlada
 
 `migrate:resolve-commercial` materializa únicamente los términos comerciales de una organización ya existente. No modifica, reasigna ni elimina partidas. Antes de escribir valida que `--used` coincide exactamente con el número actual de partidas de la empresa.
